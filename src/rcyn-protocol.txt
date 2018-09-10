@@ -1,0 +1,79 @@
+protocol
+========
+
+hello:
+
+  c->s rcyn 1
+  s->c yes 1
+
+invalidate cache:
+
+  s->c clear
+  
+test a permission:
+
+  c->s test CLIENT SESSION USER PERMISSION
+  s->c yes|no|VALUE [CACHING]
+
+check a permission:
+
+  c->s check CLIENT SESSION USER PERMISSION
+  s->c yes|no|VALUE [CACHING]
+
+erase (admin):
+
+  c->s drop CLIENT SESSION USER PERMISSION
+  s->c done|error ...
+
+set (admin):
+
+  c->s set CLIENT SESSION USER PERMISSION VALUE
+  s->c done|error ...
+
+list permissions (admin):
+
+  c->s get CLIENT SESSION USER PERMISSION
+  s->c item CLIENT SESSION USER PERMISSION VALUE
+  s->c ...
+  s->c done
+
+enter critical (admin)
+
+  c->s enter
+  s->c done
+
+leave critical (admin)
+
+  c->s leave [commit|rollback]
+  s->c done|error ...
+
+register agent (agent):
+
+  c->s agent NAME [ARGS...]
+  s->c done|error ...
+
+asking (agent ask CLIENT SESSION USER PERMISSION):
+
+  s->c ask CLIENT SESSION USER PERMISSION
+  c->s done | ([yes|no] [always|session|one-time])
+
+
+----------------------------------------------------------
+  c->s c(heck) CLIENT SESSION USER PERMISSION
+  c->s d(rop) CLIENT SESSION USER PERMISSION
+  c->s e(nter)
+  c->s g(et) CLIENT SESSION USER PERMISSION
+  c->s l(eave) [commit|rollback]
+  c->s r(cyn)
+  c->s s(et) CLIENT SESSION USER PERMISSION VALUE
+  c->s t(est) CLIENT SESSION USER PERMISSION
+
+  s->c clear
+  s->c done
+  s->c done [CLIENT SESSION USER PERMISSION VALUE]
+  s->c done|error ...
+  s->c item CLIENT SESSION USER PERMISSION VALUE
+  s->c yes|no
+  s->c yes|no|VALUE [CACHING]
+
+

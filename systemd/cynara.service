@@ -1,0 +1,29 @@
+[Unit]
+Description=Cynara service
+Requires=afm-system-setup.service
+After=afm-system-setup.service
+
+[Service]
+ExecStartPre=+-/usr/bin/sh -c 'if test ! -d /var/lib/cynara; then mkdir -p /var/lib/cynara; chown cynara:cynara /var/lib/cynara; chsmack -a System /var/lib/cynara; fi'
+ExecStart=/usr/bin/cynarad
+
+Type=notify
+
+KillMode=process
+TimeoutStopSec=3
+Restart=always
+
+Sockets=cynara-admin.socket
+Sockets=cynara-check.socket
+
+UMask=0000
+User=cynara
+Group=cynara
+SmackProcessLabel=System
+#NoNewPrivileges=true
+
+#Environment="CYNARA_LOG_LEVEL=LOG_DEBUG"
+#Environment="CYNARA_AUDIT_LEVEL=ALL"
+
+[Install]
+WantedBy=multi-user.target

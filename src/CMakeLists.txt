@@ -1,0 +1,95 @@
+###########################################################################
+# Copyright (C) 2018 "IoT.bzh"
+#
+# author: José Bollo <jose.bollo@iot.bzh>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+###########################################################################
+
+set(SERVER_SOURCES
+	cyn.c
+	db.c
+	fbuf.c
+	prot.c
+	queue.c
+	rcyn-protocol.c
+	rcyn-server.c
+	socket.c
+)
+
+set(LIB_SOURCES
+	cache.c
+	lib-compat.c
+	prot.c
+	rcyn-client.c
+	rcyn-protocol.c
+	socket.c
+)
+
+###########################################
+# build and install cynarad
+###########################################
+add_executable(cynarad ${SERVER_SOURCES})
+install(TARGETS cynarad
+        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+
+###########################################
+# build and install libcynara
+###########################################
+ADD_LIBRARY(cynara SHARED ${LIB_SOURCES})
+SET_TARGET_PROPERTIES(cynara PROPERTIES
+	VERSION ${CYNARA_VERSION}
+	SOVERSION ${CYNARA_SOVERSION})
+TARGET_LINK_LIBRARIES(cynara
+	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.map
+	-Wl,--as-needed
+	-Wl,--gc-sections
+)
+INSTALL(TARGETS cynara LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+INSTALL(FILES rcyn-client.h DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/cynara)
+
+###########################################
+# build and install test-cynara
+###########################################
+ADD_EXECUTABLE(test-cynara test-lib-compat.c)
+TARGET_LINK_LIBRARIES(test-cynara cynara)
+INSTALL(TARGETS test-cynara
+        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+
+###########################################
+# alterations for SYSTEMD and socket specs
+###########################################
+
+if(SYSTEMD)
+   target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_CHECK_SOCKET_SPEC="sd:check")
+   target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_ADMIN_SOCKET_SPEC="sd:admin")
+   target_compile_definitions(cynarad PRIVATE WITH_SYSTEMD_ACTIVATION)
+   target_link_libraries(cynarad ${libsystemd_LDFLAGS} ${libsystemd_LINK_LIBRARIES})
+   target_include_directories(cynarad PRIVATE ${libsystemd_INCLUDE_DIRS})
+   target_compile_options(cynarad PRIVATE ${libsystemd_CFLAGS})
+else()
+   if(CHECK_SOCKET_SPEC)
+      target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_CHECK_SOCKET_SPEC="${CHECK_SOCKET_SPEC}")
+   endif()
+   if(ADMIN_SOCKET_SPEC)
+      target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_ADMIN_SOCKET_SPEC="${ADMIN_SOCKET_SPEC}")
+   endif()
+endif()
+
+if(CHECK_SOCKET_SPEC)
+  target_compile_definitions(cynara PRIVATE RCYN_DEFAULT_CHECK_SOCKET_SPEC="${CHECK_SOCKET_SPEC}")
+endif()
+if(ADMIN_SOCKET_SPEC)
+  target_compile_definitions(cynara PRIVATE RCYN_DEFAULT_ADMIN_SOCKET_SPEC="${ADMIN_SOCKET_SPEC}")
+endif()
+

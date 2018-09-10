@@ -1,0 +1,15 @@
+[Socket]
+FileDescriptorName=admin
+ListenStream=@SOCKET_DIR@/cynara.admin
+SocketMode=0600
+SmackLabelIPIn=@
+SmackLabelIPOut=@
+
+Service=cynara.service
+
+[Unit]
+Wants=cynara.target
+Before=cynara.target
+
+[Install]
+WantedBy=sockets.target

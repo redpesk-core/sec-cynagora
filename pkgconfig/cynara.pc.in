@@ -1,0 +1,5 @@
+Name: cynara
+Description: cynara package
+Version: @CYNARA_VERSION@
+Libs: -L@CMAKE_INSTALL_FULL_LIBDIR@ -lcynara
+Cflags: -I@CMAKE_INSTALL_FULL_INCLUDEDIR@ -I@CMAKE_INSTALL_FULL_INCLUDEDIR@/cynara

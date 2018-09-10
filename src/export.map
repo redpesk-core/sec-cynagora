@@ -1,0 +1,9 @@
+{
+global:
+	rcyn_*;
+	cynara_*;
+local:
+	*;
+};
+
+

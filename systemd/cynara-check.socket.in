@@ -1,0 +1,15 @@
+[Socket]
+FileDescriptorName=check
+ListenStream=@SOCKET_DIR@/cynara.check
+SocketMode=0666
+SmackLabelIPIn=*
+SmackLabelIPOut=@
+
+Service=cynara.service
+
+[Unit]
+Wants=cynara.target
+Before=cynara.target
+
+[Install]
+WantedBy=sockets.target
