@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #define _GNU_SOURCE
 
 
@@ -68,24 +85,12 @@ static
 int
 changed(
 ) {
-	int rc = db_sync();
+	int rc;
 	struct callback *c;
 
+	rc = db_sync();
 	for (c = observers; c ; c = c->next)
 		c->callback(c->closure);
-	return rc;
-}
-
-int
-cyn_init(
-) {
-	/* TODO: paths? */
-	int rc = db_open("/var/lib/cynara/cynara.names", "/var/lib/cynara/cynara.rules");
-	if (rc == 0 && db_is_empty()) {
-		/* TODO: init? */
-		rc = db_set("System", "*", "*", "*", 1);
-		db_sync();
-	}
 	return rc;
 }
 
@@ -155,10 +160,17 @@ cyn_leave(
 		return -EPERM;
 
 	lock = &lock;
-	if (commit)
-		rc = queue_play() ?: changed();
-	else
+	if (!commit)
 		rc = 0;
+	else {
+		rc = queue_play();
+		if (rc < 0)
+			db_recover();
+		else {
+			rc = db_backup();
+			changed();
+		}
+	}
 	queue_clear();
 
 	e = awaiters;
@@ -187,10 +199,9 @@ cyn_set(
 	const char *permission,
 	uint32_t value
 ) {
-	if (lock && lock != &lock)
-		return queue_set(client, session, user, permission, value);
-
-	return db_set(client, session, user, permission, value) ?: changed();
+	if (!lock)
+		return -EPERM;
+	return queue_set(client, session, user, permission, value);
 }
 
 int
@@ -200,28 +211,9 @@ cyn_drop(
 	const char *user,
 	const char *permission
 ) {
-	if (lock && lock != &lock)
-		return queue_drop(client, session, user, permission);
-
-	return db_drop(client, session, user, permission) ?: changed();
-}
-
-int
-cyn_test(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	uint32_t *value
-) {
-	int rc;
-
-	rc = db_test(client, session, user, permission, value);
-	if (rc <= 0)
-		*value = DEFAULT;
-	else
-		rc = 0;
-	return rc;
+	if (!lock)
+		return -EPERM;
+	return queue_drop(client, session, user, permission);
 }
 
 void
@@ -240,6 +232,24 @@ cyn_list(
 	const char *permission
 ) {
 	db_for_all(closure, callback, client, session, user, permission);
+}
+
+int
+cyn_test(
+	const char *client,
+	const char *session,
+	const char *user,
+	const char *permission,
+	uint32_t *value
+) {
+	int rc;
+
+	rc = db_test(client, session, user, permission, value);
+	if (rc <= 0)
+		*value = DEFAULT;
+	else
+		rc = 0;
+	return rc;
 }
 
 int

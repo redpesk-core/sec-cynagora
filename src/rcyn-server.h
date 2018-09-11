@@ -16,33 +16,35 @@
  */
 
 
+#pragma once
+
+struct rcyn_server;
+typedef struct rcyn_server rcyn_server_t;
+
 extern
-int
-queue_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+void
+rcyn_server_destroy(
+	rcyn_server_t *server
 );
 
 extern
 int
-queue_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	uint32_t value
+rcyn_server_create(
+	rcyn_server_t **server,
+	const char *admin_socket_spec,
+	const char *check_socket_spec
+);
+
+extern
+int
+rcyn_server_serve(
+	rcyn_server_t *server
 );
 
 extern
 void
-queue_clear(
+rcyn_server_stop(
+	rcyn_server_t *server,
+	int status
 );
-
-extern
-int
-queue_play(
-);
-
 

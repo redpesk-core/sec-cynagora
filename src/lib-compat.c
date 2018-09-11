@@ -1,4 +1,21 @@
 /*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
 cynara_admin_initialize(&m_CynaraAdmin),
 cynara_admin_finish(m_CynaraAdmin);
 cynara_admin_set_policies(m_CynaraAdmin, pp_policies.data()),
@@ -321,20 +338,26 @@ int cynara_admin_list_policies_descriptions(struct cynara_admin *p_cynara_admin,
 }
 
 /************************************* CLIENT-ASYNC **************************************/
+struct cynara_async_configuration { uint32_t szcache; };
 
 int cynara_async_configuration_create(cynara_async_configuration **pp_conf)
 {
-	*pp_conf = (cynara_async_configuration*)pp_conf;
+	*pp_conf = malloc(sizeof(cynara_async_configuration));
+	if (*pp_conf == NULL)
+		return CYNARA_API_OUT_OF_MEMORY;
+	(*pp_conf)->szcache = 0;
 	return CYNARA_API_SUCCESS;
 }
 
 void cynara_async_configuration_destroy(cynara_async_configuration *p_conf)
 {
+	free(p_conf);
 }
 
 int cynara_async_configuration_set_cache_size(cynara_async_configuration *p_conf,
                                               size_t cache_size)
 {
+	p_conf->szcache = cache_size > 1000000 ? 1000000 : (uint32_t)cache_size;
 	return CYNARA_API_SUCCESS;
 }
 
@@ -385,7 +408,7 @@ int cynara_async_initialize(cynara_async **pp_cynara, const cynara_async_configu
 	if (p_cynara == NULL)
 		ret = CYNARA_API_OUT_OF_MEMORY;
 	else {
-		ret = from_status(rcyn_open(&p_cynara->rcyn, rcyn_Check, 0));
+		ret = from_status(rcyn_open(&p_cynara->rcyn, rcyn_Check, p_conf ? p_conf->szcache : 0));
 		if (ret != CYNARA_API_SUCCESS)
 			free(p_cynara);
 		else {
@@ -437,7 +460,7 @@ static void reqcb(void *closure, int status)
 		*p = req->next;
 
 	if (!req->canceled)
-		req->callback(req->id, CYNARA_CALL_CAUSE_ANSWER, status, req->user_response_data);
+		req->callback(req->id, CYNARA_CALL_CAUSE_ANSWER, from_check_status(status), req->user_response_data);
 
 	free(req);
 }
@@ -506,24 +529,32 @@ int cynara_async_cancel_request(cynara_async *p_cynara, cynara_check_id check_id
 
 /************************************* CLIENT **************************************/
 
+struct cynara_configuration { uint32_t szcache; };
+
 int cynara_configuration_create(cynara_configuration **pp_conf)
 {
-	*pp_conf = (cynara_configuration*)pp_conf;
+	*pp_conf = malloc(sizeof(cynara_configuration));
+	if (*pp_conf == NULL)
+		return CYNARA_API_OUT_OF_MEMORY;
+	(*pp_conf)->szcache = 0;
 	return CYNARA_API_SUCCESS;
 }
 
 void cynara_configuration_destroy(cynara_configuration *p_conf)
 {
+	free(p_conf);
 }
 
-int cynara_configuration_set_cache_size(cynara_configuration *p_conf, size_t cache_size)
+int cynara_configuration_set_cache_size(cynara_configuration *p_conf,
+                                              size_t cache_size)
 {
+	p_conf->szcache = cache_size > 1000000 ? 1000000 : (uint32_t)cache_size;
 	return CYNARA_API_SUCCESS;
 }
 
 int cynara_initialize(cynara **pp_cynara, const cynara_configuration *p_conf)
 {
-	return from_status(rcyn_open((rcyn_t**)pp_cynara, rcyn_Check, 0));
+	return from_status(rcyn_open((rcyn_t**)pp_cynara, rcyn_Check, p_conf ? p_conf->szcache : 0));
 }
 
 int cynara_finish(cynara *p_cynara)

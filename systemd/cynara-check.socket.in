@@ -1,6 +1,6 @@
 [Socket]
 FileDescriptorName=check
-ListenStream=@SOCKET_DIR@/cynara.check
+ListenStream=@DEFAULT_SOCKET_DIR@/cynara.check
 SocketMode=0666
 SmackLabelIPIn=*
 SmackLabelIPOut=@

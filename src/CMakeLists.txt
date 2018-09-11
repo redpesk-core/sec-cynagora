@@ -20,6 +20,7 @@ set(SERVER_SOURCES
 	cyn.c
 	db.c
 	fbuf.c
+	main-cynarad.c
 	prot.c
 	queue.c
 	rcyn-protocol.c
@@ -40,6 +41,14 @@ set(LIB_SOURCES
 # build and install cynarad
 ###########################################
 add_executable(cynarad ${SERVER_SOURCES})
+target_compile_definitions(cynarad PRIVATE
+	DEFAULT_DB_DIR="${DEFAULT_DB_DIR}"
+	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
+	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
+	RCYN_DEFAULT_CHECK_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.check"
+	RCYN_DEFAULT_ADMIN_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.admin"
+)
+target_link_libraries(cynarad cap)
 install(TARGETS cynarad
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
@@ -47,6 +56,10 @@ install(TARGETS cynarad
 # build and install libcynara
 ###########################################
 ADD_LIBRARY(cynara SHARED ${LIB_SOURCES})
+target_compile_definitions(cynara PRIVATE
+	RCYN_DEFAULT_CHECK_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.check"
+	RCYN_DEFAULT_ADMIN_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.admin"
+)
 SET_TARGET_PROPERTIES(cynara PROPERTIES
 	VERSION ${CYNARA_VERSION}
 	SOVERSION ${CYNARA_SOVERSION})
@@ -71,25 +84,9 @@ INSTALL(TARGETS test-cynara
 ###########################################
 
 if(SYSTEMD)
-   target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_CHECK_SOCKET_SPEC="sd:check")
-   target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_ADMIN_SOCKET_SPEC="sd:admin")
    target_compile_definitions(cynarad PRIVATE WITH_SYSTEMD_ACTIVATION)
    target_link_libraries(cynarad ${libsystemd_LDFLAGS} ${libsystemd_LINK_LIBRARIES})
    target_include_directories(cynarad PRIVATE ${libsystemd_INCLUDE_DIRS})
    target_compile_options(cynarad PRIVATE ${libsystemd_CFLAGS})
-else()
-   if(CHECK_SOCKET_SPEC)
-      target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_CHECK_SOCKET_SPEC="${CHECK_SOCKET_SPEC}")
-   endif()
-   if(ADMIN_SOCKET_SPEC)
-      target_compile_definitions(cynarad PRIVATE RCYN_DEFAULT_ADMIN_SOCKET_SPEC="${ADMIN_SOCKET_SPEC}")
-   endif()
-endif()
-
-if(CHECK_SOCKET_SPEC)
-  target_compile_definitions(cynara PRIVATE RCYN_DEFAULT_CHECK_SOCKET_SPEC="${CHECK_SOCKET_SPEC}")
-endif()
-if(ADMIN_SOCKET_SPEC)
-  target_compile_definitions(cynara PRIVATE RCYN_DEFAULT_ADMIN_SOCKET_SPEC="${ADMIN_SOCKET_SPEC}")
 endif()
 

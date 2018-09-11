@@ -4,8 +4,7 @@ Requires=afm-system-setup.service
 After=afm-system-setup.service
 
 [Service]
-ExecStartPre=+-/usr/bin/sh -c 'if test ! -d /var/lib/cynara; then mkdir -p /var/lib/cynara; chown cynara:cynara /var/lib/cynara; chsmack -a System /var/lib/cynara; fi'
-ExecStart=/usr/bin/cynarad
+ExecStart=/usr/bin/cynarad --systemd --user cynara --group cynara --make-db-dir --own-db-dir
 
 Type=notify
 
@@ -15,11 +14,11 @@ Restart=always
 
 Sockets=cynara-admin.socket
 Sockets=cynara-check.socket
-
-UMask=0000
-User=cynara
-Group=cynara
 SmackProcessLabel=System
+
+#UMask=0000
+#User=cynara
+#Group=cynara
 #NoNewPrivileges=true
 
 #Environment="CYNARA_LOG_LEVEL=LOG_DEBUG"

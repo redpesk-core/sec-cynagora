@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #define _GNU_SOURCE
 
@@ -6,6 +23,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <unistd.h>
@@ -14,7 +32,6 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <syslog.h>
 
 #include "fbuf.h"
 
@@ -31,15 +48,27 @@ get_asz(
 int
 fbuf_open(
 	fbuf_t	*fb,
-	const char *name
+	const char *name,
+	const char *backup
 ) {
 	struct stat st;
-	int fd, rc;
+	int fd, fdback, rc;
 	uint32_t sz, asz;
 	void *buffer;
 
+	/* open the backup */
+	if (backup == NULL)
+		fdback = -1;
+	else {
+		fdback = open(backup, O_RDWR|O_CREAT, 0600);
+		if (fdback < 0)
+			goto error;
+		rc = flock(fdback, LOCK_EX|LOCK_NB);
+		if (rc < 0)
+			goto error;
+	}
+
 	/* open the file */
-	//fd = open(name, O_RDWR|O_CREAT|O_SYNC|O_DIRECT, 0600);
 	fd = open(name, O_RDWR|O_CREAT, 0600);
 	if (fd < 0)
 		goto error;
@@ -71,12 +100,17 @@ fbuf_open(
 	if (read(fd, buffer, (size_t)sz) != (ssize_t)sz)
 		goto error4;
 
+	/* save name */
+	fb->name = strdup(name);
+	if (fb->name == NULL)
+		goto error4;
+
 	/* done */
-	fb->name = name;
 	fb->buffer = buffer;
 	fb->saved = fb->used = fb->size = sz;
 	fb->capacity = asz;
 	fb->fd = fd;
+	fb->backup = fdback;
 	return 0;
 
 error4:
@@ -86,9 +120,14 @@ error3:
 error2:
 	close(fd);
 error:
-	syslog(LOG_ERR, "can't open file %s: %m", name);
+	rc = -errno;
+	fprintf(stderr, "can't open file %s: %m", name);
+	if (fdback >= 0) {
+		flock(fdback, LOCK_UN);
+		close(fdback);
+	}
 	memset(fb, 0, sizeof *fb);
-	return -errno;
+	return rc;
 }
 
 /** close the file 'fb' */
@@ -96,9 +135,14 @@ void
 fbuf_close(
 	fbuf_t	*fb
 ) {
+	free(fb->name);
 	free(fb->buffer);
 	flock(fb->fd, LOCK_UN);
 	close(fb->fd);
+	if (fb->backup >= 0) {
+		flock(fb->backup, LOCK_UN);
+		close(fb->backup);
+	}
 	memset(fb, 0, sizeof *fb);
 }
 
@@ -110,25 +154,19 @@ fbuf_write(
 	uint32_t count,
 	uint32_t offset
 ) {
-	off_t rco;
 	ssize_t rcs;
 
 	/* don't call me for nothing */
 	assert(count);
 
-	/* set write position */
-	rco = lseek(fb->fd, (off_t)offset, SEEK_SET);
-	if (rco != (off_t)offset)
-		goto error;
-
 	/* effective write */
-	rcs = write(fb->fd, buffer, (size_t)count);
+	rcs = pwrite(fb->fd, buffer, (size_t)count, (off_t)offset);
 	if (rcs != (ssize_t)count)
 		goto error;
 
 	return 0;
 error:
-	syslog(LOG_ERR, "write of file %s failed: %m", fb->name);
+	fprintf(stderr, "write of file %s failed: %m", fb->name);
 	return -errno;
 }
 
@@ -167,7 +205,7 @@ fbuf_sync(
 
 	return 0;
 error:
-	syslog(LOG_ERR, "sync of file %s failed: %m", fb->name);
+	fprintf(stderr, "sync of file %s failed: %m", fb->name);
 	return -errno;
 }
 
@@ -184,7 +222,7 @@ fbuf_ensure_capacity(
 		capacity = get_asz(count);
 		buffer = realloc(fb->buffer, capacity);
 		if (buffer == NULL) {
-			syslog(LOG_ERR, "alloc %u for file %s failed: %m", capacity, fb->name);
+			fprintf(stderr, "alloc %u for file %s failed: %m", capacity, fb->name);
 			return -ENOMEM;
 		}
 		fb->buffer = buffer;
@@ -254,7 +292,7 @@ fbuf_identify(
 
 	/* bad identification */
 	errno = ENOKEY;
-	syslog(LOG_ERR, "identification of file %s failed: %m", fb->name);
+	fprintf(stderr, "identification of file %s failed: %m", fb->name);
 	return -ENOKEY;
 }
 
@@ -263,17 +301,103 @@ int
 fbuf_open_identify(
 	fbuf_t	*fb,
 	const char *name,
+	const char *backup,
 	const char *id,
 	uint32_t idlen
 ) {
 	int rc;
 
-	rc = fbuf_open(fb, name);
+	rc = fbuf_open(fb, name, backup);
 	if (rc == 0) {
 		rc = fbuf_identify(fb, id, idlen);
 		if (rc < 0)
 			fbuf_close(fb);
 	}
 	return rc;
+}
+
+
+/* On versions of glibc before 2.27, we must invoke copy_file_range()
+  using syscall(2) */
+#include <features.h>
+#if (__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 27)
+#include <syscall.h>
+static
+loff_t
+copy_file_range(
+	int fd_in,
+	loff_t *off_in,
+	int fd_out,
+	loff_t *off_out,
+	size_t len,
+	unsigned int flags
+) {
+	loff_t rc;
+
+	rc = syscall(__NR_copy_file_range, fd_in, off_in, fd_out,
+				off_out, len, flags);
+	return rc;
+}
+#endif
+
+
+/** make a backup */
+int
+fbuf_backup(
+	fbuf_t	*fb
+) {
+	int rc;
+	size_t sz;
+	ssize_t wsz;
+	loff_t ino, outo;
+
+	ino = outo = 0;
+	sz = fb->size;
+	for (;;) {
+		wsz = copy_file_range(fb->fd, &ino, fb->backup, &outo, sz, 0);
+		if (wsz < 0) {
+			if (errno != EINTR)
+				return -errno;
+		} else {
+			sz -= (size_t)wsz;
+			if (sz == 0) {
+				rc = ftruncate(fb->backup, outo);
+				if (rc == 0)
+					rc = fsync(fb->backup);
+				return rc < 0 ? -errno : 0;
+			}
+		}
+	}
+}
+
+/** recover from latest backup */
+int
+fbuf_recover(
+	fbuf_t	*fb
+) {
+	ssize_t ssz;
+	struct stat st;
+	int rc;
+
+	/* get the size */
+	rc = fstat(fb->backup, &st);
+	if (rc < 0)
+		return -errno;
+
+	/* ensure space */
+	if (st.st_size > UINT32_MAX)
+		return -EFBIG;
+	rc = fbuf_ensure_capacity(fb, (uint32_t)st.st_size);
+	if (rc < 0)
+		return rc;
+
+	/* read it */
+	ssz = pread(fb->backup, fb->buffer, (size_t)st.st_size, 0); 
+	if (ssz < 0)
+		return -errno;
+
+	fb->used = (uint32_t)st.st_size;
+	fb->saved = fb->size = 0; /* ensure rewrite of restored data */
+	return 0;
 }
 

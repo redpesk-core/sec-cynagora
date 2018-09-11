@@ -23,13 +23,16 @@ PROJECT(cynara C)
 SET(PROJECT_NAME "Cynara")
 SET(PROJECT_PRETTY_NAME "Permission database")
 SET(PROJECT_DESCRIPTION "Secured permission database for applications")
-SET(PROJECT_VERSION "1.99.RC1")
+SET(PROJECT_VERSION "1.99.99")
 set(PROJECT_URL "https://gerrit.automotivelinux.org/gerrit/gitweb?p=src/cynara.git;a=summary")
 
 INCLUDE(FindPkgConfig)
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckLibraryExists)
 INCLUDE(GNUInstallDirs)
+if(NOT CMAKE_INSTALL_FULL_RUNSTATEDIR)
+  set(CMAKE_INSTALL_FULL_RUNSTATEDIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/run")
+endif()
 INCLUDE(CTest)
 
 ###########################################################################
@@ -41,6 +44,13 @@ set(CYNARA_SOVERSION 1.99)
 add_definitions(-DCYNARA_VERSION="${CYNARA_VERSION}")
 
 set(SYSTEMD ON CACHE BOOL "should use systemd")
+set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynara"
+	CACHE PATH "directory path of the database")
+set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}"
+	CACHE PATH "directory path of the sockets")
+set(DEFAULT_CONFIG_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security"
+	CACHE PATH "directory of configuration")
+set(DEFAULT_INIT_FILE "${DEFAULT_CONFIG_DIR}/cynara.initial")
 
 ###########################################################################
 
@@ -65,18 +75,15 @@ set(CMAKE_C_FLAGS_CCOV         "-g -O2 --coverage")
 
 if(SYSTEMD)
    PKG_CHECK_MODULES(libsystemd REQUIRED libsystemd>=222)
-endif()
-
-if(SYSTEMD)
-   set(SOCKET_DIR "/run/platform"
-                  CACHE PATH "path of the socket system directories")
-   set(SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/systemd/system"
-                  CACHE PATH "Path to systemd system unit files")
-   set(CHECK_SOCKET_SPEC "unix:${SOCKET_DIR}/cynara.check")
-   set(ADMIN_SOCKET_SPEC "unix:${SOCKET_DIR}/cynara.admin")
    add_subdirectory(systemd)
 endif()
+
 add_subdirectory(include)
 add_subdirectory(src)
 add_subdirectory(pkgconfig)
 
+install(FILES
+	${CMAKE_CURRENT_SOURCE_DIR}/cynara.initial
+	DESTINATION
+	${DEFAULT_CONFIG_DIR}
+)

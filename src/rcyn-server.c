@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #define _GNU_SOURCE
 
 #include <stdbool.h>
@@ -11,23 +28,22 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
+#include <limits.h>
 #include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#if defined(WITH_SYSTEMD_ACTIVATION)
-#include <systemd/sd-daemon.h>
-#endif
-
 #include "prot.h"
 #include "cyn.h"
 #include "rcyn-protocol.h"
+#include "rcyn-server.h"
 #include "socket.h"
 
 typedef enum rcyn_type {
 	rcyn_Check,
 	rcyn_Admin
 } rcyn_type_t;
+
 
 /** structure for using epoll easily */
 typedef struct pollitem pollitem_t;
@@ -37,10 +53,10 @@ struct pollitem
 	void (*handler)(pollitem_t *pollitem, uint32_t events, int pollfd);
 
 	/** data */
-	union {
-		void *closure;
-		int fd;
-	};
+	void *closure;
+
+	/** file */
+	int fd;
 };
 
 static
@@ -48,12 +64,11 @@ int
 pollitem_do(
 	pollitem_t *pollitem,
 	uint32_t events,
-	int fd,
 	int pollfd,
 	int op
 ) {
 	struct epoll_event ev = { .events = events, .data.ptr = pollitem };
-	return epoll_ctl(pollfd, op, fd, &ev);
+	return epoll_ctl(pollfd, op, pollitem->fd, &ev);
 }
 
 static
@@ -61,10 +76,9 @@ int
 pollitem_add(
 	pollitem_t *pollitem,
 	uint32_t events,
-	int fd,
 	int pollfd
 ) {
-	return pollitem_do(pollitem, events, fd, pollfd, EPOLL_CTL_ADD);
+	return pollitem_do(pollitem, events, pollfd, EPOLL_CTL_ADD);
 }
 
 #if 0
@@ -73,20 +87,19 @@ int
 pollitem_mod(
 	pollitem_t *pollitem,
 	uint32_t events,
-	int fd,
 	int pollfd
 ) {
-	return pollitem_do(pollitem, events, fd, pollfd, EPOLL_CTL_MOD);
+	return pollitem_do(pollitem, events, pollfd, EPOLL_CTL_MOD);
 }
 #endif
 
 static
 int
 pollitem_del(
-	int fd,
+	pollitem_t *pollitem,
 	int pollfd
 ) {
-	return pollitem_do(NULL, 0, fd, pollfd, EPOLL_CTL_DEL);
+	return pollitem_do(pollitem, 0, pollfd, EPOLL_CTL_DEL);
 }
 
 
@@ -95,9 +108,6 @@ struct client
 {
 	/** a protocol structure */
 	prot_t *prot;
-
-	/** the in/out file descriptor */
-	int fd;
 
 	/** type of client */
 	rcyn_type_t type;
@@ -124,6 +134,22 @@ struct client
 	pollitem_t pollitem;
 };
 typedef struct client client_t;
+
+/** structure for servers */
+struct rcyn_server
+{
+	/** the pollfd to use */
+	int pollfd;
+
+	/** is stopped ? */
+	int stopped;
+
+	/** the admin socket */
+	pollitem_t admin;
+
+	/** the check socket */
+	pollitem_t check;
+};
 
 /**
  * Check 'arg' against 'value' beginning at offset accepting it if 'arg' prefixes 'value'
@@ -157,9 +183,9 @@ flushw(
 
 	rc = prot_should_write(cli->prot);
 	while (rc) {
-		rc = prot_write(cli->prot, cli->fd);
+		rc = prot_write(cli->prot, cli->pollitem.fd);
 		if (rc == -EAGAIN) {
-			pfd.fd = cli->fd;
+			pfd.fd = cli->pollitem.fd;
 			pfd.events = POLLOUT;
 			do { rc = poll(&pfd, 1, 0); } while (rc < 0 && errno == EINTR);
 		}
@@ -418,7 +444,7 @@ destroy_client(
 	bool closefds
 ) {
 	if (closefds)
-		close(cli->fd);
+		close(cli->pollitem.fd);
 	if (cli->entering)
 		cyn_enter_async_cancel(entercb, cli);
 	if (cli->entered)
@@ -446,7 +472,7 @@ on_client_event(
 
 	/* possible input */
 	if (events & EPOLLIN) {
-		nr = prot_read(cli->prot, cli->fd);
+		nr = prot_read(cli->prot, cli->pollitem.fd);
 		if (nr <= 0)
 			goto terminate;
 		nargs = prot_get(cli->prot, &args);
@@ -462,7 +488,7 @@ on_client_event(
 
 	/* terminate the client session */
 terminate:
-	pollitem_del(cli->fd, pollfd);
+	pollitem_del(&cli->pollitem, pollfd);
 	destroy_client(cli, true);
 }
 
@@ -495,7 +521,6 @@ create_client(
 		goto error3;
 
 	/* records the file descriptor */
-	cli->fd = fd;
 	cli->type = type;
 	cli->version = 0; /* version not set */
 	cli->relax = true; /* relax on error */
@@ -505,6 +530,7 @@ create_client(
 	cli->checked = false; /* no check made */
 	cli->pollitem.handler = on_client_event;
 	cli->pollitem.closure = cli;
+	cli->pollitem.fd = fd;
 	return 0;
 error3:
 	prot_destroy(cli->prot);
@@ -559,7 +585,7 @@ on_server_event(
 	}
 
 	/* add the client to the epolling */
-	rc = pollitem_add(&cli->pollitem, EPOLLIN, fd, pollfd);
+	rc = pollitem_add(&cli->pollitem, EPOLLIN, pollfd);
 	if (rc < 0) {
 		fprintf(stderr, "can't poll client connection: %s\n", strerror(-rc));
 		destroy_client(cli, 1);
@@ -589,66 +615,159 @@ on_admin_server_event(
 	on_server_event(pollitem, events, pollfd, rcyn_Admin);
 }
 
+/** destroy a server */
+void
+rcyn_server_destroy(
+	rcyn_server_t *server
+) {
+	if (server) {
+		if (server->pollfd >= 0)
+			close(server->pollfd);
+		if (server->admin.fd >= 0)
+			close(server->admin.fd);
+		if (server->check.fd >= 0)
+			close(server->check.fd);
+		free(server);
+	}
+}
+
+/** create a server */
+int
+rcyn_server_create(
+	rcyn_server_t **server,
+	const char *admin_socket_spec,
+	const char *check_socket_spec
+) {
+	rcyn_server_t *srv;
+	int rc;
+
+	/* allocate the structure */
+	*server = srv = malloc(sizeof *srv);
+	if (srv == NULL) {
+		rc = -ENOMEM;
+		fprintf(stderr, "can't alloc memory: %m\n");
+		goto error;
+	}
+
+	/* create the polling fd */
+	srv->admin.fd = srv->check.fd = -1;
+	srv->pollfd = epoll_create1(EPOLL_CLOEXEC);
+	if (srv->pollfd < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't create polling: %m\n");
+		goto error2;
+	}
+
+	/* create the admin server socket */
+	admin_socket_spec = admin_socket_spec ?: rcyn_default_admin_socket_spec;
+	srv->admin.fd = socket_open(admin_socket_spec, 1);
+	if (srv->admin.fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't create admin server socket %s: %m\n", admin_socket_spec);
+		goto error2;
+	}
+
+	/* add the server to pollfd */
+	srv->admin.handler = on_admin_server_event;
+	srv->admin.closure = srv;
+	rc = pollitem_add(&srv->admin, EPOLLIN, srv->pollfd);
+	if (rc < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't poll admin server: %m\n");
+		goto error2;
+	}
+
+	/* create the server socket */
+	check_socket_spec = check_socket_spec ?: rcyn_default_check_socket_spec;
+	srv->check.fd = socket_open(check_socket_spec, 1);
+	if (srv->check.fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't create check server socket %s: %m\n", check_socket_spec);
+		goto error2;
+	}
+
+	/* add the server to pollfd */
+	srv->check.handler = on_check_server_event;
+	srv->check.closure = srv;
+	rc = pollitem_add(&srv->check, EPOLLIN, srv->pollfd);
+	if (rc < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't poll check server: %m\n");
+		goto error2;
+	}
+	return 0;
+
+error2:
+	if (srv->pollfd >= 0)
+		close(srv->pollfd);
+	if (srv->admin.fd >= 0)
+		close(srv->admin.fd);
+	if (srv->check.fd >= 0)
+		close(srv->check.fd);
+	free(srv);
+error:
+	*server = NULL;
+	return rc;
+}
+
+/** stop the server */
+void
+rcyn_server_stop(
+	rcyn_server_t *server,
+	int status
+) {
+	server->stopped = status ?: INT_MIN;
+}
+
+/** create a server */
+int
+rcyn_server_serve(
+	rcyn_server_t *server
+) {
+	int rc;
+	struct epoll_event ev;
+	pollitem_t *pi;
+
+	/* process inputs */
+	server->stopped = 0;
+	while(!server->stopped) {
+		rc = epoll_wait(server->pollfd, &ev, 1, -1);
+		if (rc == 1) {
+			pi = ev.data.ptr;
+			pi->handler(pi, ev.events, server->pollfd);
+		}
+	}
+	return server->stopped == INT_MIN ? 0 : server->stopped;
+}
+
+#if 0
+#if defined(WITH_SYSTEMD_ACTIVATION)
+#include <systemd/sd-daemon.h>
+#endif
+
+
 int main(int ac, char **av)
 {
 	int rc;
-	pollitem_t pi_admin, pi_check, *pi;
-	int pollfd, fd;
-	struct epoll_event ev;
 	const char *check_spec = rcyn_default_check_socket_spec;
 	const char *admin_spec = rcyn_default_admin_socket_spec;
-
-	/*
-	 * future possible options:
-	 *    - strict/relax
-	 *    - databse name(s)
-	 *    - socket name
-	 *    - policy
-	 */
+	rcyn_server_t *server;
 
 	/* connection to the database */
-	rc = cyn_init();
+	rc = cyn_init(
+		"/var/lib/cynara/cynara.names",
+		"/var/lib/cynara/cynara.rules",
+		(const char**)((const char *[]){ "System", "*", "*", "*", "1", NULL })
+	);
 	if (rc < 0) {
 		fprintf(stderr, "can't initialise database: %m\n");
 		return 1;
 	}
 
-	/* create the polling fd */
-	pollfd = epoll_create1(EPOLL_CLOEXEC);
-	if (pollfd < 0) {
-		fprintf(stderr, "can't create polling: %m\n");
-		return 1;
-	}
-
-	/* create the admin server socket */
-	fd = socket_open(admin_spec, 1);
-	if (fd < 0) {
-		fprintf(stderr, "can't create admin server socket: %m\n");
-		return 1;
-	}
-
-	/* add the server to pollfd */
-	pi_admin.handler = on_admin_server_event;
-	pi_admin.fd = fd;
-	rc = pollitem_add(&pi_admin, EPOLLIN, fd, pollfd);
+	/* create the server */
+	rc = rcyn_server_create(&server, admin_spec, check_spec);
 	if (rc < 0) {
-		fprintf(stderr, "can't poll admin server: %m\n");
-		return 1;
-	}
-
-	/* create the server socket */
-	fd = socket_open(check_spec, 1);
-	if (fd < 0) {
-		fprintf(stderr, "can't create check server socket: %m\n");
-		return 1;
-	}
-
-	/* add the server to pollfd */
-	pi_check.handler = on_check_server_event;
-	pi_check.fd = fd;
-	rc = pollitem_add(&pi_check, EPOLLIN, fd, pollfd);
-	if (rc < 0) {
-		fprintf(stderr, "can't poll check server: %m\n");
+		fprintf(stderr, "can't initialise server: %m\n");
 		return 1;
 	}
 
@@ -658,12 +777,7 @@ int main(int ac, char **av)
 #endif
 
 	/* process inputs */
-	for(;;) {
-		rc = epoll_wait(pollfd, &ev, 1, -1);
-		if (rc == 1) {
-			pi = ev.data.ptr;
-			pi->handler(pi, ev.events, pollfd);
-		}
-	}
+	rcyn_server_serve(server);
 }
+#endif
 

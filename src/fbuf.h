@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #pragma once
 
 /**
@@ -6,7 +23,7 @@
 struct fbuf
 {
         /** filename for messages */
-        const char *name;
+        char *name;
 
         /** in memory copy of the file */
         void *buffer;
@@ -25,18 +42,22 @@ struct fbuf
 
         /** opened file descriptor for the file */
         int fd;
+
+        /** opened file descriptor for the backup */
+        int backup;
 };
 
 /** short type */
 typedef struct fbuf fbuf_t;
 
 
-/** open in 'fb' the file of 'name' */
+/** open in 'fb' the file of 'name' and optionnal 'backup' name */
 extern
 int
 fbuf_open(
 	fbuf_t	*fb,
-	const char *name
+	const char *name,
+	const char *backup
 );
 
 /** close the file 'fb' */
@@ -105,7 +126,20 @@ int
 fbuf_open_identify(
 	fbuf_t	*fb,
 	const char *name,
+	const char *backup,
 	const char *id,
 	uint32_t idlen
+);
+
+extern
+int
+fbuf_backup(
+	fbuf_t	*fb
+);
+
+extern
+int
+fbuf_recover(
+	fbuf_t	*fb
 );
 

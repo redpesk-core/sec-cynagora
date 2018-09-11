@@ -1,0 +1,4 @@
+# initial database for cynara
+System * * * 1
+User * * * 1
+

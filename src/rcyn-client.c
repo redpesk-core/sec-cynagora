@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #define _GNU_SOURCE
 
 #include <stdbool.h>
@@ -106,7 +123,7 @@ flushw(
 		if (rc == -EAGAIN) {
 			pfd.fd = rcyn->fd;
 			pfd.events = POLLOUT;
-			do { rc = poll(&pfd, 1, 0); } while (rc < 0 && errno == EINTR);
+			do { rc = poll(&pfd, 1, -1); } while (rc < 0 && errno == EINTR);
 			if (rc < 0)
 				rc = -errno;
 		}
@@ -170,7 +187,7 @@ wait_input(
 
 	pfd.fd = rcyn->fd;
 	pfd.events = POLLIN;
-	do { rc = poll(&pfd, 1, 0); } while (rc < 0 && errno == EINTR);
+	do { rc = poll(&pfd, 1, -1); } while (rc < 0 && errno == EINTR);
 	return rc < 0 ? -errno : 0;
 }
 
@@ -284,7 +301,7 @@ async(
 	int op,
 	uint32_t events
 ) {
-	return rcyn->async.controlcb
+	return rcyn->async.controlcb && rcyn->fd >= 0
 		? rcyn->async.controlcb(rcyn->async.closure, op, rcyn->fd, events)
 		: 0;
 }
@@ -344,6 +361,13 @@ connection(
 	return rc;
 }
 
+static
+int
+ensure_opened(
+	rcyn_t *rcyn
+) {
+	return rcyn->fd < 0 ? connection(rcyn) : 0;
+}
 
 /************************************************************************************/
 
@@ -375,17 +399,12 @@ rcyn_open(
 	rcyn->async.closure = 0;
 	rcyn->async.requests = NULL;
 
-	/* connection */
-	rc = connection(rcyn);
-	if (rc < 0)
-		goto error3;
+	/* lazy connection */
+	rcyn->fd = -1;
 
 	/* done */
 	return 0;
 
-error3:
-	free(rcyn->cache);
-	prot_destroy(rcyn->prot);
 error2:
 	free(rcyn);
 error:
@@ -414,6 +433,9 @@ rcyn_enter(
 		return -EPERM;
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
 
 	rc = putx(rcyn, _enter_, NULL);
 	if (rc >= 0)
@@ -432,6 +454,9 @@ rcyn_leave(
 		return -EPERM;
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
 
 	rc = putx(rcyn, _leave_, commit ? _commit_ : NULL/*default: rollback*/, NULL);
 	if (rc >= 0)
@@ -453,6 +478,9 @@ check_or_test(
 
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
 
 	/* ensure there is no clear cache pending */
 	flushr(rcyn);
@@ -514,6 +542,9 @@ rcyn_set(
 		return -EPERM;
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
 
 	snprintf(val, sizeof val, "%u", (unsigned)value);
 	rc = putx(rcyn, _set_, client, session, user, permission, val, NULL);
@@ -545,6 +576,9 @@ rcyn_get(
 		return -EPERM;
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
 
 	rc = putx(rcyn, _get_, client, session, user, permission, NULL);
 	if (rc >= 0) {
@@ -577,6 +611,9 @@ rcyn_drop(
 		return -EPERM;
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
 
 	rc = putx(rcyn, _drop_, client, session, user, permission, NULL);
 	if (rc >= 0)
@@ -645,6 +682,7 @@ rcyn_async_process(
 	int rc;
 	const char *first;
 	asreq_t *ar;
+	const char *client, *session, *user, *permission;
 
 	for (;;) {
 		/* non blocking wait for a reply */
@@ -670,6 +708,13 @@ rcyn_async_process(
 		/* emit the asynchronous answer */
 		rcyn->async.requests = ar->next;
 		rc = status_check(rcyn);
+		if (rc >= 0) {
+			client = (const char*)(ar + 1);
+			session = &client[1 + strlen(client)];
+			user = &session[1 + strlen(session)];
+			permission = &user[1 + strlen(user)];
+			cache_put(rcyn->cache, client, session, user, permission, rc);
+		}
 		ar->callback(ar->closure, rc);
 		free(ar);
 	}
@@ -691,8 +736,12 @@ rcyn_async_check(
 	int rc;
 	asreq_t **pr, *ar;
 
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
+
 	/* allocate */
-	ar = malloc(sizeof *ar);
+	ar = malloc(sizeof *ar + strlen(client) + strlen(session) + strlen(user) + strlen(permission) + 4);
 	if (ar == NULL)
 		return -ENOMEM;
 
@@ -700,6 +749,7 @@ rcyn_async_check(
 	ar->next = NULL;
 	ar->callback = callback;
 	ar->closure = closure;
+	stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy((char*)(ar + 1), client), session), user), permission);
 
 	/* send the request */
 	rc = putx(rcyn, simple ? _test_ : _check_,

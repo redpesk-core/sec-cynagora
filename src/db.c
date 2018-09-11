@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2018 "IoT.bzh"
+ * Author José Bollo <jose.bollo@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #define _GNU_SOURCE
 
@@ -7,9 +24,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdalign.h>
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <syslog.h>
 
 #include "fbuf.h"
 #include "db.h"
@@ -49,6 +66,10 @@ typedef struct session session_t;
  *  - rules: the rules based on name indexes as 32bits indexes
  * These files are normally in /var/lib/cynara
  */
+#if !defined(DEFAULT_DB_DIR)
+#    define  DEFAULT_DB_DIR  "/var/lib/cynara"
+#endif
+static const char db_default_directory[] = DEFAULT_DB_DIR;
 
 /** the file for the names */
 static fbuf_t fnames;
@@ -161,7 +182,7 @@ db_get_name_index(
 	if (!(up & 1023)) {
 		p = realloc(names_sorted, (up + 1024) * sizeof *names_sorted);
 		if (p == NULL) {
-			syslog(LOG_ERR, "out of memory");
+			fprintf(stderr, "out of memory");
 			return -1;
 		}
 		names_sorted = p;
@@ -199,7 +220,7 @@ init_names(
 			p = realloc(ns, all * sizeof *ns);
 			if (p == NULL) {
 				free(ns);
-				syslog(LOG_ERR, "out of memory");
+				fprintf(stderr, "out of memory");
 				goto error;
 			}
 			ns = p;
@@ -228,7 +249,7 @@ init_names(
 
 	return 0;
 bad_file:
-	syslog(LOG_ERR, "bad file %s", fnames.name);
+	fprintf(stderr, "bad file %s", fnames.name);
 	errno = ENOEXEC;
 error:
 	return -1;
@@ -392,21 +413,53 @@ init_rules(
 	sessions.count = (frules.used - uuidlen) / sizeof *sessions.rules;
 }
 
+/** open a fbuf */
+static
+int
+open_identify(
+	fbuf_t	*fb,
+	const char *directory,
+	const char *name,
+	const char *id,
+	uint32_t idlen
+) {
+	int rc;
+	char *file, *backup;
+
+	rc = asprintf(&file, "%s/%s", directory, name);
+	if (rc < 0)
+		rc = -ENOMEM;
+	else {
+		rc = asprintf(&backup, "%s~", file);
+		if (rc < 0)
+			rc = -ENOMEM;
+		else {
+			rc = fbuf_open_identify(fb, file, backup, id, idlen);
+			free(backup);
+		}
+		free(file);
+	}
+	return rc;
+}
+
 /** open the database for files 'names' and 'rules' (can be NULL) */
 int
 db_open(
-	const char *names,
-	const char *rules
+	const char *directory
 ) {
 	int rc;
 
+	/* provide default directory */
+	if (directory == NULL)
+		directory = db_default_directory;
+
 	/* open the names */
-	rc = fbuf_open_identify(&fnames, names ?: "cynara.names", uuid_names_v1, uuidlen);
+	rc = open_identify(&fnames, directory, "cynara.names", uuid_names_v1, uuidlen);
 	if (rc < 0)
 		goto error;
 
 	/* open the rules */
-	rc = fbuf_open_identify(&frules, rules ?: "cynara.rules", uuid_rules_v1, uuidlen);
+	rc = open_identify(&frules, directory, "cynara.rules", uuid_rules_v1, uuidlen);
 	if (rc < 0)
 		goto error;
 
@@ -447,6 +500,47 @@ db_sync(
 	rc = fbuf_sync(&fnames);
 	if (rc == 0)
 		rc = fbuf_sync(&frules);
+	return rc;
+}
+
+/** make a backup of the database */
+int
+db_backup(
+) {
+	int rc;
+
+	assert(fnames.name && frules.name);
+	rc = fbuf_backup(&fnames);
+	if (rc == 0)
+		rc = fbuf_backup(&frules);
+	return rc;
+}
+
+/** recover the database from latest backup */
+int
+db_recover(
+) {
+	int rc;
+
+	assert(fnames.name && frules.name);
+
+	rc = fbuf_recover(&fnames);
+	if (rc < 0)
+		goto error;
+
+	rc = fbuf_recover(&frules);
+	if (rc < 0)
+		goto error;
+
+	rc = init_names();
+	if (rc < 0)
+		goto error;
+
+	init_rules();
+	return 0;
+error:
+	fprintf(stderr, "db recovering impossible: %m");
+	exit(5);
 	return rc;
 }
 
