@@ -88,6 +88,7 @@ changed(
 	int rc;
 	struct callback *c;
 
+	db_cleanup(0);
 	rc = db_sync();
 	for (c = observers; c ; c = c->next)
 		c->callback(c->closure);
@@ -197,11 +198,12 @@ cyn_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
 	if (!lock)
 		return -EPERM;
-	return queue_set(client, session, user, permission, value);
+	return queue_set(client, session, user, permission, value, expire);
 }
 
 int
@@ -225,7 +227,8 @@ cyn_list(
 		const char *session,
 		const char *user,
 		const char *permission,
-		uint32_t value),
+		const char *value,
+		time_t expire),
 	const char *client,
 	const char *session,
 	const char *user,
@@ -240,11 +243,12 @@ cyn_test(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t *value
+	const char **value,
+	time_t *expire
 ) {
 	int rc;
 
-	rc = db_test(client, session, user, permission, value);
+	rc = db_test(client, session, user, permission, value, expire);
 	if (rc <= 0)
 		*value = DEFAULT;
 	else
@@ -254,24 +258,25 @@ cyn_test(
 
 int
 cyn_check_async(
-	void (*check_cb)(void *closure, uint32_t value),
+	void (*check_cb)(void *closure, const char *value, time_t expire),
 	void *closure,
 	const char *client,
 	const char *session,
 	const char *user,
 	const char *permission
 ) {
-	uint32_t value;
+	const char *value;
+	time_t expire;
 
-	cyn_test(client, session, user, permission, &value);
-	if (value == ALLOW || value == DENY) {
-		check_cb(closure, value);
+	cyn_test(client, session, user, permission, &value, &expire);
+	if (!strcmp(value, ALLOW) || !strcmp(value, DENY)) {
+		check_cb(closure, value, expire);
 		return 0;
 	}
 
 	/* TODO: try to resolve AGENT?? */
 
-	check_cb(closure, value);
+	check_cb(closure, value, expire);
 	return 0;
 }
 

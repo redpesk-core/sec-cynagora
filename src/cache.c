@@ -18,25 +18,47 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdalign.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include <ctype.h>
 
 #include "cache.h"
 
 /**
- * The cache structure is a blob of memory ('content')
- * of 'count' bytes of only 'used' bytes.
- * That blob containts at sequence of records of variable length
- * Each records holds the following values in that given order:
- *  - length: 2 bytes unsigned integer LSB first, MSB second
- *  - hit count: 1 byte unsigned integer
- *  - value: 1 byte unsigned integer
+ * A cache item header
+ *
+ * Each item is followed by values in that given order:
  *  - client: zero  terminated string
  *  - session: zero  terminated string
  *  - user: zero  terminated string
  *  - permission: zero  terminated string
  *  - 
+ */
+struct item
+{
+	/** expiration */
+	time_t expire;
+
+	/** length of the cache entry including this header */
+	uint16_t length;
+
+	/** hit indicator */
+	uint8_t hit;
+
+	/** value to store */
+	int8_t value;
+
+	/** fake ending character */
+	char strings;
+};
+typedef struct item item_t;
+
+/**
+ * The cache structure is a blob of memory ('content')
+ * of 'count' bytes of only 'used' bytes.
+ * That blob containts at sequence of records of variable length
  */
 struct cache
 {
@@ -46,12 +68,13 @@ struct cache
 };
 
 static
-uint32_t
-lenat(
+inline
+item_t *
+itemat(
 	cache_t *cache,
 	uint32_t pos
 ) {
-	return ((uint32_t)cache->content[pos]) |  (((uint32_t)cache->content[pos + 1]) << 8);
+	return (item_t*)(&cache->content[pos]);
 }
 
 static
@@ -62,7 +85,7 @@ drop_at(
 ) {
 	uint32_t e, l;
 
-	l = lenat(cache, pos);
+	l = itemat(cache, pos)->length;
 	e = pos + l;
 	cache->used -= l;
 	if (cache->used > e)
@@ -75,13 +98,15 @@ drop_lre(
 	cache_t *cache
 ) {
 	uint32_t found = 0, iter = 0;
-	uint8_t hmin = 255, hint;
+	uint8_t hmin = 255, hit;
+	item_t *item;
 
 	while (iter < cache->used) {
-		hint = cache->content[iter + 2];
-		if (hint < hmin)
+		item = itemat(cache, iter);
+		hit = item->hit;
+		if (hit < hmin)
 			found = iter;
-		iter += lenat(cache, iter);
+		iter += item->length;
 	}
 	if (found < cache->used)
 		drop_at(cache, found);
@@ -91,21 +116,23 @@ static
 void
 hit(
 	cache_t *cache,
-	uint32_t pos
+	item_t *target
 ) {
 	uint32_t iter = 0;
-	uint8_t hint;
+	uint8_t hit;
+	item_t *item;
 
 	while (iter < cache->used) {
-		if (iter == pos)
-			hint = 255;
+		item = itemat(cache, iter);
+		if (item == target)
+			hit = 255;
 		else {
-			hint = cache->content[iter + 2];
-			if (hint)
-				hint--;
+			hit = item->hit;
+			if (hit)
+				hit--;
 		}
-		cache->content[iter + 2] = hint;
-		iter += lenat(cache, iter);
+		item->hit = hit;
+		iter += item->length;
 	}
 }
 
@@ -135,7 +162,6 @@ cmp(
 	return 0;
 }
 
-
 static
 int
 match(
@@ -156,7 +182,7 @@ match(
 }
 
 static
-uint32_t
+item_t*
 search(
 	cache_t *cache,
 	const char *client,
@@ -164,16 +190,24 @@ search(
 	const char *user,
 	const char *permission
 ) {
-	char *txt;
-	uint32_t iter = 0;
+	time_t now;
+	item_t *item, *found;
+	uint32_t iter;
 
+	found = NULL;
+	now = time(NULL);
+	iter = 0;
 	while (iter < cache->used) {
-		txt = (char*)&cache->content[iter + 4];
-		if (match(txt, client, session, user, permission))
-			return iter;
-		iter += lenat(cache, iter);
+		item = itemat(cache, iter);
+		if (item->expire && item->expire < now)
+			drop_at(cache, iter);
+		else {
+			if (match(&item->strings, client, session, user, permission))
+				found = item;
+			iter += item->length;
+		}
 	}
-	return iter;
+	return found;
 }
 
 int
@@ -183,37 +217,40 @@ cache_put(
 	const char *session,
 	const char *user,
 	const char *permission,
-	int value
+	int value,
+	time_t expire
 ) {
-	uint32_t pos;
-	size_t size, scli, sses, susr, sper;
+	uint16_t length;
+	item_t *item;
+	size_t size;
 
-	if (cache == NULL || value < 0 || value > 255)
+	if (cache == NULL || value < -128 || value > 127)
 		return -EINVAL;
 
-	pos = search(cache, client, session, user, permission);
-	if (pos < cache->used)
-		cache->content[pos + 3] = (uint8_t)value;
-	else {
-		scli = strlen(client);
-		sses = strlen(session);
-		susr = strlen(user);
-		sper = strlen(permission);
-		size = scli + sses + susr + sper + 8;
+	item = search(cache, client, session, user, permission);
+	if (item == NULL) {
+		/* create an item */
+		size = (size_t)(&((item_t*)0)->strings)
+			+ strlen(client)
+			+ strlen(session)
+			+ strlen(user)
+			+ strlen(permission);
+		size = (size + alignof(item_t) - 1) & ~(alignof(item_t) - 1);
 		if (size > 65535)
 			return -EINVAL;
-		if (size > cache->count)
+		length = (uint16_t)size;
+		if (length > cache->count)
 			return -ENOMEM;
-		while(cache->used + (uint32_t)size > cache->count)
+		while(cache->used + length > cache->count)
 			drop_lre(cache);
-		pos = cache->used;
-		cache->content[pos + 0] = (uint8_t)(size & 255);
-		cache->content[pos + 1] = (uint8_t)((size >> 8) & 255);
-		cache->content[pos + 2] = (uint8_t)255;
-		cache->content[pos + 3] = (uint8_t)value;
-		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy((char*)&cache->content[pos + 4], client), session), user), permission);
+		item = itemat(cache, cache->used);
+		item->length = length;
+		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy(&item->strings, client), session), user), permission);
 		cache->used += (uint32_t)size;
 	}
+	item->expire = expire;
+	item->hit = 255;
+	item->value = (int8_t)value;
 	return 0;
 }
 
@@ -225,12 +262,12 @@ cache_search(
 	const char *user,
 	const char *permission
 ) {
-	uint32_t pos;
+	item_t *item;
 
-	pos = search(cache, client, session, user, permission);
-	if (pos < cache->used) {
-		hit(cache, pos);
-		return (int)cache->content[pos + 3];
+	item = search(cache, client, session, user, permission);
+	if (item) {
+		hit(cache, item);
+		return (int)item->value;
 	}
 	return -ENOENT;
 }

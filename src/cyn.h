@@ -18,9 +18,9 @@
 
 #pragma once
 
-#define DENY    0
-#define ALLOW   1
-#define ASK     2
+#define DENY    "no"
+#define ALLOW   "yes"
+#define ASK     "ask"
 #define DEFAULT DENY
 
 /** enter critical recoverable section */
@@ -45,7 +45,8 @@ cyn_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 );
 
 extern
@@ -64,7 +65,8 @@ cyn_test(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t *value
+	const char **value,
+	time_t *expire
 );
 
 extern
@@ -77,7 +79,8 @@ cyn_list(
 		const char *session,
 		const char *user,
 		const char *permission,
-		uint32_t value),
+		const char *value,
+		time_t expire),
 	const char *client,
 	const char *session,
 	const char *user,
@@ -87,7 +90,7 @@ cyn_list(
 extern
 int
 cyn_check_async(
-	void (*check_cb)(void *closure, uint32_t value),
+	void (*check_cb)(void *closure, const char *value, time_t expire),
 	void *closure,
 	const char *client,
 	const char *session,

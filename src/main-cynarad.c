@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
+#include <time.h>
 #include <getopt.h>
 #include <unistd.h>
 #include <pwd.h>
@@ -106,24 +107,24 @@ helptxt[] =
 	"\n"
 	"otpions:\n"
 #if defined(WITH_SYSTEMD_ACTIVATION)
-	"       -s, --systemd         socket activation by systemd\n"
+	"	-s, --systemd         socket activation by systemd\n"
 #endif
 	"	-u, --user xxx        set the user\n"
 	"	-g, --group xxx       set the group\n"
-	"       -i, --init xxx        initialize if needed the database with content of file xxx\n"
-	"\n"
+	"	-i, --init xxx        initialize if needed the database with file xxx\n"
+	"	                        (default: "DEFAULT_INIT_FILE"\n"
 	"	-b, --dbdir xxx       set the directory of database\n"
-	"                              (default: "DEFAULT_DB_DIR")\n"
+	"	                        (default: "DEFAULT_DB_DIR")\n"
 	"	-m, --make-db-dir     make the database directory\n"
 	"	-o, --own-db-dir      set user and group on database directory\n"
 	"\n"
 	"	-S, --socketdir xxx   set the base xxx for sockets\n"
-	"                              (default: "DEFAULT_SOCKET_DIR")\n"
+	"	                        (default: "DEFAULT_SOCKET_DIR")\n"
 	"	-M, --make-socket-dir make the socket directory\n"
 	"	-O, --own-socket-dir  set user and group on socket directory\n"
 	"\n"
-	"       -h, --help            print this help and exit\n"
-	"       -v, --version         print the version and exit\n"
+	"	-h, --help            print this help and exit\n"
+	"	-v, --version         print the version and exit\n"
 	"\n"
 ;
 
@@ -435,12 +436,42 @@ static void ensure_directory(const char *path, int uid, int gid)
 	ensuredir(p, (int)l, uid, gid);
 }
 
+time_t txt2exp(const char *txt)
+{
+	static const int MIN = 60;
+	static const int HOUR = 60*MIN;
+	static const int DAY = 24*HOUR;
+	static const int YEAR = 365*DAY;
+
+	time_t r, x;
+
+	if (!strcmp(txt, "always"))
+		return 0;
+	r = time(NULL);
+	while(*txt) {
+		x = 0;
+		while('0' <= *txt && *txt <= '9')
+			x = 10 * x + (time_t)(*txt++ - '0');
+		switch(*txt) {
+		case 'y': r += x * YEAR; txt++; break;
+		case 'd': r += x *= DAY; txt++; break;
+		case 'h': r += x *= HOUR; txt++; break;
+		case 'm': r += x *= MIN; txt++; break;
+		case 's': txt++; /*@fallthrough@*/
+		case 0: r += x; break;
+		default: return -1;
+		}
+	}
+	return r;
+}
+
 /** initialize the database from file of 'path' */
 static void initdb(const char *path)
 {
-	int rc, lino, x;
+	int rc, lino;
 	char *item[10];
 	char buffer[2048];
+	time_t expire;
 	FILE *f;
 
 	f = fopen(path, "r");
@@ -459,20 +490,22 @@ static void initdb(const char *path)
 			item[3] = strtok(NULL, " \t\n\r");
 			item[4] = strtok(NULL, " \t\n\r");
 			item[5] = strtok(NULL, " \t\n\r");
+			item[6] = strtok(NULL, " \t\n\r");
 			if (item[1] == NULL || item[2] == NULL
-			  || item[3] == NULL || item[4] == NULL) {
+			  || item[3] == NULL || item[4] == NULL
+			  || item[5] == NULL) {
 				fprintf(stderr, "field missing (%s:%d)\n", path, lino);
 				exit(1);
-			} else if (item[5] != NULL && item[5][0] != '#') {
+			} else if (item[6] != NULL && item[6][0] != '#') {
 				fprintf(stderr, "extra field (%s:%d)\n", path, lino);
 				exit(1);
 			}
-			x = isid(item[4]);
-			if (x < 0) {
-				fprintf(stderr, "bad value (%s:%d)\n", path, lino);
+			expire = txt2exp(item[5]);
+			if (expire < 0) {
+				fprintf(stderr, "bad expiration %s (%s:%d)\n", item[5], path, lino);
 				exit(1);
 			}
-			rc = db_set(item[0], item[1], item[2], item[3], x);
+			rc = db_set(item[0], item[1], item[2], item[3], item[4], expire);
 			if (rc < 0) {
 				fprintf(stderr, "can't set (%s:%d)\n", path, lino);
 				exit(1);

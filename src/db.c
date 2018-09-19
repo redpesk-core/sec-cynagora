@@ -26,11 +26,13 @@
 #include <stdalign.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <errno.h>
 
 #include "fbuf.h"
 #include "db.h"
 
+#define NOEXPIRE 0
 #define NOIDX   0
 
 #define ANYIDX  40
@@ -39,26 +41,45 @@
 #define WIDEIDX 42
 #define WIDESTR "*"
 
+/*
+ * for the first version,  save enougth time up to 4149
+ * 4149 = 1970 + (4294967296 * 16) / (365 * 24 * 60 * 60)
+ *
+ * in the next version, time will be relative to a stored base
+ */
+#define exp2time(x)  (((time_t)(x)) << 4)
+#define time2expl(x) ((uint32_t)((x) >> 4))
+#define time2exph(x) time2expl((x) + 15)
+
 /**
- * A rule is a set of 4 integers
+ * A rule is a set of 32 bits integers
  */
 struct rule
 {
-	uint32_t client, user, permission, value;
+	union {
+		uint32_t ids[5];
+		struct {
+			/** client string id */
+			uint32_t client;
+
+			/** session string id */
+			uint32_t session;
+
+			/** user string id */
+			uint32_t user;
+
+			/** permission string id */
+			uint32_t permission;
+
+			/** value string id */
+			uint32_t value;
+		};
+	};
+
+	/**  expiration */
+	uint32_t expire;
 };
 typedef struct rule rule_t;
-
-/**
- * Sessions
- */
-struct session
-{
-	struct session *next, *prev;
-	rule_t *rules;
-	const char *name;
-	uint32_t count;
-};
-typedef struct session session_t;
 
 /*
  * The cynara-agl database is made of 2 memory mapped files:
@@ -92,12 +113,11 @@ static uint32_t names_count;
 /** the name indexes sorted */
 static uint32_t *names_sorted;
 
-/** the sessions */
-static session_t sessions = {
-	.next = &sessions,
-	.prev = &sessions,
-	.name = WIDESTR
-};
+/** count of rules */
+static uint32_t rules_count;
+
+/** the rules */
+static rule_t *rules;
 
 /** return the name of 'index' */
 static
@@ -273,134 +293,77 @@ is_any_or_wide(
 	return is_any(text) || 0 == strcmp(text, WIDESTR);
 }
 
-/** get in 'session' the session for 'name' and create it if 'needed' */
-static
-int
-get_session(
-	const char *name,
-	bool needed,
-	session_t **session
-) {
-	session_t *s;
-	size_t len;
-
-	/* start on ANY sessions */
-	s = &sessions;
-	if (is_any_or_wide(name))
-		goto found;
-
-	/* look to other sessions */
-	s = s->next;
-	while(s != &sessions) {
-		if (!strcmp(s->name, name))
-			goto found;
-		s = s->next;
-	}
-
-	/* not found */
-	if (!needed) {
-		errno = ENOENT;
-		return -1;
-	}
-
-	/* check length */
-	len = strnlen(name, MAX_NAME_LENGTH + 1);
-	if (len > MAX_NAME_LENGTH) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	/* create it */
-	s = malloc(sizeof * s + len + 1);
-	if (s == NULL)
-		return -1; /* out of memory */
-
-	/* init new session */
-	s->rules = NULL;
-	s->count = 0;
-	s->name = strcpy((char*)(s + 1), name);
-	s->next = &sessions;
-	s->prev = sessions.prev;
-	sessions.prev = s;
-	s->prev->next = s;
-found:
-	*session = s;
-	return 0;
-}
-
-/** for 'session' set the value the rule at 'index' */
+/** set the 'value' to the rule at 'index' */
 static
 void
-session_set_at(
-	session_t *session,
-	uint32_t index,
-	uint32_t value
-) {
-	uint32_t pos;
-
-	assert(index < session->count);
-	session->rules[index].value = value;
-	if (session == &sessions) {
-		pos = (uint32_t)(((void*)&session->rules[index]) - frules.buffer);
-		if (pos < frules.saved)
-			frules.saved = pos;
-	}
-}
-
-/** drop of 'session' the rule at 'index' */
-static
-void
-session_drop_at(
-	session_t *session,
+touch_at(
 	uint32_t index
 ) {
 	uint32_t pos;
 
-	assert(index < session->count);
-	if (index < --session->count)
-		session->rules[index] = session->rules[session->count];
-	if (session == &sessions) {
-		pos = (uint32_t)(((void*)&session->rules[index]) - frules.buffer);
-		if (pos < frules.saved)
-			frules.saved = pos;
-		pos = (uint32_t)(((void*)&session->rules[session->count]) - frules.buffer);
-		frules.used = pos;
-	}
+	pos = (uint32_t)(((void*)&rules[index]) - frules.buffer);
+	if (pos < frules.saved)
+		frules.saved = pos;
 }
 
-/** add to 'session' the rule 'client' x 'user' x 'permission' x 'value' */
+/** set the 'value' to the rule at 'index' */
+static
+void
+set_at(
+	uint32_t index,
+	uint32_t value,
+	uint32_t expire
+) {
+	assert(index < rules_count);
+	rules[index].value = value;
+	rules[index].expire = expire;
+	touch_at(index);
+}
+
+/** drop the rule at 'index' */
+static
+void
+drop_at(
+	uint32_t index
+) {
+	uint32_t pos;
+
+	assert(index < rules_count);
+	if (index < --rules_count)
+		rules[index] = rules[rules_count];
+	pos = (uint32_t)(((void*)&rules[rules_count]) - frules.buffer);
+	frules.used = pos;
+	touch_at(index);
+}
+
+/** add the rule 'client' x 'session' x 'user' x 'permission' x 'value' */
 static
 int
-session_add(
-	session_t *session,
+add_rule(
 	uint32_t client,
+	uint32_t session,
 	uint32_t user,
 	uint32_t permission,
-	uint32_t value
+	uint32_t value,
+	uint32_t expire
 ) {
 	int rc;
 	uint32_t c;
 	rule_t *rule;
 
-	if (session == &sessions) {
-		c = frules.used + (uint32_t)sizeof *rule;
-		rc = fbuf_ensure_capacity(&frules, c);
-		if (rc)
-			return rc;
-		frules.used = c;
-		session->rules = (rule_t*)(frules.buffer + uuidlen);
-	} else {
-		c = session->count + 32 - (session->count & 31);
-		rule = realloc(session->rules, c * sizeof *rule);
-		if (rule == NULL)
-			return -ENOMEM;
-		session->rules = rule;
-	}
-	rule = &session->rules[session->count++];
+	c = frules.used + (uint32_t)sizeof *rule;
+	rc = fbuf_ensure_capacity(&frules, c);
+	if (rc)
+		return rc;
+	rules = (rule_t*)(frules.buffer + uuidlen);
+	rule = &rules[rules_count++];
 	rule->client = client;
+	rule->session = session;
 	rule->user = user;
 	rule->permission = permission;
 	rule->value = value;
+	rule->expire = expire;
+	frules.used = c;
 	return 0;
 }
 
@@ -409,8 +372,8 @@ static
 void
 init_rules(
 ) {
-	sessions.rules = (rule_t*)(frules.buffer + uuidlen);
-	sessions.count = (frules.used - uuidlen) / sizeof *sessions.rules;
+	rules = (rule_t*)(frules.buffer + uuidlen);
+	rules_count = (frules.used - uuidlen) / sizeof *rules;
 }
 
 /** open a fbuf */
@@ -487,7 +450,7 @@ db_close(
 bool
 db_is_empty(
 ) {
-	return !sessions.count;
+	return !rules_count;
 }
 
 /** synchronize db on files */
@@ -554,46 +517,35 @@ db_for_all(
 		const char *session,
 		const char *user,
 		const char *permission,
-		uint32_t value),
+		const char *value,
+		time_t expire),
 	const char *client,
 	const char *session,
 	const char *user,
 	const char *permission
 ) {
-	uint32_t ucli, uusr, i;
-	bool anyperm, anysession;
-	session_t *ses;
+	uint32_t ucli, uusr, uses, i;
+	bool anyperm;
 
 	if (db_get_name_index(&ucli, client, false)
+	 || db_get_name_index(&uses, session, false)
 	 || db_get_name_index(&uusr, user, false))
 		return; /* nothing to do! */
 
 	anyperm = is_any(permission);
-	anysession = is_any(session);
-	if (anysession)
-		ses = &sessions;
-	else {
-		if (get_session(session, false, &ses))
-			return; /* ignore if no session */
-	}
-	for(;;) {
-		for (i = 0; i < ses->count; i++) {
-			if ((ucli == ANYIDX || ucli == ses->rules[i].client)
-			 && (uusr == ANYIDX || uusr == ses->rules[i].user)
-			 && (anyperm || !strcasecmp(permission, name_at(ses->rules[i].permission)))) {
-				callback(closure,
-					name_at(ses->rules[i].client),
-					ses->name,
-					name_at(ses->rules[i].user),
-					name_at(ses->rules[i].permission),
-					ses->rules[i].value);
-			}
+	for (i = 0; i < rules_count; i++) {
+		if ((ucli == ANYIDX || ucli == rules[i].client)
+		 && (uses == ANYIDX || uses == rules[i].session)
+		 && (uusr == ANYIDX || uusr == rules[i].user)
+		 && (anyperm || !strcasecmp(permission, name_at(rules[i].permission)))) {
+			callback(closure,
+				name_at(rules[i].client),
+				name_at(rules[i].session),
+				name_at(rules[i].user),
+				name_at(rules[i].permission),
+				name_at(rules[i].value),
+				exp2time(rules[i].expire));
 		}
-		if (!anysession)
-			break;
-		ses = ses->next;
-		if (ses == &sessions)
-			break;
 	}
 }
 
@@ -605,37 +557,24 @@ db_drop(
 	const char *user,
 	const char *permission
 ) {
-	uint32_t ucli, uusr, i;
-	bool anyperm, anysession;
-	session_t *ses;
+	uint32_t ucli, uses, uusr, i;
+	bool anyperm;
 
 	if (db_get_name_index(&ucli, client, false)
+	 || db_get_name_index(&uses, session, false)
 	 || db_get_name_index(&uusr, user, false))
 		return 0; /* nothing to do! */
 
 	anyperm = is_any(permission);
-	anysession = is_any(session);
-	if (anysession)
-		ses = &sessions;
-	else {
-		if (get_session(session, false, &ses))
-			return 0; /* ignore if no session */
-	}
-	for(;;) {
-		i = 0;
-		while (i < ses->count) {
-			if ((ucli == ANYIDX || ucli == ses->rules[i].client)
-			 && (uusr == ANYIDX || uusr == ses->rules[i].user)
-			 && (anyperm || !strcasecmp(permission, name_at(ses->rules[i].permission))))
-				session_drop_at(ses, i);
-			else
-				i++;
-		}
-		if (!anysession)
-			break;
-		ses = ses->next;
-		if (ses == &sessions)
-			break;
+	i = 0;
+	while (i < rules_count) {
+		if ((ucli == ANYIDX || ucli == rules[i].client)
+		 && (uses == ANYIDX || uses == rules[i].session)
+		 && (uusr == ANYIDX || uusr == rules[i].user)
+		 && (anyperm || !strcasecmp(permission, name_at(rules[i].permission))))
+			drop_at(i);
+		else
+			i++;
 	}
 	return 0;
 }
@@ -647,11 +586,11 @@ db_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
 	int rc;
-	uint32_t ucli, uusr, uperm, i;
-	session_t *ses;
+	uint32_t ucli, uses, uusr, uperm, uval, i;
 
 	/* normalize */
 	client = is_any_or_wide(client) ? WIDESTR : client;
@@ -659,26 +598,28 @@ db_set(
 	user = is_any_or_wide(user) ? WIDESTR : user;
 	permission = is_any_or_wide(permission) ? WIDESTR : permission;
 
-	/* get the session */
-	rc = get_session(session, true, &ses);
-	if (rc)
-		goto error;
-
 	/* get/create strings */
 	rc = db_get_name_index(&ucli, client, true);
+	if (rc)
+		goto error;
+	rc = db_get_name_index(&uses, session, true);
 	if (rc)
 		goto error;
 	rc = db_get_name_index(&uusr, user, true);
 	if (rc)
 		goto error;
+	rc = db_get_name_index(&uval, value, true);
+	if (rc)
+		goto error;
 
 	/* search the existing rule */
-	for (i = 0 ; i < ses->count ; i++) {
-		if (ucli == ses->rules[i].client
-		 && uusr == ses->rules[i].user
-		 && !strcasecmp(permission, name_at(ses->rules[i].permission))) {
+	for (i = 0; i < rules_count; i++) {
+		if (ucli == rules[i].client
+		 && uses == rules[i].session
+		 && uusr == rules[i].user
+		 && !strcasecmp(permission, name_at(rules[i].permission))) {
 			/* found */
-			session_set_at(ses, i, value);
+			set_at(i, uval, time2exph(expire));
 			return 0;
 		}
 	}
@@ -688,7 +629,7 @@ db_set(
 	if (rc)
 		goto error;
 
-	rc = session_add(ses, ucli, uusr, uperm, value);
+	rc = add_rule(ucli, uses, uusr, uperm, uval, time2exph(expire));
 
 	return 0;
 error:
@@ -702,11 +643,11 @@ db_test(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t *value
+	const char **value,
+	time_t *expire
 ) {
-	uint32_t ucli, uusr, i, val, score, sc;
-	session_t *ses;
-	rule_t *rule;
+	uint32_t ucli, uses, uusr, i, score, sc, now;
+	rule_t *rule, *found;
 
 	/* check */
 	client = is_any_or_wide(client) ? WIDESTR : client;
@@ -715,41 +656,203 @@ db_test(
 	permission = is_any_or_wide(permission) ? WIDESTR : permission;
 
 	/* search the items */
-	val = score = 0;
-#define NOIDX   0
 	if (db_get_name_index(&ucli, client, false))
 		ucli = NOIDX;
+	if (db_get_name_index(&uses, session, false))
+		uses = NOIDX;
 	if (db_get_name_index(&uusr, user, false))
 		uusr = NOIDX;
 
-	/* get the session */
-	if (get_session(session, false, &ses))
-		ses = &sessions;
-
-retry:
 	/* search the existing rule */
-	for (i = 0 ; i < ses->count ; i++) {
-		rule = &ses->rules[i];
-		if ((ucli == rule->client || WIDEIDX == rule->client)
+	now = time2expl(time(NULL));
+	found = NULL;
+	score = 0;
+	for (i = 0 ; i < rules_count ; i++) {
+		rule = &rules[i];
+		if ((!rule->expire || rule->expire >= now)
+		 && (ucli == rule->client || WIDEIDX == rule->client)
+		 && (uses == rule->session || WIDEIDX == rule->session)
 		 && (uusr == rule->user || WIDEIDX == rule->user)
 		 && (WIDEIDX == rule->permission
 			|| !strcasecmp(permission, name_at(rule->permission)))) {
 			/* found */
-			sc = 1 + (rule->client != WIDEIDX)
+			sc = 1 + (rule->client != WIDEIDX) + (rule->session != WIDEIDX)
 				+ (rule->user != WIDEIDX) + (rule->permission != WIDEIDX);
 			if (sc > score) {
 				score = sc;
-				val = rule->value;
+				found = rule;
 			}
 		}
 	}
-	if (!score && ses != &sessions) {
-		ses = &sessions;
-		goto retry;
+	if (!found) {
+		*value = NULL;
+		*expire = 0;
+		return 0;
+	}
+	*value = name_at(found->value);
+	*expire = exp2time(found->expire);
+	return 1;
+}
+
+typedef struct gc gc_t;
+struct gc
+{
+	uint32_t *befores;
+	uint32_t *afters;
+};
+
+/** compare indexes. used by qsort and bsearch */
+static
+int
+cmpidxs(
+	const void *pa,
+	const void *pb
+) {
+	uint32_t a = *(const uint32_t*)pa;
+	uint32_t b = *(const uint32_t*)pb;
+	return a < b ? -1 : a != b;
+}
+
+static
+void
+gc_mark(
+	gc_t *gc,
+	uint32_t idx
+) {
+	uint32_t *p = bsearch(&idx, gc->befores, names_count, sizeof *gc->befores, cmpidxs);
+	assert(p != NULL);
+	gc->afters[p - gc->befores] = 1;
+}
+
+static
+uint32_t
+gc_after(
+	gc_t *gc,
+	uint32_t idx
+) {
+	uint32_t *p = bsearch(&idx, gc->befores, names_count, sizeof *gc->befores, cmpidxs);
+	assert(p != NULL);
+	return gc->afters[p - gc->befores];
+}
+
+static
+int
+gc_init(
+	gc_t *gc
+) {
+	gc->befores = malloc((sizeof *gc->befores + sizeof *gc->afters) * names_count);
+	if (gc->befores == NULL)
+		return -ENOMEM;
+
+	names_count = names_count;
+	memcpy(gc->befores, names_sorted, names_count * sizeof *gc->befores);
+	qsort(gc->befores, names_count, sizeof *gc->befores, cmpidxs);
+	gc->afters = &gc->befores[names_count];
+	memset(gc->afters, 0, names_count * sizeof *gc->afters);
+	
+	gc_mark(gc, ANYIDX);
+	gc_mark(gc, WIDEIDX);
+	return 0;
+}
+
+static
+void
+gc_end(
+	gc_t *gc
+) {
+	free(gc->befores);
+}
+
+static
+int
+gc_pack(
+	gc_t *gc
+) {
+	uint32_t i, j, n, next, prev;
+	char *strings;
+
+	/* skip the unchanged initial part */
+	n = names_count;
+	i = 0;
+	while (i < n && gc->afters[i])
+		i++;
+
+	/* at end means no change */
+	if (i == n)
+		return 0;
+
+	/* pack the strings */
+	strings = fnames.buffer;
+	j = i;
+	memcpy(gc->afters, gc->befores, j * sizeof *gc->afters);
+	next = gc->befores[i++];
+	fnames.saved = next;
+	while (i < n) {
+		if (gc->afters[i]) {
+			gc->befores[j] = prev = gc->befores[i];
+			gc->afters[j++] = next;
+			while ((strings[next++] = strings[prev++]));
+		}
+		i++;
+	}
+	fnames.used = next;
+	names_count = j;
+	memcpy(names_sorted, gc->afters, j * sizeof *gc->afters);
+	qsort(names_sorted, j, sizeof *names_sorted, cmpnames);
+
+	return 1;
+}
+
+int
+db_cleanup(
+) {
+	int rc, chg;
+	uint32_t idbef, idaft, i, j, now;
+	gc_t gc;
+	rule_t *rule;
+
+	/* init garbage collector */
+	rc= gc_init(&gc);
+	if (rc < 0)
+		return rc;
+
+	/* default now */
+	now = time2expl(time(NULL));
+
+	/* remove expired entries and mark string ids of remaining ones */
+	i = 0;
+	while (i < rules_count) {
+		rule = &rules[i];
+		if (rule->expire && now >= rule->expire)
+			drop_at(i);
+		else {
+			for (j = 0 ; j < 5 ; j++)
+				gc_mark(&gc, rule->ids[j]);
+			i++;
+		}
 	}
 
-	if (score)
-		*value = val;
-	return score > 0;
+	/* pack the strings */
+	if (gc_pack(&gc)) {
+		/* replace the ids if changed */
+		i = 0;
+		while (i < rules_count) {
+			rule = &rules[i];
+			for (chg = j = 0 ; j < 5 ; j++) {
+				idbef = rule->ids[j];
+				idaft = gc_after(&gc, idbef);
+				rule->ids[j] = idaft;
+				chg += idbef != idaft;
+			}
+			if (chg)
+				touch_at(i);
+			i++;
+		}
+	}
+
+	/* terminate */
+	gc_end(&gc);
+
+	return 0;
 }
 

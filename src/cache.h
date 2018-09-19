@@ -38,7 +38,8 @@ cache_put(
 	const char *session,
 	const char *user,
 	const char *permission,
-	int value
+	int value,
+	time_t expire
 );
 
 extern

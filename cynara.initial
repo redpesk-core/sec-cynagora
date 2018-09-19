@@ -1,4 +1,4 @@
 # initial database for cynara
-System * * * 1
-User * * * 1
+System * * * yes always
+User * * * yes always
 

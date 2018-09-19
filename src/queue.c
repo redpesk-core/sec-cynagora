@@ -55,16 +55,8 @@ qread(
 
 static
 bool
-qget_char(
-	char *value
-) {
-	return qread(value, sizeof *value);
-}
-
-static
-bool
-qget_uint32(
-	uint32_t *value
+qget_time(
+	time_t *value
 ) {
 	return qread(value, sizeof *value);
 }
@@ -109,16 +101,8 @@ qwrite(
 
 static
 bool
-qput_char(
-	char value
-) {
-	return qwrite(&value, sizeof value);
-}
-
-static
-bool
-qput_uint32(
-	uint32_t value
+qput_time(
+	time_t value
 ) {
 	return qwrite(&value, sizeof value);
 }
@@ -144,11 +128,11 @@ queue_drop(
 	const char *user,
 	const char *permission
 ) {
-	return qput_char(DROP)
-		&& qput_string(client)
+	return qput_string(client)
 		&& qput_string(session)
 		&& qput_string(user)
 		&& qput_string(permission)
+		&& qput_string(0)
 			? 0 : -(errno = ENOMEM);
 }
 
@@ -158,14 +142,15 @@ queue_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
-	return qput_char(SET)
-		&& qput_string(client)
+	return qput_string(client)
 		&& qput_string(session)
 		&& qput_string(user)
 		&& qput_string(permission)
-		&& qput_uint32(value)
+		&& qput_string(value)
+		&& qput_time(expire)
 			? 0 : -(errno = ENOMEM);
 }
 
@@ -180,26 +165,28 @@ int
 queue_play(
 ) {
 	int rc, rc2;
-	char op;
 	const char *client;
 	const char *session;
 	const char *user;
 	const char *permission;
-	uint32_t value;
+	const char *value;
+	time_t expire;
 
 	rc = 0;
 	queue.read = 0;
 	while (queue.read < queue.write) {
 		rc2 = -EINVAL;
-		if (qget_char(&op)
-		 && qget_string(&client)
+		if (qget_string(&client)
 		 && qget_string(&session)
 		 && qget_string(&user)
-		 && qget_string(&permission)) {
-			if (op == DROP)
+		 && qget_string(&permission)
+		 && qget_string(&value)) {
+			if (!value[0])
 				rc2 = db_drop(client, session, user, permission);
-			else if (qget_uint32(&value))
-				rc2 = db_set(client, session, user, permission, value);
+			else {
+				if (qget_time(&expire))
+					rc2 = db_set(client, session, user, permission, value, expire);
+			}
 		}
 		if (rc2 != 0 && rc == 0)
 			rc = rc2;

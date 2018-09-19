@@ -32,7 +32,8 @@ queue_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 );
 
 extern

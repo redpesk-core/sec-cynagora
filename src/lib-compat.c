@@ -77,26 +77,25 @@ static int from_check_status(int rc)
 	return rc;
 }
 
-static int from_value(uint32_t value)
+static int from_value(const char *value)
 {
-	switch(value) {
-	case 0: return CYNARA_ADMIN_DENY;
-	case 1: return CYNARA_ADMIN_ALLOW;
-	case 2: return CYNARA_ADMIN_ASK;
-	}
-	return (int)value;
+	if (!strcmp(value, "yes"))
+		return CYNARA_ADMIN_ALLOW;
+	if (!strcmp(value, "ask"))
+		return CYNARA_ADMIN_ASK;
+	return CYNARA_ADMIN_DENY;
 }
 
-static uint32_t to_value(int value)
+static const char *to_value(int value)
 {
 	switch(value) {
-	case CYNARA_ADMIN_DENY: return 0;
-	case CYNARA_ADMIN_NONE: return 0;
-	case CYNARA_ADMIN_BUCKET: return 0;
-	case CYNARA_ADMIN_ALLOW: return 1;
-	case CYNARA_ADMIN_ASK: return 2;
+	case CYNARA_ADMIN_DENY:
+	case CYNARA_ADMIN_NONE:
+	case CYNARA_ADMIN_BUCKET: return "no";
+	case CYNARA_ADMIN_ALLOW: return "yes";
+	case CYNARA_ADMIN_ASK: return "ask";
 	}
-	return (uint32_t)value;
+	return "?";
 }
 
 /************************************ ERROR ****************************************/
@@ -173,7 +172,7 @@ int cynara_admin_set_policies(struct cynara_admin *p_cynara_admin,
 						p->client, "*", p->user, p->privilege);
 			else if (p->result != CYNARA_ADMIN_BUCKET && p->result != CYNARA_ADMIN_NONE)
 				rc = rcyn_set((rcyn_t*)p_cynara_admin,
-						p->client, "*", p->user, p->privilege, to_value(p->result));
+						p->client, "*", p->user, p->privilege, to_value(p->result), 0);
 			p = *++policies;
 		}
 		rc2 = rcyn_leave((rcyn_t*)p_cynara_admin, rc == 0);
@@ -189,7 +188,8 @@ static void check_cb(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
 	*((int*)closure) = from_value(value);
 }
@@ -219,7 +219,8 @@ static void list_cb(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
 	struct list_data *data = closure;
 	struct cynara_admin_policy *pol;

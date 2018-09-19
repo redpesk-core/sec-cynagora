@@ -89,7 +89,8 @@ db_for_all(
 		const char *session,
 		const char *user,
 		const char *permission,
-		uint32_t value),
+		const char *value,
+		time_t expire),
 	const char *client,
 	const char *session,
 	const char *user,
@@ -114,7 +115,8 @@ db_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 );
 
 /** check rules */
@@ -125,6 +127,12 @@ db_test(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t *value
+	const char **value,
+	time_t *expire
+);
+
+/** cleanup the base */
+int
+db_cleanup(
 );
 

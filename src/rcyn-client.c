@@ -261,11 +261,29 @@ status_done(
 static
 int
 status_check(
-	rcyn_t *rcyn
+	rcyn_t *rcyn,
+	time_t *expire
 ) {
-	return !strcmp(rcyn->reply.fields[0], _yes_) ? 1
-		: !strcmp(rcyn->reply.fields[0], _no_) ? 0
-		: -EEXIST;
+	int rc, exp;
+
+	if (!strcmp(rcyn->reply.fields[0], _yes_)) {
+		rc = 1;
+		exp = 1;
+	} else if (!strcmp(rcyn->reply.fields[0], _no_)) {
+		rc = 0;
+		exp = 1;
+	} else if (!strcmp(rcyn->reply.fields[0], _done_)) {
+		rc = -EEXIST;
+		exp = 2;
+	} else {
+		rc = -EPROTO;
+		exp = rcyn->reply.count;
+	}
+	if (exp < rcyn->reply.count)
+		*expire = strtoll(rcyn->reply.fields[exp], NULL, 10);
+	else
+		*expire = 0;
+	return rc;
 }
 
 static
@@ -366,6 +384,8 @@ int
 ensure_opened(
 	rcyn_t *rcyn
 ) {
+	if (rcyn->fd >= 0 && write(rcyn->fd, NULL, 0) < 0)
+		disconnection(rcyn);
 	return rcyn->fd < 0 ? connection(rcyn) : 0;
 }
 
@@ -475,6 +495,7 @@ check_or_test(
 	const char *action
 ) {
 	int rc;
+	time_t expire;
 
 	if (rcyn->async.requests != NULL)
 		return -EINPROGRESS;
@@ -496,9 +517,9 @@ check_or_test(
 		/* get the response */
 		rc = wait_pending_reply(rcyn);
 		if (rc >= 0) {
-			rc = status_check(rcyn);
+			rc = status_check(rcyn, &expire);
 			if (rc >= 0)
-				cache_put(rcyn->cache, client, session, user, permission, rc);
+				cache_put(rcyn->cache, client, session, user, permission, rc, expire);
 		}
 	}
 	return rc;
@@ -523,7 +544,7 @@ rcyn_test(
 	const char *user,
 	const char *permission
 ) {
-	return check_or_test(rcyn, client, session, user, permission, _check_);
+	return check_or_test(rcyn, client, session, user, permission, _test_);
 }
 
 int
@@ -533,9 +554,11 @@ rcyn_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	int value
+	const char *value,
+	time_t expire
 ) {
-	char val[30];
+	char text[30];
+	const char *exp;
 	int rc;
 
 	if (rcyn->type != rcyn_Admin)
@@ -546,8 +569,13 @@ rcyn_set(
 	if (rc < 0)
 		return rc;
 
-	snprintf(val, sizeof val, "%u", (unsigned)value);
-	rc = putx(rcyn, _set_, client, session, user, permission, val, NULL);
+	if (!expire)
+		exp = NULL;
+	else {
+		snprintf(text, sizeof text, "%lld", (long long)expire);
+		exp = text;
+	}
+	rc = putx(rcyn, _set_, client, session, user, permission, value, exp, NULL);
 	if (rc >= 0)
 		rc = wait_done(rcyn);
 	return rc;
@@ -566,7 +594,8 @@ rcyn_get(
 		const char *session,
 		const char *user,
 		const char *permission,
-		uint32_t value
+		const char *value,
+		time_t expire
 	),
 	void *closure
 ) {
@@ -583,13 +612,14 @@ rcyn_get(
 	rc = putx(rcyn, _get_, client, session, user, permission, NULL);
 	if (rc >= 0) {
 		rc = wait_reply(rcyn, true);
-		while (rc == 6 && !strcmp(rcyn->reply.fields[0], _item_)) {
+		while ((rc == 6 || rc == 7) && !strcmp(rcyn->reply.fields[0], _item_)) {
 			callback(closure,
 				rcyn->reply.fields[1],
 				rcyn->reply.fields[2],
 				rcyn->reply.fields[3],
 				rcyn->reply.fields[4],
-				(uint32_t)atoi(rcyn->reply.fields[5]));
+				rcyn->reply.fields[5],
+				rc == 6 ? 0 : (time_t)strtoll(rcyn->reply.fields[6], NULL, 10));
 			rc = wait_reply(rcyn, true);
 		}
 		rc = status_done(rcyn);
@@ -683,6 +713,7 @@ rcyn_async_process(
 	const char *first;
 	asreq_t *ar;
 	const char *client, *session, *user, *permission;
+	time_t expire;
 
 	for (;;) {
 		/* non blocking wait for a reply */
@@ -707,13 +738,13 @@ rcyn_async_process(
 
 		/* emit the asynchronous answer */
 		rcyn->async.requests = ar->next;
-		rc = status_check(rcyn);
+		rc = status_check(rcyn, &expire);
 		if (rc >= 0) {
 			client = (const char*)(ar + 1);
 			session = &client[1 + strlen(client)];
 			user = &session[1 + strlen(session)];
 			permission = &user[1 + strlen(user)];
-			cache_put(rcyn->cache, client, session, user, permission, rc);
+			cache_put(rcyn->cache, client, session, user, permission, rc, expire);
 		}
 		ar->callback(ar->closure, rc);
 		free(ar);

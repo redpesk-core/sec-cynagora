@@ -13,12 +13,12 @@ invalidate cache:
 test a permission:
 
   c->s test CLIENT SESSION USER PERMISSION
-  s->c yes|no|VALUE [CACHING]
+  s->c [yes|no|done VALUE] [EXPIRE]
 
 check a permission:
 
   c->s check CLIENT SESSION USER PERMISSION
-  s->c yes|no|VALUE [CACHING]
+  s->c [yes|no|done VALUE] [EXPIRE]
 
 erase (admin):
 
@@ -27,13 +27,13 @@ erase (admin):
 
 set (admin):
 
-  c->s set CLIENT SESSION USER PERMISSION VALUE
+  c->s set CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
   s->c done|error ...
 
 list permissions (admin):
 
   c->s get CLIENT SESSION USER PERMISSION
-  s->c item CLIENT SESSION USER PERMISSION VALUE
+  s->c item CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
   s->c ...
   s->c done
 
@@ -65,15 +65,14 @@ asking (agent ask CLIENT SESSION USER PERMISSION):
   c->s g(et) CLIENT SESSION USER PERMISSION
   c->s l(eave) [commit|rollback]
   c->s r(cyn)
-  c->s s(et) CLIENT SESSION USER PERMISSION VALUE
+  c->s s(et) CLIENT SESSION USER PERMISSION VALUE EXPIRE
   c->s t(est) CLIENT SESSION USER PERMISSION
 
   s->c clear
   s->c done
   s->c done [CLIENT SESSION USER PERMISSION VALUE]
   s->c done|error ...
-  s->c item CLIENT SESSION USER PERMISSION VALUE
-  s->c yes|no
-  s->c yes|no|VALUE [CACHING]
+  s->c item CLIENT SESSION USER PERMISSION VALUE EXPIRE
+  s->c done VALUE EXPIRE
 
 

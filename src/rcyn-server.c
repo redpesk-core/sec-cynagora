@@ -277,26 +277,37 @@ entercb(
 	send_done(cli);
 }
 
+/** translate optional expire value */
+static
+const char *
+exp2txt(
+	time_t expire,
+	char *buffer,
+	size_t bufsz
+) {
+	if (!expire)
+		return NULL;
+
+	/* TODO: check size */
+	snprintf(buffer, bufsz, "%lld", (long long)expire);
+	return buffer;
+}
+
 /** callback of checking */
 static
 void
 checkcb(
 	void *closure,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
 	client_t *cli = closure;
-	const char *a;
-	char val[30];
+	char text[30];
 
-	if (value == DENY)
-		a = _no_;
-	else if (value == ALLOW)
-		a = _yes_;
-	else {
-		snprintf(val, sizeof val, "%d", value);
-		a = val;
-	}
-	putx(cli, a, NULL);
+	if (strcmp(value, ALLOW) && strcmp(value, DENY))
+		putx(cli, _done_, value, exp2txt(expire, text, sizeof text), NULL);
+	else
+		putx(cli, value, exp2txt(expire, text, sizeof text), NULL);
 	flushw(cli);
 }
 
@@ -309,12 +320,14 @@ getcb(
 	const char *session,
 	const char *user,
 	const char *permission,
-	uint32_t value
+	const char *value,
+	time_t expire
 ) {
 	client_t *cli = closure;
-	char val[30];
-	snprintf(val, sizeof val, "%d", value);
-	putx(cli, _item_, client, session, user, permission, val, NULL);
+	char text[30];
+
+	putx(cli, _item_, client, session, user, permission,
+		value, exp2txt(expire, text, sizeof text), NULL);
 }
 
 /** handle a request */
@@ -326,7 +339,8 @@ onrequest(
 	const char *args[]
 ) {
 	int rc;
-	uint32_t value;
+	const char *value;
+	time_t expire;
 
 	/* just ignore empty lines */
 	if (count == 0)
@@ -397,21 +411,25 @@ onrequest(
 		}
 		break;
 	case 's': /* set */
-		if (ckarg(args[0], _set_, 1) && count == 6) {
+		if (ckarg(args[0], _set_, 1) && (count == 6 || count == 7)) {
 			if (cli->type != rcyn_Admin)
 				break;
 			if (!cli->entered)
 				break;
-			value = (uint32_t)atol(args[5]);
-			rc = cyn_set(args[1], args[2], args[3], args[4], value);
+			if (count == 6)
+				expire = 0;
+			else
+				expire = strtoll(args[6], NULL, 10);
+			rc = cyn_set(args[1], args[2], args[3], args[4], args[5], expire);
 			send_done_or_error(cli, rc);
 			return;
 		}
 		break;
 	case 't': /* test */
 		if (ckarg(args[0], _test_, 1) && count == 5) {
-			cyn_test(args[1], args[2], args[3], args[4], &value);
-			checkcb(cli, value);
+			cli->checked = 1;
+			cyn_test(args[1], args[2], args[3], args[4], &value, &expire);
+			checkcb(cli, value, expire);
 			return;
 		}
 		break;
@@ -739,45 +757,4 @@ rcyn_server_serve(
 	}
 	return server->stopped == INT_MIN ? 0 : server->stopped;
 }
-
-#if 0
-#if defined(WITH_SYSTEMD_ACTIVATION)
-#include <systemd/sd-daemon.h>
-#endif
-
-
-int main(int ac, char **av)
-{
-	int rc;
-	const char *check_spec = rcyn_default_check_socket_spec;
-	const char *admin_spec = rcyn_default_admin_socket_spec;
-	rcyn_server_t *server;
-
-	/* connection to the database */
-	rc = cyn_init(
-		"/var/lib/cynara/cynara.names",
-		"/var/lib/cynara/cynara.rules",
-		(const char**)((const char *[]){ "System", "*", "*", "*", "1", NULL })
-	);
-	if (rc < 0) {
-		fprintf(stderr, "can't initialise database: %m\n");
-		return 1;
-	}
-
-	/* create the server */
-	rc = rcyn_server_create(&server, admin_spec, check_spec);
-	if (rc < 0) {
-		fprintf(stderr, "can't initialise server: %m\n");
-		return 1;
-	}
-
-	/* ready ! */
-#if defined(WITH_SYSTEMD_ACTIVATION)
-	sd_notify(0, "READY=1");
-#endif
-
-	/* process inputs */
-	rcyn_server_serve(server);
-}
-#endif
 

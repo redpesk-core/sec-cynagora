@@ -72,11 +72,19 @@ INSTALL(TARGETS cynara LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 INSTALL(FILES rcyn-client.h DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/cynara)
 
 ###########################################
-# build and install test-cynara
+# build and install cynadm
 ###########################################
-ADD_EXECUTABLE(test-cynara test-lib-compat.c)
-TARGET_LINK_LIBRARIES(test-cynara cynara)
-INSTALL(TARGETS test-cynara
+ADD_EXECUTABLE(cynadm main-cynadm.c)
+TARGET_LINK_LIBRARIES(cynadm cynara)
+INSTALL(TARGETS cynadm
+        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+
+###########################################
+# build and install test-old-cynara
+###########################################
+ADD_EXECUTABLE(test-old-cynara main-test-old-cynara.c)
+TARGET_LINK_LIBRARIES(test-old-cynara cynara)
+INSTALL(TARGETS test-old-cynara
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
 ###########################################

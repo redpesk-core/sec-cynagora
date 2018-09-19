@@ -81,7 +81,8 @@ rcyn_set(
 	const char *session,
 	const char *user,
 	const char *permission,
-	int value
+	const char *value,
+	time_t expire
 );
 
 extern
@@ -98,7 +99,8 @@ rcyn_get(
 		const char *session,
 		const char *user,
 		const char *permission,
-		uint32_t value
+		const char *value,
+		time_t expire
 	),
 	void *closure
 );
