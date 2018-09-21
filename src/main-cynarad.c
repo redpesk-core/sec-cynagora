@@ -439,9 +439,10 @@ static void ensure_directory(const char *path, int uid, int gid)
 time_t txt2exp(const char *txt)
 {
 	static const int MIN = 60;
-	static const int HOUR = 60*MIN;
-	static const int DAY = 24*HOUR;
-	static const int YEAR = 365*DAY;
+	static const int HOUR = 60*60;
+	static const int DAY = 24*60*60;
+	static const int WEEK = 7*24*60*60;
+	static const int YEAR = 365*24*60*60;
 
 	time_t r, x;
 
@@ -454,6 +455,7 @@ time_t txt2exp(const char *txt)
 			x = 10 * x + (time_t)(*txt++ - '0');
 		switch(*txt) {
 		case 'y': r += x * YEAR; txt++; break;
+		case 'w': r += x *= WEEK; txt++; break;
 		case 'd': r += x *= DAY; txt++; break;
 		case 'h': r += x *= HOUR; txt++; break;
 		case 'm': r += x *= MIN; txt++; break;
