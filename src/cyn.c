@@ -15,9 +15,6 @@
  * limitations under the License.
  */
 
-#define _GNU_SOURCE
-
-
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -26,6 +23,7 @@
 #include <errno.h>
 
 
+#include "data.h"
 #include "db.h"
 #include "queue.h"
 #include "cyn.h"
@@ -33,26 +31,48 @@
 struct callback
 {
 	struct callback *next;
-	void (*callback)(void *closure);
+	union {
+		void *any_cb;
+		on_enter_cb_t *on_enter_cb;
+		on_change_cb_t *on_change_cb;
+		agent_cb_t *agent_cb;
+	};
 	void *closure;
+};
+
+struct async_check
+{
+	struct async_check *next;
+	on_result_cb_t *on_result_cb;
+	void *closure;
+	data_key_t key;
+	struct callback *next_agent;
 };
 
 /** locking critical section */
 static const void *lock;
 static struct callback *awaiters;
 static struct callback *observers;
+static struct callback *agents;
+static struct async_check *asynchecks;
 
 static
 int
 delcb(
-	void (*callback)(void *closure),
+	void *callback,
 	void *closure,
-	struct callback **head
+	struct callback **head,
+	struct async_check *achecks
 ) {
 	struct callback *c;
 
 	while((c = *head)) {
-		if (c->callback == callback && c->closure == closure) {
+		if (c->any_cb == callback && c->closure == closure) {
+			while (achecks) {
+				if (achecks->next_agent == c)
+					achecks->next_agent = c->next;
+				achecks = achecks->next;
+			}
 			*head = c->next;
 			free(c);
 			return 1;
@@ -65,7 +85,7 @@ delcb(
 static
 int
 addcb(
-	void (*callback)(void *closure),
+	void *callback,
 	void *closure,
 	struct callback **head
 ) {
@@ -74,25 +94,11 @@ addcb(
 	c = malloc(sizeof *c);
 	if (c == NULL)
 		return -(errno = ENOMEM);
-	c->callback = callback;
+	c->any_cb = callback;
 	c->closure = closure;
 	c->next = *head;
 	*head = c;
 	return 0;
-}
-
-static
-int
-changed(
-) {
-	int rc;
-	struct callback *c;
-
-	db_cleanup(0);
-	rc = db_sync();
-	for (c = observers; c ; c = c->next)
-		c->callback(c->closure);
-	return rc;
 }
 
 /** enter critical recoverable section */
@@ -108,7 +114,7 @@ cyn_enter(
 
 int
 cyn_enter_async(
-	void (*enter_cb)(void *closure),
+	on_enter_cb_t *enter_cb,
 	void *closure
 ) {
 	if (lock)
@@ -121,27 +127,26 @@ cyn_enter_async(
 
 int
 cyn_enter_async_cancel(
-	void (*enter_cb)(void *closure),
+	on_enter_cb_t *enter_cb,
 	void *closure
 ) {
-	return delcb(enter_cb, closure, &awaiters);
+	return delcb(enter_cb, closure, &awaiters, 0);
 }
 
 int
 cyn_on_change_add(
-	void (*on_change_cb)(void *closure),
+	on_change_cb_t *on_change_cb,
 	void *closure
 ) {
 	return addcb(on_change_cb, closure, &observers);
 }
 
-
 int
 cyn_on_change_remove(
-	void (*on_change_cb)(void *closure),
+	on_change_cb_t *on_change_cb,
 	void *closure
 ) {
-	return delcb(on_change_cb, closure, &observers);
+	return delcb(on_change_cb, closure, &observers, 0);
 }
 
 /** leave critical recoverable section */
@@ -151,7 +156,7 @@ cyn_leave(
 	bool commit
 ) {
 	int rc;
-	struct callback *e, **p;
+	struct callback *c, *e, **p;
 
 	if (!magic)
 		return -EINVAL;
@@ -164,12 +169,18 @@ cyn_leave(
 	if (!commit)
 		rc = 0;
 	else {
+		db_backup();
 		rc = queue_play();
-		if (rc < 0)
+		if (rc == 0) {
+			db_cleanup(0);
+			rc = db_sync();
+		}
+		if (rc < 0) {
 			db_recover();
-		else {
-			rc = db_backup();
-			changed();
+			db_sync();
+		} else {
+			for (c = observers; c ; c = c->next)
+				c->on_change_cb(c->closure);
 		}
 	}
 	queue_clear();
@@ -185,7 +196,7 @@ cyn_leave(
 		}
 		*p = NULL;
 		lock = e->closure;
-		e->callback(e->closure);
+		e->on_enter_cb(e->closure);
 		free(e);
 	}
 
@@ -194,89 +205,169 @@ cyn_leave(
 
 int
 cyn_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const data_key_t *key,
+	const data_value_t *value
 ) {
 	if (!lock)
 		return -EPERM;
-	return queue_set(client, session, user, permission, value, expire);
+	return queue_set(key, value);
 }
 
 int
 cyn_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const data_key_t *key
 ) {
 	if (!lock)
 		return -EPERM;
-	return queue_drop(client, session, user, permission);
+	return queue_drop(key);
 }
 
 void
 cyn_list(
 	void *closure,
-	void (*callback)(
-		void *closure,
-		const char *client,
-		const char *session,
-		const char *user,
-		const char *permission,
-		const char *value,
-		time_t expire),
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	list_cb_t *callback,
+	const data_key_t *key
 ) {
-	db_for_all(closure, callback, client, session, user, permission);
+	db_for_all(closure, callback, key);
 }
 
 int
 cyn_test(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char **value,
-	time_t *expire
+	const data_key_t *key,
+	data_value_t *value
 ) {
 	int rc;
 
-	rc = db_test(client, session, user, permission, value, expire);
-	if (rc <= 0)
-		*value = DEFAULT;
-	else
+	rc = db_test(key, value);
+	if (rc > 0)
 		rc = 0;
+	else {
+		value->value = DEFAULT;
+		value->expire = 0;
+	}
 	return rc;
 }
 
+static
+void
+async_on_result(
+	void *closure,
+	const data_value_t *value
+) {
+	struct async_check *achk = closure, **pac;
+	struct callback *agent;
+	int rc;
+	data_value_t v;
+
+	if (!value) {
+		agent = achk->next_agent;
+		while (agent) {
+			achk->next_agent = agent->next;
+			rc = agent->agent_cb(
+				agent->closure,
+				&achk->key,
+				async_on_result,
+				closure);
+			if (!rc)
+				return;
+			agent = achk->next_agent;
+		}
+		v.value = DEFAULT;
+		v.expire = 0;
+		value = &v;
+	}
+
+	achk->on_result_cb(achk->closure, value);
+	pac = &asynchecks;
+	while (*pac != achk)
+		pac = &(*pac)->next;
+	*pac = achk->next;
+	free(achk);
+}
+
+
 int
 cyn_check_async(
-	void (*check_cb)(void *closure, const char *value, time_t expire),
+	on_result_cb_t *on_result_cb,
 	void *closure,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const data_key_t *key
 ) {
-	const char *value;
-	time_t expire;
+	data_value_t value;
+	size_t szcli, szses, szuse, szper;
+	struct async_check *achk;
+	void *ptr;
 
-	cyn_test(client, session, user, permission, &value, &expire);
-	if (!strcmp(value, ALLOW) || !strcmp(value, DENY)) {
-		check_cb(closure, value, expire);
+	cyn_test(key, &value);
+	if (!strcmp(value.value, ALLOW) || !strcmp(value.value, DENY)) {
+		on_result_cb(closure, &value);
 		return 0;
 	}
 
-	/* TODO: try to resolve AGENT?? */
+	if (!agents) {
+		on_result_cb(closure, &value);
+		return 0;
+	}
 
-	check_cb(closure, value, expire);
+	szcli = key->client ? 1 + strlen(key->client) : 0;
+	szses = key->session ? 1 + strlen(key->session) : 0;
+	szuse = key->user ? 1 + strlen(key->user) : 0;
+	szper = key->permission ? 1 + strlen(key->permission) : 0;
+	achk = malloc(szcli + szses + szuse + szper + sizeof *achk);
+	if (!achk) {
+		on_result_cb(closure, &value);
+		return -ENOMEM;
+	}
+
+	ptr = achk;
+	achk->on_result_cb = on_result_cb;
+	achk->closure = closure;
+	if (!key->client)
+		achk->key.client = 0;
+	else {
+		achk->key.client = ptr;
+		memcpy(ptr, key->client, szcli);
+		ptr += szcli;
+	}
+	if (!key->session)
+		achk->key.session = 0;
+	else {
+		achk->key.session = ptr;
+		memcpy(ptr, key->session, szses);
+		ptr += szses;
+	}
+	if (!key->user)
+		achk->key.user = 0;
+	else {
+		achk->key.user = ptr;
+		memcpy(ptr, key->user, szuse);
+		ptr += szuse;
+	}
+	if (!key->permission)
+		achk->key.permission = 0;
+	else {
+		achk->key.permission = ptr;
+		memcpy(ptr, key->permission, szper);
+	}
+	achk->next_agent = agents;
+	achk->next = asynchecks;
+	asynchecks = achk;
+	async_on_result(achk, 0);
 	return 0;
+}
+
+int
+cyn_agent_add(
+	agent_cb_t *agent_cb,
+	void *closure
+) {
+	return addcb(agent_cb, closure, &agents);
+}
+
+int
+cyn_agent_remove(
+	agent_cb_t *agent_cb,
+	void *closure
+) {
+	return delcb(agent_cb, closure, &agents, asynchecks);
 }
 

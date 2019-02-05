@@ -15,10 +15,6 @@
  * limitations under the License.
  */
 
-
-#define _GNU_SOURCE
-
-
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -26,9 +22,11 @@
 #include <stdalign.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
 #include <errno.h>
 
+#include "data.h"
 #include "fbuf.h"
 #include "db.h"
 
@@ -52,29 +50,33 @@
 #define time2exph(x) time2expl((x) + 15)
 
 /**
+ * A query is a set of 32 bits integers
+ */
+struct key_ids {
+	/** client string id */
+	uint32_t client;
+
+	/** session string id */
+	uint32_t session;
+
+	/** user string id */
+	uint32_t user;
+
+	/** permission string id */
+	uint32_t permission;
+};
+typedef struct key_ids key_ids_t;
+
+/**
  * A rule is a set of 32 bits integers
  */
 struct rule
 {
-	union {
-		uint32_t ids[5];
-		struct {
-			/** client string id */
-			uint32_t client;
+	/** key part */
+	key_ids_t key;
 
-			/** session string id */
-			uint32_t session;
-
-			/** user string id */
-			uint32_t user;
-
-			/** permission string id */
-			uint32_t permission;
-
-			/** value string id */
-			uint32_t value;
-		};
-	};
+	/** value string id */
+	uint32_t value;
 
 	/**  expiration */
 	uint32_t expire;
@@ -98,10 +100,16 @@ static fbuf_t fnames;
 /** the file for the rules */
 static fbuf_t frules;
 
-/** identification of names version 1 (uuidgen --sha1 -n @url -N urn:AGL:cynara:db:names:1) */
+/** identification of names version 1
+ *    $> uuidgen --sha1 -n @url -N urn:AGL:cynara:db:names:1
+ *    $> uuid -v 5 urn:AGL:cynara:db:names:1
+ */
 static const char uuid_names_v1[] = "e9481f9e-b2f4-5716-90cf-c286d98d1868\n--\n";
 
-/** identification of rules version 1 (uuidgen --sha1 -n @url -N urn:AGL:cynara:db:rules:1) */
+/** identification of rules version 1
+ *    $> uuidgen --sha1 -n @url -N urn:AGL:cynara:db:rules:1
+ *    $> uuid -v 5 ns:URL urn:AGL:cynara:db:rules:1
+ */
 static const char uuid_rules_v1[] = "8f7a5b21-48b1-57af-96c9-d5d7192be370\n--\n";
 
 /** length of the identification */
@@ -357,10 +365,10 @@ add_rule(
 		return rc;
 	rules = (rule_t*)(frules.buffer + uuidlen);
 	rule = &rules[rules_count++];
-	rule->client = client;
-	rule->session = session;
-	rule->user = user;
-	rule->permission = permission;
+	rule->key.client = client;
+	rule->key.session = session;
+	rule->key.user = user;
+	rule->key.permission = permission;
 	rule->value = value;
 	rule->expire = expire;
 	frules.used = c;
@@ -388,18 +396,23 @@ open_identify(
 ) {
 	int rc;
 	char *file, *backup;
+	size_t sd, sn;
 
-	rc = asprintf(&file, "%s/%s", directory, name);
-	if (rc < 0)
+	sd = strlen(directory);
+	sn = strlen(name);
+	file = malloc(((sd + sn) << 1) + 5);
+	if (!file)
 		rc = -ENOMEM;
 	else {
-		rc = asprintf(&backup, "%s~", file);
-		if (rc < 0)
-			rc = -ENOMEM;
-		else {
-			rc = fbuf_open_identify(fb, file, backup, id, idlen);
-			free(backup);
-		}
+
+		memcpy(file, directory, sd);
+		file[sd] = '/';
+		memcpy(&file[sd + 1], name, sn + 1);
+		backup = &file[sd + sn + 2];
+		memcpy(backup, file, sd + sn + 1);
+		backup[sd + sn + 1] = '~';
+		backup[sd + sn + 2] = 0;
+		rc = fbuf_open_identify(fb, file, backup, id, idlen);
 		free(file);
 	}
 	return rc;
@@ -502,8 +515,26 @@ db_recover(
 	init_rules();
 	return 0;
 error:
-	fprintf(stderr, "db recovering impossible: %m");
+	fprintf(stderr, "db recovery impossible: %m");
 	exit(5);
+	return rc;
+}
+
+static int get_query_ids(
+	const data_key_t *in,
+	key_ids_t *out,
+	bool create
+) {
+	int rc;
+
+	rc = db_get_name_index(&out->client, in->client, create);
+	if (rc) goto end;
+	rc = db_get_name_index(&out->session, in->session, create);
+	if (rc) goto end;
+	rc = db_get_name_index(&out->user, in->user, create);
+	if (rc) goto end;
+	rc = db_get_name_index(&out->permission, in->permission, create);
+end:
 	return rc;
 }
 
@@ -513,38 +544,33 @@ db_for_all(
 	void *closure,
 	void (*callback)(
 		void *closure,
-		const char *client,
-		const char *session,
-		const char *user,
-		const char *permission,
-		const char *value,
-		time_t expire),
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+		const data_key_t *key,
+		const data_value_t *value),
+	const data_key_t *key
 ) {
 	uint32_t ucli, uusr, uses, i;
-	bool anyperm;
+	int anyperm;
+	data_key_t k;
+	data_value_t v;
 
-	if (db_get_name_index(&ucli, client, false)
-	 || db_get_name_index(&uses, session, false)
-	 || db_get_name_index(&uusr, user, false))
+	if (db_get_name_index(&ucli, key->client, false)
+	 || db_get_name_index(&uses, key->session, false)
+	 || db_get_name_index(&uusr, key->user, false))
 		return; /* nothing to do! */
 
-	anyperm = is_any(permission);
+	anyperm = is_any(key->permission);
 	for (i = 0; i < rules_count; i++) {
-		if ((ucli == ANYIDX || ucli == rules[i].client)
-		 && (uses == ANYIDX || uses == rules[i].session)
-		 && (uusr == ANYIDX || uusr == rules[i].user)
-		 && (anyperm || !strcasecmp(permission, name_at(rules[i].permission)))) {
-			callback(closure,
-				name_at(rules[i].client),
-				name_at(rules[i].session),
-				name_at(rules[i].user),
-				name_at(rules[i].permission),
-				name_at(rules[i].value),
-				exp2time(rules[i].expire));
+		if ((ucli == ANYIDX || ucli == rules[i].key.client)
+		 && (uses == ANYIDX || uses == rules[i].key.session)
+		 && (uusr == ANYIDX || uusr == rules[i].key.user)
+		 && (anyperm || !strcasecmp(key->permission, name_at(rules[i].key.permission)))) {
+			k.client = name_at(rules[i].key.client);
+			k.session = name_at(rules[i].key.session);
+			k.user = name_at(rules[i].key.user);
+			k.permission = name_at(rules[i].key.permission);
+			v.value = name_at(rules[i].value);
+			v.expire = exp2time(rules[i].expire);
+			callback(closure, &k, &v);
 		}
 	}
 }
@@ -552,26 +578,23 @@ db_for_all(
 /** drop rules */
 int
 db_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const data_key_t *key
 ) {
 	uint32_t ucli, uses, uusr, i;
 	bool anyperm;
 
-	if (db_get_name_index(&ucli, client, false)
-	 || db_get_name_index(&uses, session, false)
-	 || db_get_name_index(&uusr, user, false))
+	if (db_get_name_index(&ucli, key->client, false)
+	 || db_get_name_index(&uses, key->session, false)
+	 || db_get_name_index(&uusr, key->user, false))
 		return 0; /* nothing to do! */
 
-	anyperm = is_any(permission);
+	anyperm = is_any(key->permission);
 	i = 0;
 	while (i < rules_count) {
-		if ((ucli == ANYIDX || ucli == rules[i].client)
-		 && (uses == ANYIDX || uses == rules[i].session)
-		 && (uusr == ANYIDX || uusr == rules[i].user)
-		 && (anyperm || !strcasecmp(permission, name_at(rules[i].permission))))
+		if ((ucli == ANYIDX || ucli == rules[i].key.client)
+		 && (uses == ANYIDX || uses == rules[i].key.session)
+		 && (uusr == ANYIDX || uusr == rules[i].key.user)
+		 && (anyperm || !strcasecmp(key->permission, name_at(rules[i].key.permission))))
 			drop_at(i);
 		else
 			i++;
@@ -582,54 +605,47 @@ db_drop(
 /** set rules */
 int
 db_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const data_key_t *key,
+	const data_value_t *value
 ) {
 	int rc;
 	uint32_t ucli, uses, uusr, uperm, uval, i;
+	const char *perm;
 
-	/* normalize */
-	client = is_any_or_wide(client) ? WIDESTR : client;
-	session = is_any_or_wide(session) ? WIDESTR : session;
-	user = is_any_or_wide(user) ? WIDESTR : user;
-	permission = is_any_or_wide(permission) ? WIDESTR : permission;
+	perm = is_any_or_wide(key->permission) ? WIDESTR : key->permission;
 
 	/* get/create strings */
-	rc = db_get_name_index(&ucli, client, true);
+	rc = db_get_name_index(&ucli, is_any_or_wide(key->client) ? WIDESTR : key->client, true);
 	if (rc)
 		goto error;
-	rc = db_get_name_index(&uses, session, true);
+	rc = db_get_name_index(&uses, is_any_or_wide(key->session) ? WIDESTR : key->session, true);
 	if (rc)
 		goto error;
-	rc = db_get_name_index(&uusr, user, true);
+	rc = db_get_name_index(&uusr, is_any_or_wide(key->user) ? WIDESTR : key->user, true);
 	if (rc)
 		goto error;
-	rc = db_get_name_index(&uval, value, true);
+	rc = db_get_name_index(&uval, value->value, true);
 	if (rc)
 		goto error;
 
 	/* search the existing rule */
 	for (i = 0; i < rules_count; i++) {
-		if (ucli == rules[i].client
-		 && uses == rules[i].session
-		 && uusr == rules[i].user
-		 && !strcasecmp(permission, name_at(rules[i].permission))) {
+		if (ucli == rules[i].key.client
+		 && uses == rules[i].key.session
+		 && uusr == rules[i].key.user
+		 && !strcasecmp(perm, name_at(rules[i].key.permission))) {
 			/* found */
-			set_at(i, uval, time2exph(expire));
+			set_at(i, uval, time2exph(value->expire));
 			return 0;
 		}
 	}
 
 	/* create the rule */
-	rc = db_get_name_index(&uperm, permission, true);
+	rc = db_get_name_index(&uperm, perm, true);
 	if (rc)
 		goto error;
 
-	rc = add_rule(ucli, uses, uusr, uperm, uval, time2exph(expire));
+	rc = add_rule(ucli, uses, uusr, uperm, uval, time2exph(value->expire));
 
 	return 0;
 error:
@@ -639,29 +655,21 @@ error:
 /** check rules */
 int
 db_test(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char **value,
-	time_t *expire
+	const data_key_t *key,
+	data_value_t *value
 ) {
+	const char *perm;
 	uint32_t ucli, uses, uusr, i, score, sc, now;
 	rule_t *rule, *found;
 
-	/* check */
-	client = is_any_or_wide(client) ? WIDESTR : client;
-	session = is_any_or_wide(session) ? WIDESTR : session;
-	user = is_any_or_wide(user) ? WIDESTR : user;
-	permission = is_any_or_wide(permission) ? WIDESTR : permission;
-
-	/* search the items */
-	if (db_get_name_index(&ucli, client, false))
+	/* normalize the items */
+	if (db_get_name_index(&ucli, is_any_or_wide(key->client) ? WIDESTR : key->client, false))
 		ucli = NOIDX;
-	if (db_get_name_index(&uses, session, false))
+	if (db_get_name_index(&uses, is_any_or_wide(key->session) ? WIDESTR : key->session, false))
 		uses = NOIDX;
-	if (db_get_name_index(&uusr, user, false))
+	if (db_get_name_index(&uusr, is_any_or_wide(key->user) ? WIDESTR : key->user, false))
 		uusr = NOIDX;
+	perm = is_any_or_wide(key->permission) ? WIDESTR : key->permission;
 
 	/* search the existing rule */
 	now = time2expl(time(NULL));
@@ -670,14 +678,14 @@ db_test(
 	for (i = 0 ; i < rules_count ; i++) {
 		rule = &rules[i];
 		if ((!rule->expire || rule->expire >= now)
-		 && (ucli == rule->client || WIDEIDX == rule->client)
-		 && (uses == rule->session || WIDEIDX == rule->session)
-		 && (uusr == rule->user || WIDEIDX == rule->user)
-		 && (WIDEIDX == rule->permission
-			|| !strcasecmp(permission, name_at(rule->permission)))) {
+		 && (ucli == rule->key.client || WIDEIDX == rule->key.client)
+		 && (uses == rule->key.session || WIDEIDX == rule->key.session)
+		 && (uusr == rule->key.user || WIDEIDX == rule->key.user)
+		 && (WIDEIDX == rule->key.permission
+			|| !strcasecmp(perm, name_at(rule->key.permission)))) {
 			/* found */
-			sc = 1 + (rule->client != WIDEIDX) + (rule->session != WIDEIDX)
-				+ (rule->user != WIDEIDX) + (rule->permission != WIDEIDX);
+			sc = 1 + (rule->key.client != WIDEIDX) + (rule->key.session != WIDEIDX)
+				+ (rule->key.user != WIDEIDX) + (rule->key.permission != WIDEIDX);
 			if (sc > score) {
 				score = sc;
 				found = rule;
@@ -685,12 +693,13 @@ db_test(
 		}
 	}
 	if (!found) {
-		*value = NULL;
-		*expire = 0;
+		value->value = NULL;
+		value->expire = 0;
 		return 0;
 	}
-	*value = name_at(found->value);
-	*expire = exp2time(found->expire);
+	value->value = name_at(found->value);
+	value->expire = exp2time(found->expire);
+
 	return 1;
 }
 
@@ -714,25 +723,46 @@ cmpidxs(
 }
 
 static
-void
-gc_mark(
+uint32_t*
+gc_after_ptr(
 	gc_t *gc,
-	uint32_t idx
+	uint32_t *idx
 ) {
-	uint32_t *p = bsearch(&idx, gc->befores, names_count, sizeof *gc->befores, cmpidxs);
+	uint32_t *p = bsearch(idx, gc->befores, names_count, sizeof *gc->befores, cmpidxs);
 	assert(p != NULL);
-	gc->afters[p - gc->befores] = 1;
+	return &gc->afters[p - gc->befores];
 }
 
 static
-uint32_t
-gc_after(
+void
+gc_mark(
+	gc_t *gc,
+	uint32_t *idx
+) {
+	*gc_after_ptr(gc, idx) = 1;
+}
+
+static
+void
+gc_mark_id(
 	gc_t *gc,
 	uint32_t idx
 ) {
-	uint32_t *p = bsearch(&idx, gc->befores, names_count, sizeof *gc->befores, cmpidxs);
-	assert(p != NULL);
-	return gc->afters[p - gc->befores];
+	gc_mark(gc, &idx);
+}
+
+static
+int
+gc_after(
+	gc_t *gc,
+	uint32_t *idx
+) {
+	uint32_t idbef, idaft;
+
+	idbef = *idx;
+	idaft = *gc_after_ptr(gc, idx);
+	*idx = idaft;
+	return (int)(idbef - idaft);
 }
 
 static
@@ -749,9 +779,9 @@ gc_init(
 	qsort(gc->befores, names_count, sizeof *gc->befores, cmpidxs);
 	gc->afters = &gc->befores[names_count];
 	memset(gc->afters, 0, names_count * sizeof *gc->afters);
-	
-	gc_mark(gc, ANYIDX);
-	gc_mark(gc, WIDEIDX);
+
+	gc_mark_id(gc, ANYIDX);
+	gc_mark_id(gc, WIDEIDX);
 	return 0;
 }
 
@@ -807,7 +837,7 @@ int
 db_cleanup(
 ) {
 	int rc, chg;
-	uint32_t idbef, idaft, i, j, now;
+	uint32_t i, now;
 	gc_t gc;
 	rule_t *rule;
 
@@ -826,8 +856,11 @@ db_cleanup(
 		if (rule->expire && now >= rule->expire)
 			drop_at(i);
 		else {
-			for (j = 0 ; j < 5 ; j++)
-				gc_mark(&gc, rule->ids[j]);
+			gc_mark(&gc, &rule->key.client);
+			gc_mark(&gc, &rule->key.session);
+			gc_mark(&gc, &rule->key.user);
+			gc_mark(&gc, &rule->key.permission);
+			gc_mark(&gc, &rule->value);
 			i++;
 		}
 	}
@@ -838,12 +871,11 @@ db_cleanup(
 		i = 0;
 		while (i < rules_count) {
 			rule = &rules[i];
-			for (chg = j = 0 ; j < 5 ; j++) {
-				idbef = rule->ids[j];
-				idaft = gc_after(&gc, idbef);
-				rule->ids[j] = idaft;
-				chg += idbef != idaft;
-			}
+			chg = gc_after(&gc, &rule->key.client);
+			chg |= gc_after(&gc, &rule->key.session);
+			chg |= gc_after(&gc, &rule->key.user);
+			chg |= gc_after(&gc, &rule->key.permission);
+			chg |= gc_after(&gc, &rule->value);
 			if (chg)
 				touch_at(i);
 			i++;

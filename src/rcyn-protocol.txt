@@ -55,7 +55,7 @@ register agent (agent):
 asking (agent ask CLIENT SESSION USER PERMISSION):
 
   s->c ask CLIENT SESSION USER PERMISSION
-  c->s done | ([yes|no] [always|session|one-time])
+  c->s done | ([yes|no] [always|session|one-time|EXPIRE])
 
 
 ----------------------------------------------------------

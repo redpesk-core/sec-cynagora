@@ -20,95 +20,59 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <getopt.h>
 #include <errno.h>
 #include <time.h>
 #include <signal.h>
 
 #include "rcyn-client.h"
+#include "rcyn-protocol.h"
+#include "expire.h"
 
-rcyn_t *rcyn;
+#define _HELP_        'h'
+#define _SOCKET_      's'
+#define _VERSION_     'v'
 
-char buffer[4000];
-char *str[40];
-int nstr;
+static
+const char
+shortopts[] = "hs:v";
 
-static const int MIN = 60;
-static const int HOUR = 60*60;
-static const int DAY = 24*60*60;
-static const int WEEK = 7*24*60*60;
-static const int YEAR = 365*24*60*60;
+static
+const struct option
+longopts[] = {
+	{ "help", 0, NULL, _HELP_ },
+	{ "socket", 1, NULL, _SOCKET_ },
+	{ "version", 0, NULL, _VERSION_ },
+	{ NULL, 0, NULL, 0 }
+};
 
-const char *client, *session, *user, *permission, *value;
-time_t expire;
-int txt2experr;
+static
+const char
+helptxt[] =
+	"\n"
+	"usage: cynadm [options]...\n"
+	"\n"
+	"otpions:\n"
+	"	-s, --socket xxx      set the base xxx for sockets\n"
+	"	                        (default: %s)\n"
+	"	-h, --help            print this help and exit\n"
+	"	-v, --version         print the version and exit\n"
+	"\n"
+;
 
-time_t txt2exp(const char *txt)
-{
-	time_t r, x;
+static
+const char
+versiontxt[] =
+	"cynadm version 1.99.99\n"
+;
 
-	txt2experr = 0;
-	if (!strcmp(txt, "always"))
-		return 0;
+static rcyn_t *rcyn;
+static char buffer[4000];
+static char *str[40];
+static int nstr;
 
-	r = time(NULL);
-	while(*txt) {
-		x = 0;
-		while('0' <= *txt && *txt <= '9')
-			x = 10 * x + (time_t)(*txt++ - '0');
-		switch(*txt) {
-		case 'y': r += x * YEAR; txt++; break;
-		case 'w': r += x * WEEK; txt++; break;
-		case 'd': r += x *= DAY; txt++; break;
-		case 'h': r += x *= HOUR; txt++; break;
-		case 'm': r += x *= MIN; txt++; break;
-		case 's': txt++; /*@fallthrough@*/
-		case 0: r += x; break;
-		default: txt2experr = 1; return -1;
-		}
-	}
-	return r;
-}
-
-const char *exp2txt(time_t expire)
-{
-	static char buffer[200];
-	int n;
-
-	if (!expire)
-		return "always";
-	expire -= time(NULL);
-	n = 0;
-	if (expire >= YEAR) {
-		n += snprintf(&buffer[n], sizeof buffer - n, "%lldy",
-			(long long)(expire / YEAR));
-		expire = expire % YEAR;
-	}
-	if (expire >= WEEK) {
-		n += snprintf(&buffer[n], sizeof buffer - n, "%lldw",
-			(long long)(expire / WEEK));
-		expire = expire % WEEK;
-	}
-	if (expire >= DAY) {
-		n += snprintf(&buffer[n], sizeof buffer - n, "%lldd",
-			(long long)(expire / DAY));
-		expire = expire % DAY;
-	}
-	if (expire >= HOUR) {
-		n += snprintf(&buffer[n], sizeof buffer - n, "%lldh",
-			(long long)(expire / HOUR));
-		expire = expire % HOUR;
-	}
-	if (expire >= MIN) {
-		n += snprintf(&buffer[n], sizeof buffer - n, "%lldm",
-			(long long)(expire / MIN));
-		expire = expire % MIN;
-	}
-	if (expire) {
-		n += snprintf(&buffer[n], sizeof buffer - n, "%llds",
-			(long long)expire);
-	}
-	return buffer;
-}
+rcyn_key_t key;
+rcyn_value_t value;
 
 int plink(int ac, char **av, int *used, int maxi)
 {
@@ -127,35 +91,34 @@ int get_csupve(int ac, char **av, int *used, const char *def)
 {
 	int n = plink(ac, av, used, 7);
 
-	client = n > 1 ? av[1] : def;
-	session = n > 2 ? av[2] : def;
-	user = n > 3 ? av[3] : def;
-	permission = n > 4 ? av[4] : def;
-	value = n > 5 ? av[5] : "no";
-	expire = n > 6 ? txt2exp(av[6]) : 0;
+	key.client = n > 1 ? av[1] : def;
+	key.session = n > 2 ? av[2] : def;
+	key.user = n > 3 ? av[3] : def;
+	key.permission = n > 4 ? av[4] : def;
+	value.value = n > 5 ? av[5] : "no";
+	value.expire = n > 6 ? txt2exp(av[6]) : 0;
 
-	return client && session && user && permission && value && !txt2experr ? 0 : -EINVAL;
+	return key.client && key.session && key.user && key.permission && value.value && value.expire >= 0 ? 0 : -EINVAL;
 }
 
 int get_csup(int ac, char **av, int *used, const char *def)
 {
 	int n = plink(ac, av, used, 5);
 
-	client = n > 1 ? av[1] : def;
-	session = n > 2 ? av[2] : def;
-	user = n > 3 ? av[3] : def;
-	permission = n > 4 ? av[4] : def;
+	key.client = n > 1 ? av[1] : def;
+	key.session = n > 2 ? av[2] : def;
+	key.user = n > 3 ? av[3] : def;
+	key.permission = n > 4 ? av[4] : def;
 
-	return client && session && user && permission ? 0 : -EINVAL;
+	return key.client && key.session && key.user && key.permission ? 0 : -EINVAL;
 }
 
-void listcb(void *closure, const char *client, const char *session,
-		const char *user, const char *permission,
-		const char *value, time_t expire)
+void listcb(void *closure, const rcyn_key_t *k, const rcyn_value_t *v)
 {
+	char buffer[100];
 	int *p = closure;
-	const char *e = exp2txt(expire);
-	fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n", client, session, user, permission, value, e);
+	exp2txt(v->expire, buffer, sizeof buffer);
+	fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n", k->client, k->session, k->user, k->permission, v->value, buffer);
 	(*p)++;
 }
 
@@ -166,7 +129,7 @@ int do_list(int ac, char **av)
 	rc = get_csup(ac, av, &uc, "#");
 	if (rc == 0) {
 		count = 0;
-		rc = rcyn_get(rcyn, client, session, user, permission, listcb, &count);
+		rc = rcyn_get(rcyn, &key, listcb, &count);
 		if (rc < 0)
 			fprintf(stderr, "error %s\n", strerror(-rc));
 		else
@@ -183,7 +146,7 @@ int do_set(int ac, char **av)
 	if (rc == 0)
 		rc = rcyn_enter(rcyn);
 	if (rc == 0) {
-		rc = rcyn_set(rcyn, client, session, user, permission, value, expire);
+		rc = rcyn_set(rcyn, &key, &value);
 		rcyn_leave(rcyn, !rc);
 	}
 	if (rc < 0)
@@ -199,7 +162,7 @@ int do_drop(int ac, char **av)
 	if (rc == 0)
 		rc = rcyn_enter(rcyn);
 	if (rc == 0) {
-		rc = rcyn_drop(rcyn, client, session, user, permission);
+		rc = rcyn_drop(rcyn, &key);
 		rcyn_leave(rcyn, !rc);
 	}
 	if (rc < 0)
@@ -207,13 +170,13 @@ int do_drop(int ac, char **av)
 	return uc;
 }
 
-int do_check(int ac, char **av, int (*f)(rcyn_t*,const char*,const char*,const char*,const char*))
+int do_check(int ac, char **av, int (*f)(rcyn_t*,const rcyn_key_t*))
 {
 	int uc, rc;
 
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
-		rc = f(rcyn, client, session, user, permission);
+		rc = f(rcyn, &key);
 		if (rc > 0)
 			fprintf(stdout, "allowed\n");
 		else if (rc == 0)
@@ -270,16 +233,57 @@ void do_all(int ac, char **av)
 
 int main(int ac, char **av)
 {
+	int opt;
 	int rc;
+	int help = 0;
+	int version = 0;
+	int error = 0;
+	const char *socket = NULL;
 
+	/* scan arguments */
+	for (;;) {
+		opt = getopt_long(ac, av, shortopts, longopts, NULL);
+		if (opt == -1)
+			break;
+
+		switch(opt) {
+		case _HELP_:
+			help = 1;
+			break;
+		case _SOCKET_:
+			socket = optarg;
+			break;
+		case _VERSION_:
+			version = 1;
+			break;
+		default:
+			error = 1;
+			break;
+		}
+	}
+
+	/* handles help, version, error */
+	if (help) {
+		fprintf(stdout, helptxt, rcyn_default_admin_socket_spec);
+		return 0;
+	}
+	if (version) {
+		fprintf(stdout, versiontxt);
+		return 0;
+	}
+	if (error)
+		return 1;
+
+	/* initialize server */
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = rcyn_open(&rcyn, rcyn_Admin, 5000);
+	rc = rcyn_open(&rcyn, rcyn_Admin, 5000, socket);
 	if (rc < 0) {
 		fprintf(stderr, "initialisation failed: %s\n", strerror(-rc));
 		return 1;
 	}
-	if (ac > 1) {
-		do_all(ac - 1, av + 1);
+
+	if (optind < ac) {
+		do_all(ac - optind, av + optind);
 		return 0;
 	}
 
@@ -301,4 +305,3 @@ int main(int ac, char **av)
 	}
 	return 0;
 }
-

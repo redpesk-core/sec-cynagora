@@ -27,7 +27,6 @@ cynara_initialize(&m_Cynara, nullptr),
 cynara_finish(m_Cynara);
 cynara_check(m_Cynara,
 */
-#define _GNU_SOURCE
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -148,7 +147,7 @@ struct cynara_admin;
 
 int cynara_admin_initialize(struct cynara_admin **pp_cynara_admin)
 {
-	return from_status(rcyn_open((rcyn_t**)pp_cynara_admin, rcyn_Admin, 0));
+	return from_status(rcyn_open((rcyn_t**)pp_cynara_admin, rcyn_Admin, 0, 0));
 }
 
 int cynara_admin_finish(struct cynara_admin *p_cynara_admin)
@@ -162,17 +161,24 @@ int cynara_admin_set_policies(struct cynara_admin *p_cynara_admin,
 {
 	int rc, rc2;
 	const struct cynara_admin_policy *p;
+	rcyn_key_t key;
+	rcyn_value_t value;
 
+	key.session = "*";
+	value.expire = 0;
 	rc = rcyn_enter((rcyn_t*)p_cynara_admin);
 	if (rc == 0) {
 		p = *policies;
 		while (rc == 0 && p != NULL) {
+			key.client = p->client;
+			key.user = p->user;
+			key.permission = p->privilege;
 			if (p->result == CYNARA_ADMIN_DELETE)
-				rc = rcyn_drop((rcyn_t*)p_cynara_admin,
-						p->client, "*", p->user, p->privilege);
-			else if (p->result != CYNARA_ADMIN_BUCKET && p->result != CYNARA_ADMIN_NONE)
-				rc = rcyn_set((rcyn_t*)p_cynara_admin,
-						p->client, "*", p->user, p->privilege, to_value(p->result), 0);
+				rc = rcyn_drop((rcyn_t*)p_cynara_admin, &key);
+			else if (p->result != CYNARA_ADMIN_BUCKET && p->result != CYNARA_ADMIN_NONE) {
+				value.value = to_value(p->result);
+				rc = rcyn_set((rcyn_t*)p_cynara_admin, &key, &value);
+			}
 			p = *++policies;
 		}
 		rc2 = rcyn_leave((rcyn_t*)p_cynara_admin, rc == 0);
@@ -184,14 +190,10 @@ int cynara_admin_set_policies(struct cynara_admin *p_cynara_admin,
 
 static void check_cb(
 	void *closure,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const rcyn_key_t *key,
+	const rcyn_value_t *value
 ) {
-	*((int*)closure) = from_value(value);
+	*((int*)closure) = from_value(value->value);
 }
 
 int cynara_admin_check(struct cynara_admin *p_cynara_admin,
@@ -199,10 +201,11 @@ int cynara_admin_check(struct cynara_admin *p_cynara_admin,
                        const char *client, const char *user, const char *privilege,
                        int *result, char **result_extra)
 {
+	rcyn_key_t key = { client, "*", user, privilege };
 	if (result_extra)
 		*result_extra = NULL;
 	*result = CYNARA_ADMIN_DENY;
-	return from_status(rcyn_get((rcyn_t*)p_cynara_admin, client, "*", user, privilege, check_cb, result));
+	return from_status(rcyn_get((rcyn_t*)p_cynara_admin, &key, check_cb, result));
 }
 
 struct list_data
@@ -215,12 +218,8 @@ struct list_data
 
 static void list_cb(
 	void *closure,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const rcyn_key_t *key,
+	const rcyn_value_t *value
 ) {
 	struct list_data *data = closure;
 	struct cynara_admin_policy *pol;
@@ -233,13 +232,13 @@ static void list_cb(
 		goto error;
 
 	pol->bucket = strdup(data->bucket ?: "");
-	pol->client = strdup(client);
-	pol->user = strdup(user);
-	pol->privilege = strdup(permission);
+	pol->client = strdup(key->client);
+	pol->user = strdup(key->user);
+	pol->privilege = strdup(key->permission);
 	if (pol->bucket == NULL || pol->client == NULL || pol->user == NULL || pol->privilege == NULL)
 		goto error;
 
-	pol->result = from_value(value);
+	pol->result = from_value(value->value);
 	pol->result_extra = 0;
 	closure = realloc(data->policies, (data->count + 1) * sizeof *data->policies);
 	if (closure == NULL)
@@ -265,12 +264,13 @@ int cynara_admin_list_policies(struct cynara_admin *p_cynara_admin, const char *
 {
 	int rc;
 	struct list_data data;
+	rcyn_key_t key = { client, "*", user, privilege };
 
 	data.policies = NULL;
 	data.bucket = bucket && strcmp(bucket, "#") && strcmp(bucket, "*") ? bucket : NULL;
 	data.count = 0;
 	data.error = 0;
-	rc = rcyn_get((rcyn_t*)p_cynara_admin, client, "*", user, privilege, list_cb, &data);
+	rc = rcyn_get((rcyn_t*)p_cynara_admin, &key, list_cb, &data);
 	if (rc == 0 && data.error != 0)
 		rc = data.error;
 	if (rc == 0 && !data.error) {
@@ -293,11 +293,11 @@ int cynara_admin_erase(struct cynara_admin *p_cynara_admin,
                        const char *client, const char *user, const char *privilege)
 {
 	int rc, rc2;
+	rcyn_key_t key = { client, "*", user, privilege };
 
 	rc = rcyn_enter((rcyn_t*)p_cynara_admin);
 	if (rc == 0) {
-		rc = rcyn_drop((rcyn_t*)p_cynara_admin,
-					client, "*", user, privilege);
+		rc = rcyn_drop((rcyn_t*)p_cynara_admin, &key);
 		rc2 = rcyn_leave((rcyn_t*)p_cynara_admin, rc == 0);
 		if (rc == 0)
 			rc = rc2;
@@ -409,7 +409,7 @@ int cynara_async_initialize(cynara_async **pp_cynara, const cynara_async_configu
 	if (p_cynara == NULL)
 		ret = CYNARA_API_OUT_OF_MEMORY;
 	else {
-		ret = from_status(rcyn_open(&p_cynara->rcyn, rcyn_Check, p_conf ? p_conf->szcache : 0));
+		ret = from_status(rcyn_open(&p_cynara->rcyn, rcyn_Check, p_conf ? p_conf->szcache : 0, 0));
 		if (ret != CYNARA_API_SUCCESS)
 			free(p_cynara);
 		else {
@@ -447,7 +447,8 @@ void cynara_async_finish(cynara_async *p_cynara)
 int cynara_async_check_cache(cynara_async *p_cynara, const char *client, const char *client_session,
                              const char *user, const char *privilege)
 {
-	return from_check_status(rcyn_cache_check(p_cynara->rcyn, client, client_session,user, privilege));
+	rcyn_key_t key = { client, client_session, user, privilege };
+	return from_check_status(rcyn_cache_check(p_cynara->rcyn, &key));
 }
 
 static void reqcb(void *closure, int status)
@@ -473,6 +474,7 @@ static int create_reqasync(cynara_async *p_cynara, const char *client,
 {
 	int rc;
 	struct reqasync *req;
+	rcyn_key_t key = { client, client_session, user, privilege };
 
 	req = malloc(sizeof *req);
 	if (req == NULL)
@@ -485,7 +487,7 @@ static int create_reqasync(cynara_async *p_cynara, const char *client,
 	req->id = ++p_cynara->ids;
 	req->canceled = false;
 
-	rc = rcyn_async_check(p_cynara->rcyn, client, client_session, user, privilege, simple, reqcb, req);
+	rc = rcyn_async_check(p_cynara->rcyn, &key, simple, reqcb, req);
 	if (rc == 0)
 		p_cynara->reqs = req;
 	else
@@ -555,7 +557,7 @@ int cynara_configuration_set_cache_size(cynara_configuration *p_conf,
 
 int cynara_initialize(cynara **pp_cynara, const cynara_configuration *p_conf)
 {
-	return from_status(rcyn_open((rcyn_t**)pp_cynara, rcyn_Check, p_conf ? p_conf->szcache : 0));
+	return from_status(rcyn_open((rcyn_t**)pp_cynara, rcyn_Check, p_conf ? p_conf->szcache : 0, 0));
 }
 
 int cynara_finish(cynara *p_cynara)
@@ -567,13 +569,15 @@ int cynara_finish(cynara *p_cynara)
 int cynara_check(cynara *p_cynara, const char *client, const char *client_session, const char *user,
                  const char *privilege)
 {
-	return from_check_status(rcyn_check((rcyn_t*)p_cynara, client, client_session, user, privilege));
+	rcyn_key_t key = { client, client_session, user, privilege };
+	return from_check_status(rcyn_check((rcyn_t*)p_cynara, &key));
 }
 
 int cynara_simple_check(cynara *p_cynara, const char *client, const char *client_session,
                         const char *user, const char *privilege)
 {
-	return from_check_status(rcyn_test((rcyn_t*)p_cynara, client, client_session, user, privilege));
+	rcyn_key_t key = { client, client_session, user, privilege };
+	return from_check_status(rcyn_test((rcyn_t*)p_cynara, &key));
 }
 
 /************************************* CREDS... & SESSION *********************************/

@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#define _GNU_SOURCE
-
 #include <stdlib.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -36,6 +34,8 @@ struct buf
 
 	/** a count */
 	unsigned count;
+
+	/* TODO: add a 3rd unsigned for improving management of read and write */
 
 	/** a fixed size content */
 	char content[MAXBUFLEN];
@@ -62,76 +62,82 @@ struct prot
 	/** output buf, pos is to be written position */
 	buf_t outbuf;
 
+	/** count of pending output fields */
+	unsigned outfields;
+
+	/** cancel index value value */
+	unsigned cancelidx;
+
 	/** the fields */
 	fields_t fields;
 };
 
 
 /**
- * Put the 'count' in 'fields' to the 'buf'
+ * Put the 'car' into the 'buf'
  * returns:
  *  - 0 on success
- *  - -EINVAL if the count of fields is too big
  *  - -ECANCELED if there is not enought space in the buffer
  */
 static
 int
-buf_put_fields(
+buf_put_car(
 	buf_t *buf,
-	unsigned count,
-	const char **fields
+	char car
 ) {
-	unsigned ifield, pos, remain;
-	const char *t;
-	char c;
+	unsigned pos;
 
-	/* check the count of fields */
-	if (count > MAXARGS)
-		return -EINVAL;
+	pos = buf->count;
+	if (pos >= MAXBUFLEN)
+		return -ECANCELED;
 
-	/* get the writing position and the free count */
-	pos = buf->pos + buf->count;
+	buf->count = pos + 1;
+	pos += buf->pos;
 	if (pos >= MAXBUFLEN)
 		pos -= MAXBUFLEN;
-	remain = MAXBUFLEN - buf->count;
+	buf->content[pos] = car;
+	return 0;
+}
 
-	/* put all fields */
-	for (ifield = 0 ; ifield < count ; ifield++) {
-		/* prepend the field separator if needed */
-		if (ifield) {
+
+/**
+ * Put the 'string' into the 'buf' escaping it at need
+ * returns:
+ *  - 0 on success
+ *  - -ECANCELED if there is not enought space in the buffer
+ */
+static
+int
+buf_put_string(
+	buf_t *buf,
+	const char *string
+) {
+	unsigned pos, remain;
+	char c;
+
+	remain = buf->count;
+	pos = buf->pos + remain;
+	if (pos >= MAXBUFLEN)
+		pos -= MAXBUFLEN;
+	remain = MAXBUFLEN - remain;
+
+	/* put all chars of the string */
+	while((c = *string++)) {
+		/* escape special characters */
+		if (c == FS || c == RS || c == ESC) {
 			if (!remain--)
 				goto cancel;
-			buf->content[pos++] = FS;
+			buf->content[pos++] = ESC;
 			if (pos == MAXBUFLEN)
 				pos = 0;
 		}
-		/* put the field if any (NULL aliases "") */
-		t = fields[ifield];
-		if (t) {
-			/* put all chars of the field */
-			while((c = *t++)) {
-				/* escape special characters */
-				if (c == FS || c == RS || c == ESC) {
-					if (!remain--)
-						goto cancel;
-					buf->content[pos++] = ESC;
-					if (pos == MAXBUFLEN)
-						pos = 0;
-				}
-				/* put the char */
-				if (!remain--)
-					goto cancel;
-				buf->content[pos++] = c;
-				if (pos == MAXBUFLEN)
-					pos = 0;
-			}
-		}
+		/* put the char */
+		if (!remain--)
+			goto cancel;
+		buf->content[pos++] = c;
+		if (pos == MAXBUFLEN)
+			pos = 0;
 	}
-
-	/* put the end indicator */
-	if (!remain--)
-		goto cancel;
-	buf->content[pos] = RS;
 
 	/* record the new values */
 	buf->count = MAXBUFLEN - remain;
@@ -340,7 +346,72 @@ prot_reset(
 	/* initialisation of the structure */
 	prot->inbuf.pos = prot->inbuf.count = 0;
 	prot->outbuf.pos = prot->outbuf.count = 0;
+	prot->outfields = 0;
 	prot->fields.count = -1;
+}
+
+void
+prot_put_cancel(
+	prot_t *prot
+) {
+	unsigned count;
+
+	if (prot->outfields) {
+		count = prot->cancelidx - prot->outbuf.pos;
+		prot->outbuf.count = count > MAXBUFLEN ? count - MAXBUFLEN : count;
+		prot->outfields = 0;
+	}
+}
+
+int
+prot_put_end(
+	prot_t *prot
+) {
+	int rc;
+
+	if (!prot->outfields)
+		rc = 0;
+	else {
+		rc = buf_put_car(&prot->outbuf, RS);
+		prot->outfields = 0;
+	}
+	return rc;
+}
+
+int
+prot_put_field(
+	prot_t *prot,
+	const char *field
+) {
+	int rc;
+
+	if (prot->outfields++)
+		rc = buf_put_car(&prot->outbuf, FS);
+	else {
+		prot->cancelidx = prot->outbuf.pos + prot->outbuf.count;
+		rc = 0;
+	}
+	if (rc >= 0 && field)
+		rc = buf_put_string(&prot->outbuf, field);
+
+	return rc;
+}
+
+int
+prot_put_fields(
+	prot_t *prot,
+	unsigned count,
+	const char **fields
+) {
+	int rc;
+	if (!count)
+		rc = 0;
+	else {
+		rc = prot_put_field(prot, *fields);
+		while (rc >= 0 && --count)
+			rc = prot_put_field(prot, *++fields);
+	}
+	return rc;
 }
 
 /**
@@ -348,7 +419,7 @@ prot_reset(
  * returns:
  *  - 0 on success
  *  - -EINVAL if the count of fields is too big
- *  - -ECANCELED if there is not enought space in the buffer
+ *  - -ECANCELED if there is not enough space in the buffer
  */
 int
 prot_put(
@@ -356,7 +427,16 @@ prot_put(
 	unsigned count,
 	const char **fields
 ) {
-	return buf_put_fields(&prot->outbuf, count, fields);
+	int rc = 0;
+	unsigned index = 0;
+
+	while(!rc && index < count)
+		rc = prot_put_field(prot, fields[index++]);
+	if (rc)
+		prot_put_cancel(prot);
+	else
+		rc = prot_put_end(prot);
+	return rc;
 }
 
 /**
@@ -371,21 +451,21 @@ prot_putx(
 	prot_t *prot,
 	...
 ) {
-	const char *p, *fields[MAXARGS];
-	unsigned n;
+	int rc = 0;
 	va_list l;
+	const char *p;
 
 	va_start(l, prot);
-	n = 0;
 	p = va_arg(l, const char *);
-	while (p) {
-		if (n == MAXARGS)
-			return -EINVAL;
-		fields[n++] = p;
+	while(!rc && p) {
+		rc = prot_put_field(prot, p);
 		p = va_arg(l, const char *);
 	}
-	va_end(l);
-	return prot_put(prot, n, fields);
+	if (rc)
+		prot_put_cancel(prot);
+	else
+		rc = prot_put_end(prot);
+	return rc;
 }
 
 /**

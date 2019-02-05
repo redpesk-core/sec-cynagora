@@ -19,8 +19,11 @@
 set(SERVER_SOURCES
 	cyn.c
 	db.c
+	dbinit.c
+	expire.c
 	fbuf.c
 	main-cynarad.c
+	pollitem.c
 	prot.c
 	queue.c
 	rcyn-protocol.c
@@ -37,20 +40,7 @@ set(LIB_SOURCES
 	socket.c
 )
 
-###########################################
-# build and install cynarad
-###########################################
-add_executable(cynarad ${SERVER_SOURCES})
-target_compile_definitions(cynarad PRIVATE
-	DEFAULT_DB_DIR="${DEFAULT_DB_DIR}"
-	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
-	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
-	RCYN_DEFAULT_CHECK_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.check"
-	RCYN_DEFAULT_ADMIN_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.admin"
-)
-target_link_libraries(cynarad cap)
-install(TARGETS cynarad
-        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+add_compile_definitions(_GNU_SOURCE)
 
 ###########################################
 # build and install libcynara
@@ -72,9 +62,24 @@ INSTALL(TARGETS cynara LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 INSTALL(FILES rcyn-client.h DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/cynara)
 
 ###########################################
+# build and install cynarad
+###########################################
+add_executable(cynarad ${SERVER_SOURCES})
+target_compile_definitions(cynarad PRIVATE
+	DEFAULT_DB_DIR="${DEFAULT_DB_DIR}"
+	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
+	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
+	RCYN_DEFAULT_CHECK_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.check"
+	RCYN_DEFAULT_ADMIN_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.admin"
+)
+target_link_libraries(cynarad cap)
+install(TARGETS cynarad
+        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+
+###########################################
 # build and install cynadm
 ###########################################
-ADD_EXECUTABLE(cynadm main-cynadm.c)
+ADD_EXECUTABLE(cynadm main-cynadm.c expire.c)
 TARGET_LINK_LIBRARIES(cynadm cynara)
 INSTALL(TARGETS cynadm
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})

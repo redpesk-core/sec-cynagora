@@ -19,21 +19,14 @@
 extern
 int
 queue_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const data_key_t *key
 );
 
 extern
 int
 queue_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const data_key_t *key,
+	const data_value_t *value
 );
 
 extern

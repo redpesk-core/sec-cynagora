@@ -17,6 +17,7 @@
 
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdalign.h>
 #include <string.h>
@@ -24,6 +25,7 @@
 #include <time.h>
 #include <ctype.h>
 
+#include "rcyn-client.h"
 #include "cache.h"
 
 /**
@@ -34,7 +36,7 @@
  *  - session: zero  terminated string
  *  - user: zero  terminated string
  *  - permission: zero  terminated string
- *  - 
+ *  -
  */
 struct item
 {
@@ -166,18 +168,15 @@ static
 int
 match(
 	const char *head,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
-	head = cmp(head, client);
+	head = cmp(head, key->client);
 	if (head)
-		head = cmp(head, session);
+		head = cmp(head, key->session);
 	if (head)
-		head = cmp(head, user);
+		head = cmp(head, key->user);
 	if (head)
-		head = cmpi(head, permission);
+		head = cmpi(head, key->permission);
 	return !!head;
 }
 
@@ -185,10 +184,7 @@ static
 item_t*
 search(
 	cache_t *cache,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
 	time_t now;
 	item_t *item, *found;
@@ -202,7 +198,7 @@ search(
 		if (item->expire && item->expire < now)
 			drop_at(cache, iter);
 		else {
-			if (match(&item->strings, client, session, user, permission))
+			if (match(&item->strings, key))
 				found = item;
 			iter += item->length;
 		}
@@ -213,10 +209,7 @@ search(
 int
 cache_put(
 	cache_t *cache,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
+	const rcyn_key_t *key,
 	int value,
 	time_t expire
 ) {
@@ -227,14 +220,14 @@ cache_put(
 	if (cache == NULL || value < -128 || value > 127)
 		return -EINVAL;
 
-	item = search(cache, client, session, user, permission);
+	item = search(cache, key);
 	if (item == NULL) {
 		/* create an item */
 		size = (size_t)(&((item_t*)0)->strings)
-			+ strlen(client)
-			+ strlen(session)
-			+ strlen(user)
-			+ strlen(permission);
+			+ strlen(key->client)
+			+ strlen(key->session)
+			+ strlen(key->user)
+			+ strlen(key->permission);
 		size = (size + alignof(item_t) - 1) & ~(alignof(item_t) - 1);
 		if (size > 65535)
 			return -EINVAL;
@@ -245,7 +238,7 @@ cache_put(
 			drop_lre(cache);
 		item = itemat(cache, cache->used);
 		item->length = length;
-		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy(&item->strings, client), session), user), permission);
+		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy(&item->strings, key->client), key->session), key->user), key->permission);
 		cache->used += (uint32_t)size;
 	}
 	item->expire = expire;
@@ -257,14 +250,11 @@ cache_put(
 int
 cache_search(
 	cache_t *cache,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
 	item_t *item;
 
-	item = search(cache, client, session, user, permission);
+	item = search(cache, key);
 	if (item) {
 		hit(cache, item);
 		return (int)item->value;

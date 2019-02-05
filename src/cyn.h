@@ -18,10 +18,20 @@
 
 #pragma once
 
-#define DENY    "no"
-#define ALLOW   "yes"
-#define ASK     "ask"
-#define DEFAULT DENY
+typedef void (on_enter_cb_t)(void *closure);
+typedef void (on_change_cb_t)(void *closure);
+typedef void (on_result_cb_t)(void *closure, const data_value_t *value);
+
+typedef void (list_cb_t)(
+		void *closure,
+		const data_key_t *key,
+		const data_value_t *value);
+
+typedef int (agent_cb_t)(
+		void *agent_closure,
+		const data_key_t *key,
+		on_result_cb_t *on_result_cb,
+		void *on_result_closure);
 
 /** enter critical recoverable section */
 extern
@@ -40,89 +50,79 @@ cyn_leave(
 
 extern
 int
-cyn_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
-);
-
-extern
-int
-cyn_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
-);
-
-extern
-int
-cyn_test(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char **value,
-	time_t *expire
-);
-
-extern
-void
-cyn_list(
-	void *closure,
-	void (*callback)(
-		void *closure,
-		const char *client,
-		const char *session,
-		const char *user,
-		const char *permission,
-		const char *value,
-		time_t expire),
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
-);
-
-extern
-int
-cyn_check_async(
-	void (*check_cb)(void *closure, const char *value, time_t expire),
-	void *closure,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
-);
-
-extern
-int
 cyn_enter_async(
-	void (*enter_cb)(void *closure),
+	on_enter_cb_t *enter_cb,
 	void *closure
 );
 
 extern
 int
 cyn_enter_async_cancel(
-	void (*enter_cb)(void *closure),
+	on_enter_cb_t *enter_cb,
 	void *closure
 );
 
 extern
 int
 cyn_on_change_add(
-	void (*on_change_cb)(void *closure),
+	on_change_cb_t *on_change_cb,
 	void *closure
 );
 
 extern
 int
 cyn_on_change_remove(
-	void (*on_change_cb)(void *closure),
+	on_change_cb_t *on_change_cb,
+	void *closure
+);
+
+extern
+int
+cyn_set(
+	const data_key_t *key,
+	const data_value_t *value
+);
+
+extern
+int
+cyn_drop(
+	const data_key_t *key
+);
+
+extern
+int
+cyn_test(
+	const data_key_t *key,
+	data_value_t *value
+);
+
+extern
+void
+cyn_list(
+	void *closure,
+	list_cb_t *callback,
+	const data_key_t *key
+);
+
+extern
+int
+cyn_check_async(
+	on_result_cb_t *on_result_cb,
+	void *closure,
+	const data_key_t *key
+);
+
+extern
+int
+cyn_agent_add(
+	agent_cb_t *agent_cb,
+	void *closure
+);
+
+extern
+int
+cyn_agent_remove(
+	agent_cb_t *agent_cb,
 	void *closure
 );
 

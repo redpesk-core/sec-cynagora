@@ -15,37 +15,47 @@
  * limitations under the License.
  */
 
-#pragma once
+/** structure for using epoll easily */
+typedef struct pollitem pollitem_t;
 
-extern const char
-	_agent_[],
-	_check_[],
-	_drop_[],
-	_enter_[],
-	_get_[],
-	_leave_[],
-	_rcyn_[],
-	_set_[],
-	_test_[];
+struct pollitem
+{
+	/** callback on event */
+	void (*handler)(pollitem_t *pollitem, uint32_t events, int pollfd);
 
-extern const char
-	_commit_[],
-	_rollback_[];
+	/** data */
+	void *closure;
 
-extern const char
-	_clear_[],
-	_done_[],
-	_error_[],
-	_item_[],
-	_no_[],
-	_yes_[];
+	/** file */
+	int fd;
+};
 
-extern const char
-	rcyn_default_socket_scheme[],
-	rcyn_default_socket_dir[],
-	rcyn_default_check_socket_base[],
-	rcyn_default_admin_socket_base[],
-	rcyn_default_agent_socket_base[],
-	rcyn_default_check_socket_spec[],
-	rcyn_default_admin_socket_spec[],
-	rcyn_default_agent_socket_spec[];
+extern
+int
+pollitem_add(
+	pollitem_t *pollitem,
+	uint32_t events,
+	int pollfd
+);
+
+extern
+int
+pollitem_mod(
+	pollitem_t *pollitem,
+	uint32_t events,
+	int pollfd
+);
+
+extern
+int
+pollitem_del(
+	pollitem_t *pollitem,
+	int pollfd
+);
+
+extern
+int
+pollitem_wait_dispatch(
+	int pollfd,
+	int timeout
+);

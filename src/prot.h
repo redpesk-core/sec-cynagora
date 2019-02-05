@@ -46,6 +46,33 @@ prot_reset(
 );
 
 extern
+void
+prot_put_cancel(
+	prot_t *prot
+);
+
+extern
+int
+prot_put_end(
+	prot_t *prot
+);
+
+extern
+int
+prot_put_field(
+	prot_t *prot,
+	const char *field
+);
+
+extern
+int
+prot_put_fields(
+	prot_t *prot,
+	unsigned count,
+	const char **fields
+);
+
+extern
 int
 prot_put(
 	prot_t *prot,

@@ -15,10 +15,6 @@
  * limitations under the License.
  */
 
-
-#define _GNU_SOURCE
-
-
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -45,88 +41,101 @@ get_asz(
 }
 
 /** open in 'fb' the file of 'name' */
+static
 int
-fbuf_open(
+read_file(
 	fbuf_t	*fb,
-	const char *name,
-	const char *backup
+	const char *name
 ) {
 	struct stat st;
-	int fd, fdback, rc;
-	uint32_t sz, asz;
-	void *buffer;
-
-	/* open the backup */
-	if (backup == NULL)
-		fdback = -1;
-	else {
-		fdback = open(backup, O_RDWR|O_CREAT, 0600);
-		if (fdback < 0)
-			goto error;
-		rc = flock(fdback, LOCK_EX|LOCK_NB);
-		if (rc < 0)
-			goto error;
-	}
+	int fd, rc;
+	uint32_t sz;
 
 	/* open the file */
 	fd = open(name, O_RDWR|O_CREAT, 0600);
 	if (fd < 0)
 		goto error;
 
-	/* lock it */
-	rc = flock(fd, LOCK_EX|LOCK_NB);
-	if (rc < 0)
-		goto error2;
-
 	/* get file stat */
 	rc = fstat(fd, &st);
 	if (rc < 0)
-		goto error3;
+		goto error2;
 
 	/* check file size */
 	if ((off_t)INT32_MAX < st.st_size) {
 		errno = EFBIG;
-		goto error3;
+		goto error2;
 	}
-
-	/* compute allocation size */
 	sz = (uint32_t)st.st_size;
-	asz = get_asz(sz);
-	buffer = malloc(asz);
-	if (buffer == NULL)
-		goto error3;
+
+	/* allocate memory */
+	rc = fbuf_ensure_capacity(fb, (uint32_t)st.st_size);
+	if (rc < 0)
+		goto error2;
 
 	/* read the file */
-	if (read(fd, buffer, (size_t)sz) != (ssize_t)sz)
-		goto error4;
-
-	/* save name */
-	fb->name = strdup(name);
-	if (fb->name == NULL)
-		goto error4;
+	if (read(fd, fb->buffer, (size_t)sz) != (ssize_t)sz)
+		goto error2;
 
 	/* done */
-	fb->buffer = buffer;
-	fb->saved = fb->used = fb->size = sz;
-	fb->capacity = asz;
-	fb->fd = fd;
-	fb->backup = fdback;
+	fb->used = fb->size = sz;
+	close(fd);
 	return 0;
 
-error4:
-	free(buffer);
-error3:
-	flock(fd, LOCK_UN);
 error2:
 	close(fd);
 error:
 	rc = -errno;
-	fprintf(stderr, "can't open file %s: %m", name);
-	if (fdback >= 0) {
-		flock(fdback, LOCK_UN);
-		close(fdback);
-	}
+	fprintf(stderr, "can't read file %s: %m", name);
+	fb->saved = fb->used = fb->size = 0;
+	return rc;
+}
+
+/** open in 'fb' the file of 'name' */
+int
+fbuf_open(
+	fbuf_t	*fb,
+	const char *name,
+	const char *backup
+) {
+	int rc;
+	size_t sz;
+
+	/* reset */
 	memset(fb, 0, sizeof *fb);
+
+	/* save name */
+	fb->name = strdup(name);
+	if (fb->name == NULL)
+		goto error;
+
+	/* open the backup */
+	if (backup != NULL)
+		fb->backup = strdup(backup);
+	else {
+		sz = strlen(name);
+		fb->backup = malloc(sz + 2);
+		if (fb->backup != NULL) {
+			memcpy(fb->backup, name, sz);
+			fb->backup[sz] = '~';
+			fb->backup[sz + 1] = 0;
+		}
+	}
+	if (fb->backup == NULL)
+		goto error;
+
+	/* read the file */
+	rc = read_file(fb, fb->name);
+	if (rc < 0)
+		goto error;
+
+	fb->saved = fb->used;
+	return 0;
+
+error:
+	rc = -errno;
+	fprintf(stderr, "can't open file %s: %m", name);
+	fbuf_close(fb);
 	return rc;
 }
 
@@ -136,38 +145,9 @@ fbuf_close(
 	fbuf_t	*fb
 ) {
 	free(fb->name);
+	free(fb->backup);
 	free(fb->buffer);
-	flock(fb->fd, LOCK_UN);
-	close(fb->fd);
-	if (fb->backup >= 0) {
-		flock(fb->backup, LOCK_UN);
-		close(fb->backup);
-	}
 	memset(fb, 0, sizeof *fb);
-}
-
-/** write to file 'fb' at 'offset' the 'count' bytes pointed by 'buffer' */
-int
-fbuf_write(
-	fbuf_t	*fb,
-	const void *buffer,
-	uint32_t count,
-	uint32_t offset
-) {
-	ssize_t rcs;
-
-	/* don't call me for nothing */
-	assert(count);
-
-	/* effective write */
-	rcs = pwrite(fb->fd, buffer, (size_t)count, (off_t)offset);
-	if (rcs != (ssize_t)count)
-		goto error;
-
-	return 0;
-error:
-	fprintf(stderr, "write of file %s failed: %m", fb->name);
-	return -errno;
 }
 
 /** write to file 'fb' the unsaved bytes and flush the content to the file */
@@ -175,38 +155,32 @@ int
 fbuf_sync(
 	fbuf_t	*fb
 ) {
-	int rc;
-	bool changed = false;
+	ssize_t rcs;
+	int rc, fd;
+
+	/* is sync needed? */
+	if (fb->used == fb->saved && fb->used == fb->size)
+		return 0;
+
+	/* open the file */
+	unlink(fb->name);
+	fd = creat(fb->name, 0600);
+	if (fd < 0)
+		goto error;
 
 	/* write unsaved bytes */
-	if (fb->used > fb->saved) {
-		rc = fbuf_write(fb, fb->buffer + fb->saved, fb->used - fb->saved, fb->saved);
-		if (rc < 0)
-			return rc;
-		fb->saved = fb->used;
-		changed = true;
-	}
+	rcs = write(fd, fb->buffer, fb->used);
+	close(fd);
+	if (rcs < 0)
+		goto error;
 
-	/* truncate on needed */
-	if (fb->used < fb->size) {
-		rc = ftruncate(fb->fd, (off_t)fb->used);
-		if (rc < 0)
-			goto error;
-		changed = true;
-	}
-	fb->size = fb->used;
-
-	/* force synchronisation of the file */
-	if (changed) {
-		rc = fsync(fb->fd);
-		if (rc < 0)
-			goto error;
-	}
-
+	fb->size = fb->saved = fb->used;
 	return 0;
+
 error:
+	rc = -errno;
 	fprintf(stderr, "sync of file %s failed: %m", fb->name);
-	return -errno;
+	return rc;
 }
 
 /** allocate enough memory in 'fb' to store 'count' bytes */
@@ -316,58 +290,13 @@ fbuf_open_identify(
 	return rc;
 }
 
-
-/* On versions of glibc before 2.27, we must invoke copy_file_range()
-  using syscall(2) */
-#include <features.h>
-#if (__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 27)
-#include <syscall.h>
-static
-loff_t
-copy_file_range(
-	int fd_in,
-	loff_t *off_in,
-	int fd_out,
-	loff_t *off_out,
-	size_t len,
-	unsigned int flags
-) {
-	loff_t rc;
-
-	rc = syscall(__NR_copy_file_range, fd_in, off_in, fd_out,
-				off_out, len, flags);
-	return rc;
-}
-#endif
-
-
 /** make a backup */
 int
 fbuf_backup(
 	fbuf_t	*fb
 ) {
-	int rc;
-	size_t sz;
-	ssize_t wsz;
-	loff_t ino, outo;
-
-	ino = outo = 0;
-	sz = fb->size;
-	for (;;) {
-		wsz = copy_file_range(fb->fd, &ino, fb->backup, &outo, sz, 0);
-		if (wsz < 0) {
-			if (errno != EINTR)
-				return -errno;
-		} else {
-			sz -= (size_t)wsz;
-			if (sz == 0) {
-				rc = ftruncate(fb->backup, outo);
-				if (rc == 0)
-					rc = fsync(fb->backup);
-				return rc < 0 ? -errno : 0;
-			}
-		}
-	}
+	unlink(fb->backup);
+	return link(fb->name, fb->backup);
 }
 
 /** recover from latest backup */
@@ -375,29 +304,10 @@ int
 fbuf_recover(
 	fbuf_t	*fb
 ) {
-	ssize_t ssz;
-	struct stat st;
 	int rc;
 
-	/* get the size */
-	rc = fstat(fb->backup, &st);
-	if (rc < 0)
-		return -errno;
-
-	/* ensure space */
-	if (st.st_size > UINT32_MAX)
-		return -EFBIG;
-	rc = fbuf_ensure_capacity(fb, (uint32_t)st.st_size);
-	if (rc < 0)
-		return rc;
-
-	/* read it */
-	ssz = pread(fb->backup, fb->buffer, (size_t)st.st_size, 0); 
-	if (ssz < 0)
-		return -errno;
-
-	fb->used = (uint32_t)st.st_size;
-	fb->saved = fb->size = 0; /* ensure rewrite of restored data */
-	return 0;
+	rc = read_file(fb, fb->backup);
+	fb->saved = 0; /* ensure rewrite of restored data */
+	return rc;
 }
 

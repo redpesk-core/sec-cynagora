@@ -18,20 +18,36 @@
 
 #pragma once
 
-typedef enum rcyn_type {
-	rcyn_Check,
-	rcyn_Admin
-} rcyn_type_t;
-
-struct rcyn;
 typedef struct rcyn rcyn_t;
+typedef enum rcyn_type rcyn_type_t;
+typedef struct rcyn_key rcyn_key_t;
+typedef struct rcyn_value rcyn_value_t;
+
+enum rcyn_type {
+	rcyn_Check,
+	rcyn_Admin,
+	rcyn_Agent
+};
+
+struct rcyn_key {
+	const char *client;
+	const char *session;
+	const char *user;
+	const char *permission;
+};
+
+struct rcyn_value {
+	const char *value;
+	time_t expire;
+};
 
 extern
 int
 rcyn_open(
 	rcyn_t **rcyn,
 	rcyn_type_t type,
-	uint32_t cache_size
+	uint32_t cache_size,
+	const char *socketspec
 );
 
 extern
@@ -57,50 +73,33 @@ extern
 int
 rcyn_check(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 );
 
 extern
 int
 rcyn_test(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 );
 
 extern
 int
 rcyn_set(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const rcyn_key_t *key,
+	const rcyn_value_t *value
 );
 
 extern
 int
 rcyn_get(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
+	const rcyn_key_t *key,
 	void (*callback)(
 		void *closure,
-		const char *client,
-		const char *session,
-		const char *user,
-		const char *permission,
-		const char *value,
-		time_t expire
+		const rcyn_key_t *key,
+		const rcyn_value_t *value
 	),
 	void *closure
 );
@@ -109,10 +108,7 @@ extern
 int
 rcyn_drop(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 );
 
 extern
@@ -125,10 +121,7 @@ extern
 int
 rcyn_cache_check(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 );
 
 typedef int (*rcyn_async_ctl_t)(
@@ -155,11 +148,8 @@ extern
 int
 rcyn_async_check(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	bool test,
+	const rcyn_key_t *key,
+	bool simple,
 	void (*callback)(
 		void *closure,
 		int status),

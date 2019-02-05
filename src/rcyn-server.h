@@ -32,7 +32,8 @@ int
 rcyn_server_create(
 	rcyn_server_t **server,
 	const char *admin_socket_spec,
-	const char *check_socket_spec
+	const char *check_socket_spec,
+	const char *agent_socket_spec
 );
 
 extern

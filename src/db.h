@@ -44,19 +44,6 @@ int
 db_sync(
 );
 
-/** enter critical recoverable section */
-extern
-int
-db_enter(
-);
-
-/** leave critical recoverable section */
-extern
-int
-db_leave(
-	bool commit
-);
-
 /** get an index for a name */
 extern
 int
@@ -85,53 +72,36 @@ db_for_all(
 	void *closure,
 	void (*callback)(
 		void *closure,
-		const char *client,
-		const char *session,
-		const char *user,
-		const char *permission,
-		const char *value,
-		time_t expire),
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+		const data_key_t *key,
+		const data_value_t *value),
+	const data_key_t *key
 );
 
 /** erase rules */
 extern
 int
 db_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const data_key_t *key
 );
 
 /** set rules */
 extern
 int
 db_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const data_key_t *key,
+	const data_value_t *value
 );
 
 /** check rules */
 extern
 int
 db_test(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char **value,
-	time_t *expire
+	const data_key_t *key,
+	data_value_t *value
 );
 
 /** cleanup the base */
+extern
 int
 db_cleanup(
 );

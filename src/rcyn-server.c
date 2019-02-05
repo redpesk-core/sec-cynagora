@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#define _GNU_SOURCE
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -33,74 +31,19 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include "data.h"
 #include "prot.h"
 #include "cyn.h"
 #include "rcyn-protocol.h"
 #include "rcyn-server.h"
 #include "socket.h"
+#include "pollitem.h"
 
 typedef enum rcyn_type {
 	rcyn_Check,
+	rcyn_Agent,
 	rcyn_Admin
 } rcyn_type_t;
-
-
-/** structure for using epoll easily */
-typedef struct pollitem pollitem_t;
-struct pollitem
-{
-	/** callback on event */
-	void (*handler)(pollitem_t *pollitem, uint32_t events, int pollfd);
-
-	/** data */
-	void *closure;
-
-	/** file */
-	int fd;
-};
-
-static
-int
-pollitem_do(
-	pollitem_t *pollitem,
-	uint32_t events,
-	int pollfd,
-	int op
-) {
-	struct epoll_event ev = { .events = events, .data.ptr = pollitem };
-	return epoll_ctl(pollfd, op, pollitem->fd, &ev);
-}
-
-static
-int
-pollitem_add(
-	pollitem_t *pollitem,
-	uint32_t events,
-	int pollfd
-) {
-	return pollitem_do(pollitem, events, pollfd, EPOLL_CTL_ADD);
-}
-
-#if 0
-static
-int
-pollitem_mod(
-	pollitem_t *pollitem,
-	uint32_t events,
-	int pollfd
-) {
-	return pollitem_do(pollitem, events, pollfd, EPOLL_CTL_MOD);
-}
-#endif
-
-static
-int
-pollitem_del(
-	pollitem_t *pollitem,
-	int pollfd
-) {
-	return pollitem_do(pollitem, 0, pollfd, EPOLL_CTL_DEL);
-}
 
 
 /** structure that represents a rcyn client */
@@ -124,7 +67,7 @@ struct client
 	/** enter/leave status, record if entered */
 	unsigned entered: 1;
 
-	/** enter/leave status, record if entring pending */
+	/** enter/leave status, record if enter is pending */
 	unsigned entering: 1;
 
 	/** indicate if some check were made */
@@ -146,6 +89,9 @@ struct rcyn_server
 
 	/** the admin socket */
 	pollitem_t admin;
+
+	/** the agent socket */
+	pollitem_t agent;
 
 	/** the check socket */
 	pollitem_t check;
@@ -181,18 +127,20 @@ flushw(
 	int rc;
 	struct pollfd pfd;
 
-	rc = prot_should_write(cli->prot);
-	while (rc) {
+	for(;;) {
+		rc = prot_should_write(cli->prot);
+		if (!rc)
+			break;
 		rc = prot_write(cli->prot, cli->pollitem.fd);
 		if (rc == -EAGAIN) {
 			pfd.fd = cli->pollitem.fd;
 			pfd.events = POLLOUT;
 			do { rc = poll(&pfd, 1, 0); } while (rc < 0 && errno == EINTR);
+			if (rc < 0)
+				rc = -errno;
 		}
-		if (rc < 0) {
+		if (rc < 0)
 			break;
-		}
-		rc = prot_should_write(cli->prot);
 	}
 	return rc;
 }
@@ -298,16 +246,20 @@ static
 void
 checkcb(
 	void *closure,
-	const char *value,
-	time_t expire
+	const data_value_t *value
 ) {
 	client_t *cli = closure;
 	char text[30];
 
-	if (strcmp(value, ALLOW) && strcmp(value, DENY))
-		putx(cli, _done_, value, exp2txt(expire, text, sizeof text), NULL);
-	else
-		putx(cli, value, exp2txt(expire, text, sizeof text), NULL);
+	if (!value)
+		putx(cli, DEFAULT, "0", NULL);
+	else {
+		exp2txt(value->expire, text, sizeof text);
+		if (strcmp(value->value, ALLOW) && strcmp(value->value, DENY))
+			putx(cli, _done_, value, text, NULL);
+		else
+			putx(cli, value->value, text, NULL);
+	}
 	flushw(cli);
 }
 
@@ -316,18 +268,14 @@ static
 void
 getcb(
 	void *closure,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const data_key_t *key,
+	const data_value_t *value
 ) {
 	client_t *cli = closure;
 	char text[30];
 
-	putx(cli, _item_, client, session, user, permission,
-		value, exp2txt(expire, text, sizeof text), NULL);
+	putx(cli, _item_, key->client, key->session, key->user, key->permission,
+		value->value, exp2txt(value->expire, text, sizeof text), NULL);
 }
 
 /** handle a request */
@@ -339,8 +287,8 @@ onrequest(
 	const char *args[]
 ) {
 	int rc;
-	const char *value;
-	time_t expire;
+	data_key_t key;
+	data_value_t value;
 
 	/* just ignore empty lines */
 	if (count == 0)
@@ -357,10 +305,22 @@ onrequest(
 	}
 
 	switch(args[0][0]) {
+	case 'a': /* agent */
+		if (ckarg(args[0], _agent_, 1) && count == 5) {
+			if (cli->type != rcyn_Agent)
+				break;
+			/* TODO */ break;
+			return;
+		}
+		break;
 	case 'c': /* check */
 		if (ckarg(args[0], _check_, 1) && count == 5) {
 			cli->checked = 1;
-			cyn_check_async(checkcb, cli, args[1], args[2], args[3], args[4]);
+			key.client = args[1];
+			key.session = args[2];
+			key.user = args[3];
+			key.permission = args[4];
+			cyn_check_async(checkcb, cli, &key);
 			return;
 		}
 		break;
@@ -370,7 +330,11 @@ onrequest(
 				break;
 			if (!cli->entered)
 				break;
-			rc = cyn_drop(args[1], args[2], args[3], args[4]);
+			key.client = args[1];
+			key.session = args[2];
+			key.user = args[3];
+			key.permission = args[4];
+			rc = cyn_drop(&key);
 			send_done_or_error(cli, rc);
 			return;
 		}
@@ -391,7 +355,11 @@ onrequest(
 		if (ckarg(args[0], _get_, 1) && count == 5) {
 			if (cli->type != rcyn_Admin)
 				break;
-			cyn_list(cli, getcb, args[1], args[2], args[3], args[4]);
+			key.client = args[1];
+			key.session = args[2];
+			key.user = args[3];
+			key.permission = args[4];
+			cyn_list(cli, getcb, &key);
 			send_done(cli);
 			return;
 		}
@@ -417,10 +385,15 @@ onrequest(
 			if (!cli->entered)
 				break;
 			if (count == 6)
-				expire = 0;
+				value.expire = 0;
 			else
-				expire = strtoll(args[6], NULL, 10);
-			rc = cyn_set(args[1], args[2], args[3], args[4], args[5], expire);
+				value.expire = strtoll(args[6], NULL, 10);
+			key.client = args[1];
+			key.session = args[2];
+			key.user = args[3];
+			key.permission = args[4];
+			value.value = args[5];
+			rc = cyn_set(&key, &value);
 			send_done_or_error(cli, rc);
 			return;
 		}
@@ -428,8 +401,12 @@ onrequest(
 	case 't': /* test */
 		if (ckarg(args[0], _test_, 1) && count == 5) {
 			cli->checked = 1;
-			cyn_test(args[1], args[2], args[3], args[4], &value, &expire);
-			checkcb(cli, value, expire);
+			key.client = args[1];
+			key.session = args[2];
+			key.user = args[3];
+			key.permission = args[4];
+			cyn_test(&key, &value);
+			checkcb(cli, &value);
 			return;
 		}
 		break;
@@ -633,6 +610,17 @@ on_admin_server_event(
 	on_server_event(pollitem, events, pollfd, rcyn_Admin);
 }
 
+/** handle admin server events */
+static
+void
+on_agent_server_event(
+	pollitem_t *pollitem,
+	uint32_t events,
+	int pollfd
+) {
+	on_server_event(pollitem, events, pollfd, rcyn_Agent);
+}
+
 /** destroy a server */
 void
 rcyn_server_destroy(
@@ -654,7 +642,8 @@ int
 rcyn_server_create(
 	rcyn_server_t **server,
 	const char *admin_socket_spec,
-	const char *check_socket_spec
+	const char *check_socket_spec,
+	const char *agent_socket_spec
 ) {
 	rcyn_server_t *srv;
 	int rc;
@@ -668,7 +657,7 @@ rcyn_server_create(
 	}
 
 	/* create the polling fd */
-	srv->admin.fd = srv->check.fd = -1;
+	srv->admin.fd = srv->check.fd = srv->agent.fd = -1;
 	srv->pollfd = epoll_create1(EPOLL_CLOEXEC);
 	if (srv->pollfd < 0) {
 		rc = -errno;
@@ -685,7 +674,7 @@ rcyn_server_create(
 		goto error2;
 	}
 
-	/* add the server to pollfd */
+	/* add the admin server to pollfd */
 	srv->admin.handler = on_admin_server_event;
 	srv->admin.closure = srv;
 	rc = pollitem_add(&srv->admin, EPOLLIN, srv->pollfd);
@@ -695,7 +684,7 @@ rcyn_server_create(
 		goto error2;
 	}
 
-	/* create the server socket */
+	/* create the check server socket */
 	check_socket_spec = check_socket_spec ?: rcyn_default_check_socket_spec;
 	srv->check.fd = socket_open(check_socket_spec, 1);
 	if (srv->check.fd < 0) {
@@ -704,7 +693,7 @@ rcyn_server_create(
 		goto error2;
 	}
 
-	/* add the server to pollfd */
+	/* add the check server to pollfd */
 	srv->check.handler = on_check_server_event;
 	srv->check.closure = srv;
 	rc = pollitem_add(&srv->check, EPOLLIN, srv->pollfd);
@@ -713,6 +702,26 @@ rcyn_server_create(
 		fprintf(stderr, "can't poll check server: %m\n");
 		goto error2;
 	}
+
+	/* create the agent server socket */
+	agent_socket_spec = agent_socket_spec ?: rcyn_default_agent_socket_spec;
+	srv->agent.fd = socket_open(agent_socket_spec, 1);
+	if (srv->agent.fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't create agent server socket %s: %m\n", agent_socket_spec);
+		goto error2;
+	}
+
+	/* add the agent server to pollfd */
+	srv->agent.handler = on_agent_server_event;
+	srv->agent.closure = srv;
+	rc = pollitem_add(&srv->agent, EPOLLIN, srv->pollfd);
+	if (rc < 0) {
+		rc = -errno;
+		fprintf(stderr, "can't poll agent server: %m\n");
+		goto error2;
+	}
+
 	return 0;
 
 error2:
@@ -722,6 +731,8 @@ error2:
 		close(srv->admin.fd);
 	if (srv->check.fd >= 0)
 		close(srv->check.fd);
+	if (srv->agent.fd >= 0)
+		close(srv->agent.fd);
 	free(srv);
 error:
 	*server = NULL;
@@ -742,18 +753,10 @@ int
 rcyn_server_serve(
 	rcyn_server_t *server
 ) {
-	int rc;
-	struct epoll_event ev;
-	pollitem_t *pi;
-
 	/* process inputs */
 	server->stopped = 0;
 	while(!server->stopped) {
-		rc = epoll_wait(server->pollfd, &ev, 1, -1);
-		if (rc == 1) {
-			pi = ev.data.ptr;
-			pi->handler(pi, ev.events, server->pollfd);
-		}
+		pollitem_wait_dispatch(server->pollfd, -1);
 	}
 	return server->stopped == INT_MIN ? 0 : server->stopped;
 }

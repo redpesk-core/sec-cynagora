@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#define _GNU_SOURCE
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -38,15 +36,14 @@
 #include <systemd/sd-daemon.h>
 #endif
 
+#include "data.h"
 #include "db.h"
-#include "cyn.h"
 #include "rcyn-server.h"
+#include "rcyn-protocol.h"
+#include "dbinit.h"
 
 #if !defined(DEFAULT_DB_DIR)
 #    define  DEFAULT_DB_DIR      "/var/lib/cynara"
-#endif
-#if !defined(DEFAULT_SOCKET_DIR)
-#    define  DEFAULT_SOCKET_DIR  "/var/run/cynara"
 #endif
 #if !defined(DEFAULT_INIT_FILE)
 #    define  DEFAULT_INIT_FILE   "/etc/security/cynara.initial"
@@ -113,13 +110,13 @@ helptxt[] =
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
 	"	                        (default: "DEFAULT_INIT_FILE"\n"
-	"	-b, --dbdir xxx       set the directory of database\n"
+	"	-d, --dbdir xxx       set the directory of database\n"
 	"	                        (default: "DEFAULT_DB_DIR")\n"
 	"	-m, --make-db-dir     make the database directory\n"
 	"	-o, --own-db-dir      set user and group on database directory\n"
 	"\n"
 	"	-S, --socketdir xxx   set the base xxx for sockets\n"
-	"	                        (default: "DEFAULT_SOCKET_DIR")\n"
+	"	                        (default: %s)\n"
 	"	-M, --make-socket-dir make the socket directory\n"
 	"	-O, --own-socket-dir  set user and group on socket directory\n"
 	"\n"
@@ -136,7 +133,7 @@ versiontxt[] =
 
 static int isid(const char *text);
 static void ensure_directory(const char *path, int uid, int gid);
-static void initdb(const char *path);
+
 int main(int ac, char **av)
 {
 	int opt;
@@ -160,7 +157,7 @@ int main(int ac, char **av)
 	struct group *gr;
 	cap_t caps = { 0 };
 	rcyn_server_t *server;
-	char *spec_socket_admin, *spec_socket_check;
+	char *spec_socket_admin, *spec_socket_check, *spec_socket_agent;
 
 	/* scan arguments */
 	for (;;) {
@@ -214,8 +211,12 @@ int main(int ac, char **av)
 	}
 
 	/* handles help, version, error */
-	if (help | version) {
-		fprintf(stdout, "%s", help ? helptxt : versiontxt);
+	if (help) {
+		fprintf(stdout, helptxt, rcyn_default_socket_dir);
+		return 0;
+	}
+	if (version) {
+		fprintf(stdout, versiontxt);
 		return 0;
 	}
 	if (error)
@@ -228,21 +229,23 @@ int main(int ac, char **av)
 
 	/* set the defaults */
 	dbdir = dbdir ?: DEFAULT_DB_DIR;
-	socketdir = socketdir ?: DEFAULT_SOCKET_DIR;
+	socketdir = socketdir ?: rcyn_default_socket_dir;
 	user = user ?: DEFAULT_CYNARA_USER;
 	group = group ?: DEFAULT_CYNARA_GROUP;
 	init = init ?: DEFAULT_INIT_FILE;
 
 	/* compute socket specs */
-	spec_socket_admin = spec_socket_check = NULL;
+	spec_socket_admin = spec_socket_check = spec_socket_agent = 0;
 	if (systemd) {
 		spec_socket_admin = strdup("sd:admin");
 		spec_socket_check = strdup("sd:check");
+		spec_socket_agent = strdup("sd:agent");
 	} else {
-		rc = asprintf(&spec_socket_admin, "unix:%s/cynara.admin", socketdir);
-		rc = asprintf(&spec_socket_check, "unix:%s/cynara.check", socketdir);
+		rc = asprintf(&spec_socket_admin, "%s:%s/%s", rcyn_default_socket_scheme, socketdir, rcyn_default_admin_socket_base);
+		rc = asprintf(&spec_socket_check, "%s:%s/%s", rcyn_default_socket_scheme, socketdir, rcyn_default_check_socket_base);
+		rc = asprintf(&spec_socket_agent, "%s:%s/%s", rcyn_default_socket_scheme, socketdir, rcyn_default_agent_socket_base);
 	}
-	if (spec_socket_admin == NULL || spec_socket_check == NULL) {
+	if (!spec_socket_admin || !spec_socket_check || !spec_socket_agent) {
 		fprintf(stderr, "can't make socket paths\n");
 		return 1;
 	}
@@ -296,32 +299,35 @@ int main(int ac, char **av)
 	cap_clear(caps);
 	rc = cap_set_proc(caps);
 
-	/* connection to the database */
-	rc = db_open(dbdir);
+	/* initialize server */
+	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
+	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
 	if (rc < 0) {
-		fprintf(stderr, "can not open database: %m\n");
+		fprintf(stderr, "can't initialise server: %m\n");
+		return 1;
+	}
+
+	/* connection to the database */
+	rc = chdir(dbdir);
+	if (rc < 0) {
+		fprintf(stderr, "can not chroot to database directory %s: %m\n", dbdir);
+		return 1;
+	}
+	rc = db_open(".");
+	if (rc < 0) {
+		fprintf(stderr, "can not open database of directory %s: %m\n", dbdir);
 		return 1;
 	}
 
 	/* initialisation of the database */
 	if (db_is_empty()) {
-		initdb(init);
+		rc = dbinit_add_file(init);
 		if (rc == 0)
 			rc = db_sync();
-		if (rc == 0)
-			rc = db_backup();
 		if (rc < 0) {
 			fprintf(stderr, "can't initialise database: %m\n");
 			return 1;
 		}
-	}
-
-	/* initialize server */
-	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check);
-	if (rc < 0) {
-		fprintf(stderr, "can't initialise server: %m\n");
-		return 1;
 	}
 
 	/* ready ! */
@@ -405,7 +411,7 @@ static void ensuredir(char *path, int length, int uid, int gid)
 			path[n] = '/';
 			n = (int)strlen(path);
 		} else if (errno == ENOENT) {
-			/* a part of the path doesn't exist, try to create it */ 
+			/* a part of the path doesn't exist, try to create it */
 			e = enddir(path);
 			if (!e) {
 				/* can't create it because at root */
@@ -429,95 +435,10 @@ static void ensure_directory(const char *path, int uid, int gid)
 	l = strlen(path);
 	if (l > INT_MAX) {
 		/* ?!?!?!? *#@! */
-		fprintf(stderr, "path toooooo long\n");
+		fprintf(stderr, "path toooooo long (%s)\n", path);
 		exit(1);
 	}
 	p = strndupa(path, l);
 	ensuredir(p, (int)l, uid, gid);
-}
-
-time_t txt2exp(const char *txt)
-{
-	static const int MIN = 60;
-	static const int HOUR = 60*60;
-	static const int DAY = 24*60*60;
-	static const int WEEK = 7*24*60*60;
-	static const int YEAR = 365*24*60*60;
-
-	time_t r, x;
-
-	if (!strcmp(txt, "always"))
-		return 0;
-	r = time(NULL);
-	while(*txt) {
-		x = 0;
-		while('0' <= *txt && *txt <= '9')
-			x = 10 * x + (time_t)(*txt++ - '0');
-		switch(*txt) {
-		case 'y': r += x * YEAR; txt++; break;
-		case 'w': r += x *= WEEK; txt++; break;
-		case 'd': r += x *= DAY; txt++; break;
-		case 'h': r += x *= HOUR; txt++; break;
-		case 'm': r += x *= MIN; txt++; break;
-		case 's': txt++; /*@fallthrough@*/
-		case 0: r += x; break;
-		default: return -1;
-		}
-	}
-	return r;
-}
-
-/** initialize the database from file of 'path' */
-static void initdb(const char *path)
-{
-	int rc, lino;
-	char *item[10];
-	char buffer[2048];
-	time_t expire;
-	FILE *f;
-
-	f = fopen(path, "r");
-	if (f == NULL) {
-		fprintf(stderr, "can't open file %s\n", path);
-		exit(1);
-	}
-
-	lino = 0;
-	while(fgets(buffer, sizeof buffer, f)) {
-		lino++;
-		item[0] = strtok(buffer, " \t\n\r");
-		if (item[0] && item[0][0] != '#') {
-			item[1] = strtok(NULL, " \t\n\r");
-			item[2] = strtok(NULL, " \t\n\r");
-			item[3] = strtok(NULL, " \t\n\r");
-			item[4] = strtok(NULL, " \t\n\r");
-			item[5] = strtok(NULL, " \t\n\r");
-			item[6] = strtok(NULL, " \t\n\r");
-			if (item[1] == NULL || item[2] == NULL
-			  || item[3] == NULL || item[4] == NULL
-			  || item[5] == NULL) {
-				fprintf(stderr, "field missing (%s:%d)\n", path, lino);
-				exit(1);
-			} else if (item[6] != NULL && item[6][0] != '#') {
-				fprintf(stderr, "extra field (%s:%d)\n", path, lino);
-				exit(1);
-			}
-			expire = txt2exp(item[5]);
-			if (expire < 0) {
-				fprintf(stderr, "bad expiration %s (%s:%d)\n", item[5], path, lino);
-				exit(1);
-			}
-			rc = db_set(item[0], item[1], item[2], item[3], item[4], expire);
-			if (rc < 0) {
-				fprintf(stderr, "can't set (%s:%d)\n", path, lino);
-				exit(1);
-			}
-		}
-	}
-	if (!feof(f)) {
-		fprintf(stderr, "error while reading file %s\n", path);
-		exit(1);
-	}
-	fclose(f);
 }
 

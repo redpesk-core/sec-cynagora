@@ -24,20 +24,14 @@ extern
 int
 cache_search(
 	cache_t *cache,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 );
 
 extern
 int
 cache_put(
 	cache_t *cache,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
+	const rcyn_key_t *key,
 	int value,
 	time_t expire
 );

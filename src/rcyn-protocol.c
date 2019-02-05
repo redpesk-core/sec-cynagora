@@ -18,6 +18,7 @@
 #include "rcyn-protocol.h"
 
 const char
+	_agent_[] = "agent",
 	_check_[] = "check",
 	_drop_[] = "drop",
 	_enter_[] = "enter",
@@ -39,12 +40,43 @@ const char
 	_no_[] = "no",
 	_yes_[] = "yes";
 
+#if !defined(RCYN_DEFAULT_SOCKET_SCHEME)
+#    define  RCYN_DEFAULT_SOCKET_SCHEME  "unix"
+#endif
+
+#if !defined(RCYN_DEFAULT_SOCKET_DIR)
+#    define  RCYN_DEFAULT_SOCKET_DIR  "/var/run/cynara"
+#endif
+
+#define  DEF_PREFIX  RCYN_DEFAULT_SOCKET_SCHEME":"RCYN_DEFAULT_SOCKET_DIR"/"
+
+#if !defined(RCYN_DEFAULT_CHECK_SOCKET_BASE)
+# define RCYN_DEFAULT_CHECK_SOCKET_BASE "cynara.check"
+#endif
+#if !defined(RCYN_DEFAULT_ADMIN_SOCKET_BASE)
+# define RCYN_DEFAULT_ADMIN_SOCKET_BASE "cynara.admin"
+#endif
+#if !defined(RCYN_DEFAULT_AGENT_SOCKET_BASE)
+# define RCYN_DEFAULT_AGENT_SOCKET_BASE "cynara.agent"
+#endif
+
+
 #if !defined(RCYN_DEFAULT_CHECK_SOCKET_SPEC)
-# define RCYN_DEFAULT_CHECK_SOCKET_SPEC "unix:/run/platform/cynara.check"
+# define RCYN_DEFAULT_CHECK_SOCKET_SPEC   DEF_PREFIX RCYN_DEFAULT_CHECK_SOCKET_BASE
 #endif
 #if !defined(RCYN_DEFAULT_ADMIN_SOCKET_SPEC)
-# define RCYN_DEFAULT_ADMIN_SOCKET_SPEC "unix:/run/platform/cynara.admin"
+# define RCYN_DEFAULT_ADMIN_SOCKET_SPEC   DEF_PREFIX RCYN_DEFAULT_ADMIN_SOCKET_BASE
 #endif
+#if !defined(RCYN_DEFAULT_AGENT_SOCKET_SPEC)
+# define RCYN_DEFAULT_AGENT_SOCKET_SPEC   DEF_PREFIX RCYN_DEFAULT_AGENT_SOCKET_BASE
+#endif
+
 const char
+	rcyn_default_socket_scheme[] = RCYN_DEFAULT_SOCKET_SCHEME,
+	rcyn_default_socket_dir[] = RCYN_DEFAULT_SOCKET_DIR,
+	rcyn_default_check_socket_base[] = RCYN_DEFAULT_CHECK_SOCKET_BASE,
+	rcyn_default_admin_socket_base[] = RCYN_DEFAULT_ADMIN_SOCKET_BASE,
+	rcyn_default_agent_socket_base[] = RCYN_DEFAULT_AGENT_SOCKET_BASE,
 	rcyn_default_check_socket_spec[] = RCYN_DEFAULT_CHECK_SOCKET_SPEC,
-	rcyn_default_admin_socket_spec[] = RCYN_DEFAULT_ADMIN_SOCKET_SPEC;
+	rcyn_default_admin_socket_spec[] = RCYN_DEFAULT_ADMIN_SOCKET_SPEC,
+	rcyn_default_agent_socket_spec[] = RCYN_DEFAULT_AGENT_SOCKET_SPEC;

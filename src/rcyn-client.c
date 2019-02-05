@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#define _GNU_SOURCE
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -76,6 +74,9 @@ struct rcyn
 	/** type of link */
 	rcyn_type_t type;
 
+	/** spec of the socket */
+	const char *socketspec;
+
 	/** protocol manager object */
 	prot_t *prot;
 
@@ -117,8 +118,10 @@ flushw(
 	int rc;
 	struct pollfd pfd;
 
-	rc = prot_should_write(rcyn->prot);
-	while (rc) {
+	for (;;) {
+		rc = prot_should_write(rcyn->prot);
+		if (!rc)
+			break;
 		rc = prot_write(rcyn->prot, rcyn->fd);
 		if (rc == -EAGAIN) {
 			pfd.fd = rcyn->fd;
@@ -130,7 +133,6 @@ flushw(
 		if (rc < 0) {
 			break;
 		}
-		rc = prot_should_write(rcyn->prot);
 	}
 	return rc;
 }
@@ -142,40 +144,98 @@ flushw(
  */
 static
 int
-putx(
+putxkv(
 	rcyn_t *rcyn,
-	...
+	const char *command,
+	const char *optarg,
+	const rcyn_key_t *optkey,
+	const rcyn_value_t *optval
 ) {
-	const char *p, *fields[MAXARGS];
-	unsigned n;
-	va_list l;
-	int rc;
+	int rc, trial;
+	prot_t *prot;
+	char text[30];
 
-	/* reconstruct the array of arguments */
-	va_start(l, rcyn);
-	n = 0;
-	p = va_arg(l, const char *);
-	while (p && n < MAXARGS) {
-		fields[n++] = p;
-		p = va_arg(l, const char *);
-	}
-	va_end(l);
-
-	/* put it to the output buffer */
-	rc = prot_put(rcyn->prot, n, fields);
-	if (rc == -ECANCELED) {
-		/* not enough room in the buffer, flush it */
+	prot = rcyn->prot;
+	for(trial = 0 ; ; trial++) {
+		rc = prot_put_field(prot, command);
+		if (!rc && optarg)
+			rc = prot_put_field(prot, optarg);
+		if (!rc && optkey) {
+			rc = prot_put_field(prot, optkey->client);
+			if (!rc)
+				rc = prot_put_field(prot, optkey->session);
+			if (!rc)
+				rc = prot_put_field(prot, optkey->user);
+			if (!rc)
+				rc = prot_put_field(prot, optkey->permission);
+		}
+		if (!rc && optval) {
+			rc = prot_put_field(prot, optval->value);
+			if (!rc) {
+				if (!optval->expire)
+					text[0] = 0;
+				else
+					snprintf(text, sizeof text, "%lld", (long long)optval->expire);
+				rc = prot_put_field(prot, text);
+			}
+		}
+		if (!rc)
+			rc = prot_put_end(prot);
+		if (!rc) {
+			/* client always flushes */
+			rcyn->pending++;
+			return flushw(rcyn);
+		}
+		prot_put_cancel(prot);
+		if (trial >= 1)
+			return rc;
 		rc = flushw(rcyn);
-		if (rc == 0)
-			rc = prot_put(rcyn->prot, n, fields);
+		if (rc)
+			return rc;
 	}
-	/* client always flushes */
-	if (rc == 0) {
-		rcyn->pending++;
-		rc = flushw(rcyn);
-	}
-	return rc;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 static
 int
@@ -342,26 +402,18 @@ connection(
 	rcyn_t *rcyn
 ) {
 	int rc;
-	const char *spec;
-
-	/* socket spec */
-	switch(rcyn->type) {
-	default:
-	case rcyn_Check: spec = rcyn_default_check_socket_spec; break;
-	case rcyn_Admin: spec = rcyn_default_admin_socket_spec; break;
-	}
 
 	/* init the client */
 	rcyn->pending = 0;
 	rcyn->reply.count = -1;
 	cache_clear(rcyn->cache);
 	prot_reset(rcyn->prot);
-	rcyn->fd = socket_open(spec, 0);
+	rcyn->fd = socket_open(rcyn->socketspec, 0);
 	if (rcyn->fd < 0)
 		return -errno;
 
 	/* negociate the protocol */
-	rc = putx(rcyn, _rcyn_, "1", NULL);
+	rc = putxkv(rcyn, _rcyn_, "1", 0, 0);
 	if (rc >= 0) {
 		rc = wait_pending_reply(rcyn);
 		if (rc >= 0) {
@@ -395,13 +447,14 @@ int
 rcyn_open(
 	rcyn_t **prcyn,
 	rcyn_type_t type,
-	uint32_t cache_size
+	uint32_t cache_size,
+	const char *socketspec
 ) {
 	rcyn_t *rcyn;
 	int rc;
 
 	/* allocate the structure */
-	*prcyn = rcyn = malloc(sizeof *rcyn);
+	*prcyn = rcyn = malloc(sizeof *rcyn + (socketspec ? strlen(socketspec) : 0));
 	if (rcyn == NULL) {
 		rc = -ENOMEM;
 		goto error;
@@ -412,9 +465,21 @@ rcyn_open(
 	if (rc < 0)
 		goto error2;
 
+	/* socket spec */
+	if (socketspec)
+		strcpy((char*)(rcyn+1), socketspec);
+	else
+		switch(rcyn->type) {
+		default:
+		case rcyn_Check: socketspec = rcyn_default_check_socket_spec; break;
+		case rcyn_Admin: socketspec = rcyn_default_admin_socket_spec; break;
+		case rcyn_Agent: socketspec = rcyn_default_agent_socket_spec; break;
+		}
+
 	/* record type and weakly create cache */
 	cache_create(&rcyn->cache, cache_size < MIN_CACHE_SIZE ? MIN_CACHE_SIZE : cache_size);
 	rcyn->type = type;
+	rcyn->socketspec = socketspec;
 	rcyn->async.controlcb = NULL;
 	rcyn->async.closure = 0;
 	rcyn->async.requests = NULL;
@@ -457,7 +522,7 @@ rcyn_enter(
 	if (rc < 0)
 		return rc;
 
-	rc = putx(rcyn, _enter_, NULL);
+	rc = putxkv(rcyn, _enter_, 0, 0, 0);
 	if (rc >= 0)
 		rc = wait_done(rcyn);
 	return rc;
@@ -478,7 +543,7 @@ rcyn_leave(
 	if (rc < 0)
 		return rc;
 
-	rc = putx(rcyn, _leave_, commit ? _commit_ : NULL/*default: rollback*/, NULL);
+	rc = putxkv(rcyn, _leave_, commit ? _commit_ : 0/*default: rollback*/, 0, 0);
 	if (rc >= 0)
 		rc = wait_done(rcyn);
 	return rc;
@@ -488,10 +553,7 @@ static
 int
 check_or_test(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
+	const rcyn_key_t *key,
 	const char *action
 ) {
 	int rc;
@@ -507,19 +569,19 @@ check_or_test(
 	flushr(rcyn);
 
 	/* check cache item */
-	rc = cache_search(rcyn->cache, client, session, user, permission);
+	rc = cache_search(rcyn->cache, key);
 	if (rc >= 0)
 		return rc;
 
 	/* send the request */
-	rc = putx(rcyn, action, client, session, user, permission, NULL);
+	rc = putxkv(rcyn, action, 0, key, 0);
 	if (rc >= 0) {
 		/* get the response */
 		rc = wait_pending_reply(rcyn);
 		if (rc >= 0) {
 			rc = status_check(rcyn, &expire);
 			if (rc >= 0)
-				cache_put(rcyn->cache, client, session, user, permission, rc, expire);
+				cache_put(rcyn->cache, key, rc, expire);
 		}
 	}
 	return rc;
@@ -528,37 +590,25 @@ check_or_test(
 int
 rcyn_check(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
-	return check_or_test(rcyn, client, session, user, permission, _check_);
+	return check_or_test(rcyn, key, _check_);
 }
 
 int
 rcyn_test(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
-	return check_or_test(rcyn, client, session, user, permission, _test_);
+	return check_or_test(rcyn, key, _test_);
 }
 
 int
 rcyn_set(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const rcyn_key_t *key,
+	const rcyn_value_t *value
 ) {
-	char text[30];
-	const char *exp;
 	int rc;
 
 	if (rcyn->type != rcyn_Admin)
@@ -569,13 +619,7 @@ rcyn_set(
 	if (rc < 0)
 		return rc;
 
-	if (!expire)
-		exp = NULL;
-	else {
-		snprintf(text, sizeof text, "%lld", (long long)expire);
-		exp = text;
-	}
-	rc = putx(rcyn, _set_, client, session, user, permission, value, exp, NULL);
+	rc = putxkv(rcyn, _set_, 0, key, value);
 	if (rc >= 0)
 		rc = wait_done(rcyn);
 	return rc;
@@ -584,22 +628,17 @@ rcyn_set(
 int
 rcyn_get(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
+	const rcyn_key_t *key,
 	void (*callback)(
 		void *closure,
-		const char *client,
-		const char *session,
-		const char *user,
-		const char *permission,
-		const char *value,
-		time_t expire
+		const rcyn_key_t *key,
+		const rcyn_value_t *value
 	),
 	void *closure
 ) {
 	int rc;
+	rcyn_key_t k;
+	rcyn_value_t v;
 
 	if (rcyn->type != rcyn_Admin)
 		return -EPERM;
@@ -609,17 +648,17 @@ rcyn_get(
 	if (rc < 0)
 		return rc;
 
-	rc = putx(rcyn, _get_, client, session, user, permission, NULL);
+	rc = putxkv(rcyn, _get_, 0, key, 0);
 	if (rc >= 0) {
 		rc = wait_reply(rcyn, true);
 		while ((rc == 6 || rc == 7) && !strcmp(rcyn->reply.fields[0], _item_)) {
-			callback(closure,
-				rcyn->reply.fields[1],
-				rcyn->reply.fields[2],
-				rcyn->reply.fields[3],
-				rcyn->reply.fields[4],
-				rcyn->reply.fields[5],
-				rc == 6 ? 0 : (time_t)strtoll(rcyn->reply.fields[6], NULL, 10));
+			k.client = rcyn->reply.fields[1];
+			k.session = rcyn->reply.fields[2];
+			k.user = rcyn->reply.fields[3];
+			k.permission = rcyn->reply.fields[4];
+			v.value = rcyn->reply.fields[5];
+			v.expire = rc == 6 ? 0 : (time_t)strtoll(rcyn->reply.fields[6], NULL, 10);
+			callback(closure, &k, &v);
 			rc = wait_reply(rcyn, true);
 		}
 		rc = status_done(rcyn);
@@ -630,10 +669,7 @@ rcyn_get(
 int
 rcyn_drop(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
 	int rc;
 
@@ -645,7 +681,7 @@ rcyn_drop(
 	if (rc < 0)
 		return rc;
 
-	rc = putx(rcyn, _drop_, client, session, user, permission, NULL);
+	rc = putxkv(rcyn, _drop_, 0, key, 0);
 	if (rc >= 0)
 		rc = wait_done(rcyn);
 	return rc;
@@ -671,12 +707,9 @@ rcyn_cache_clear(
 int
 rcyn_cache_check(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const rcyn_key_t *key
 ) {
-	return cache_search(rcyn->cache, client, session, user, permission);
+	return cache_search(rcyn->cache, key);
 }
 
 
@@ -712,8 +745,8 @@ rcyn_async_process(
 	int rc;
 	const char *first;
 	asreq_t *ar;
-	const char *client, *session, *user, *permission;
 	time_t expire;
+	rcyn_key_t key;
 
 	for (;;) {
 		/* non blocking wait for a reply */
@@ -740,11 +773,11 @@ rcyn_async_process(
 		rcyn->async.requests = ar->next;
 		rc = status_check(rcyn, &expire);
 		if (rc >= 0) {
-			client = (const char*)(ar + 1);
-			session = &client[1 + strlen(client)];
-			user = &session[1 + strlen(session)];
-			permission = &user[1 + strlen(user)];
-			cache_put(rcyn->cache, client, session, user, permission, rc, expire);
+			key.client = (const char*)(ar + 1);
+			key.session = &key.client[1 + strlen(key.client)];
+			key.user = &key.session[1 + strlen(key.session)];
+			key.permission = &key.user[1 + strlen(key.user)];
+			cache_put(rcyn->cache, &key, rc, expire);
 		}
 		ar->callback(ar->closure, rc);
 		free(ar);
@@ -754,10 +787,7 @@ rcyn_async_process(
 int
 rcyn_async_check(
 	rcyn_t *rcyn,
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
+	const rcyn_key_t *key,
 	bool simple,
 	void (*callback)(
 		void *closure,
@@ -772,7 +802,7 @@ rcyn_async_check(
 		return rc;
 
 	/* allocate */
-	ar = malloc(sizeof *ar + strlen(client) + strlen(session) + strlen(user) + strlen(permission) + 4);
+	ar = malloc(sizeof *ar + strlen(key->client) + strlen(key->session) + strlen(key->user) + strlen(key->permission) + 4);
 	if (ar == NULL)
 		return -ENOMEM;
 
@@ -780,11 +810,10 @@ rcyn_async_check(
 	ar->next = NULL;
 	ar->callback = callback;
 	ar->closure = closure;
-	stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy((char*)(ar + 1), client), session), user), permission);
+	stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy((char*)(ar + 1), key->client), key->session), key->user), key->permission);
 
 	/* send the request */
-	rc = putx(rcyn, simple ? _test_ : _check_,
-		client, session, user, permission, NULL);
+	rc = putxkv(rcyn, simple ? _test_ : _check_, 0, key, 0);
 	if (rc >= 0)
 		rc = flushw(rcyn);
 	if (rc < 0) {
@@ -799,5 +828,4 @@ rcyn_async_check(
 	*pr = ar;
 	return 0;
 }
-
 

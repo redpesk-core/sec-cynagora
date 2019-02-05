@@ -22,17 +22,14 @@
  */
 struct fbuf
 {
-        /** filename for messages */
+        /** filename */
         char *name;
+
+        /** backup filename */
+        char *backup;
 
         /** in memory copy of the file */
         void *buffer;
-
-        /** size saved to the file */
-        uint32_t saved;
-
-        /** size currently used */
-        uint32_t used;
 
         /** size currently allocated */
         uint32_t capacity;
@@ -40,11 +37,11 @@ struct fbuf
         /** size of the file */
         uint32_t size;
 
-        /** opened file descriptor for the file */
-        int fd;
+        /** size saved to the file */
+        uint32_t saved;
 
-        /** opened file descriptor for the backup */
-        int backup;
+        /** size currently used */
+        uint32_t used;
 };
 
 /** short type */
@@ -65,16 +62,6 @@ extern
 void
 fbuf_close(
 	fbuf_t	*fb
-);
-
-/** write to file 'fb' at 'offset' the 'count' bytes pointed by 'buffer' */
-extern
-int
-fbuf_write(
-	fbuf_t	*fb,
-	const void *buffer,
-	uint32_t count,
-	uint32_t offset
 );
 
 /** write to file 'fb' the unsaved bytes and flush the content to the file */

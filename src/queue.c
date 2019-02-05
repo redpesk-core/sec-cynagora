@@ -21,6 +21,7 @@
 #include <string.h>
 #include <errno.h>
 
+#include "data.h"
 #include "db.h"
 
 #define DROP 0
@@ -123,34 +124,27 @@ qput_string(
 
 int
 queue_drop(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission
+	const data_key_t *key
 ) {
-	return qput_string(client)
-		&& qput_string(session)
-		&& qput_string(user)
-		&& qput_string(permission)
+	return qput_string(key->client)
+		&& qput_string(key->session)
+		&& qput_string(key->user)
+		&& qput_string(key->permission)
 		&& qput_string(0)
 			? 0 : -(errno = ENOMEM);
 }
 
 int
 queue_set(
-	const char *client,
-	const char *session,
-	const char *user,
-	const char *permission,
-	const char *value,
-	time_t expire
+	const data_key_t *key,
+	const data_value_t *value
 ) {
-	return qput_string(client)
-		&& qput_string(session)
-		&& qput_string(user)
-		&& qput_string(permission)
-		&& qput_string(value)
-		&& qput_time(expire)
+	return qput_string(key->client)
+		&& qput_string(key->session)
+		&& qput_string(key->user)
+		&& qput_string(key->permission)
+		&& qput_string(value->value)
+		&& qput_time(value->expire)
 			? 0 : -(errno = ENOMEM);
 }
 
@@ -165,27 +159,23 @@ int
 queue_play(
 ) {
 	int rc, rc2;
-	const char *client;
-	const char *session;
-	const char *user;
-	const char *permission;
-	const char *value;
-	time_t expire;
+	data_key_t key;
+	data_value_t value;
 
 	rc = 0;
 	queue.read = 0;
 	while (queue.read < queue.write) {
 		rc2 = -EINVAL;
-		if (qget_string(&client)
-		 && qget_string(&session)
-		 && qget_string(&user)
-		 && qget_string(&permission)
-		 && qget_string(&value)) {
-			if (!value[0])
-				rc2 = db_drop(client, session, user, permission);
+		if (qget_string(&key.client)
+		 && qget_string(&key.session)
+		 && qget_string(&key.user)
+		 && qget_string(&key.permission)
+		 && qget_string(&value.value)) {
+			if (!value.value[0])
+				rc2 = db_drop(&key);
 			else {
-				if (qget_time(&expire))
-					rc2 = db_set(client, session, user, permission, value, expire);
+				if (qget_time(&value.expire))
+					rc2 = db_set(&key, &value);
 			}
 		}
 		if (rc2 != 0 && rc == 0)
