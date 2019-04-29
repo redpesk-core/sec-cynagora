@@ -29,6 +29,7 @@
 #include "data.h"
 #include "fbuf.h"
 #include "db.h"
+#include "rcyn-client.h"
 
 #define NOEXPIRE 0
 #define NOIDX   0
@@ -55,9 +56,6 @@
 struct key_ids {
 	/** client string id */
 	uint32_t client;
-
-	/** session string id */
-	uint32_t session;
 
 	/** user string id */
 	uint32_t user;
@@ -235,10 +233,10 @@ init_names(
 
 	/* iterate over names */
 	pos = uuidlen;
-	while (pos < fnames.saved) {
+	while (pos < fnames.used) {
 		/* get name length */
 		len = (uint32_t)strlen(name_at(pos));
-		if (pos + len <= pos || pos + len > fnames.saved) {
+		if (pos + len <= pos || pos + len > fnames.used) {
 			free(ns);
 			goto bad_file;
 		}
@@ -344,12 +342,11 @@ drop_at(
 	touch_at(index);
 }
 
-/** add the rule 'client' x 'session' x 'user' x 'permission' x 'value' */
+/** add the rule 'client' x 'user' x 'permission' x 'value' */
 static
 int
 add_rule(
 	uint32_t client,
-	uint32_t session,
 	uint32_t user,
 	uint32_t permission,
 	uint32_t value,
@@ -366,7 +363,6 @@ add_rule(
 	rules = (rule_t*)(frules.buffer + uuidlen);
 	rule = &rules[rules_count++];
 	rule->key.client = client;
-	rule->key.session = session;
 	rule->key.user = user;
 	rule->key.permission = permission;
 	rule->value = value;
@@ -529,8 +525,6 @@ static int get_query_ids(
 
 	rc = db_get_name_index(&out->client, in->client, create);
 	if (rc) goto end;
-	rc = db_get_name_index(&out->session, in->session, create);
-	if (rc) goto end;
 	rc = db_get_name_index(&out->user, in->user, create);
 	if (rc) goto end;
 	rc = db_get_name_index(&out->permission, in->permission, create);
@@ -548,24 +542,23 @@ db_for_all(
 		const data_value_t *value),
 	const data_key_t *key
 ) {
-	uint32_t ucli, uusr, uses, i;
+	uint32_t ucli, uusr, i;
 	int anyperm;
 	data_key_t k;
 	data_value_t v;
 
-	if (db_get_name_index(&ucli, key->client, false)
-	 || db_get_name_index(&uses, key->session, false)
+	if (!is_any_or_wide(key->session)
+	 || db_get_name_index(&ucli, key->client, false)
 	 || db_get_name_index(&uusr, key->user, false))
 		return; /* nothing to do! */
 
 	anyperm = is_any(key->permission);
 	for (i = 0; i < rules_count; i++) {
 		if ((ucli == ANYIDX || ucli == rules[i].key.client)
-		 && (uses == ANYIDX || uses == rules[i].key.session)
 		 && (uusr == ANYIDX || uusr == rules[i].key.user)
 		 && (anyperm || !strcasecmp(key->permission, name_at(rules[i].key.permission)))) {
 			k.client = name_at(rules[i].key.client);
-			k.session = name_at(rules[i].key.session);
+			k.session = WIDESTR;
 			k.user = name_at(rules[i].key.user);
 			k.permission = name_at(rules[i].key.permission);
 			v.value = name_at(rules[i].value);
@@ -580,11 +573,11 @@ int
 db_drop(
 	const data_key_t *key
 ) {
-	uint32_t ucli, uses, uusr, i;
+	uint32_t ucli, uusr, i;
 	bool anyperm;
 
-	if (db_get_name_index(&ucli, key->client, false)
-	 || db_get_name_index(&uses, key->session, false)
+	if (!is_any_or_wide(key->session)
+	 || db_get_name_index(&ucli, key->client, false)
 	 || db_get_name_index(&uusr, key->user, false))
 		return 0; /* nothing to do! */
 
@@ -592,7 +585,6 @@ db_drop(
 	i = 0;
 	while (i < rules_count) {
 		if ((ucli == ANYIDX || ucli == rules[i].key.client)
-		 && (uses == ANYIDX || uses == rules[i].key.session)
 		 && (uusr == ANYIDX || uusr == rules[i].key.user)
 		 && (anyperm || !strcasecmp(key->permission, name_at(rules[i].key.permission))))
 			drop_at(i);
@@ -609,16 +601,21 @@ db_set(
 	const data_value_t *value
 ) {
 	int rc;
-	uint32_t ucli, uses, uusr, uperm, uval, i;
+	uint32_t ucli, uusr, uperm, uval, i;
 	const char *perm;
 
+	/* check the session */
+	if (!is_any_or_wide(key->session)) {
+		errno = EINVAL;
+		rc = -1;
+		goto error;
+	}
+
+	/* normalise the perm */
 	perm = is_any_or_wide(key->permission) ? WIDESTR : key->permission;
 
 	/* get/create strings */
 	rc = db_get_name_index(&ucli, is_any_or_wide(key->client) ? WIDESTR : key->client, true);
-	if (rc)
-		goto error;
-	rc = db_get_name_index(&uses, is_any_or_wide(key->session) ? WIDESTR : key->session, true);
 	if (rc)
 		goto error;
 	rc = db_get_name_index(&uusr, is_any_or_wide(key->user) ? WIDESTR : key->user, true);
@@ -631,7 +628,6 @@ db_set(
 	/* search the existing rule */
 	for (i = 0; i < rules_count; i++) {
 		if (ucli == rules[i].key.client
-		 && uses == rules[i].key.session
 		 && uusr == rules[i].key.user
 		 && !strcasecmp(perm, name_at(rules[i].key.permission))) {
 			/* found */
@@ -645,7 +641,7 @@ db_set(
 	if (rc)
 		goto error;
 
-	rc = add_rule(ucli, uses, uusr, uperm, uval, time2exph(value->expire));
+	rc = add_rule(ucli, uusr, uperm, uval, time2exph(value->expire));
 
 	return 0;
 error:
@@ -659,14 +655,12 @@ db_test(
 	data_value_t *value
 ) {
 	const char *perm;
-	uint32_t ucli, uses, uusr, i, score, sc, now;
+	uint32_t ucli, uusr, i, score, sc, now;
 	rule_t *rule, *found;
 
 	/* normalize the items */
 	if (db_get_name_index(&ucli, is_any_or_wide(key->client) ? WIDESTR : key->client, false))
 		ucli = NOIDX;
-	if (db_get_name_index(&uses, is_any_or_wide(key->session) ? WIDESTR : key->session, false))
-		uses = NOIDX;
 	if (db_get_name_index(&uusr, is_any_or_wide(key->user) ? WIDESTR : key->user, false))
 		uusr = NOIDX;
 	perm = is_any_or_wide(key->permission) ? WIDESTR : key->permission;
@@ -679,13 +673,13 @@ db_test(
 		rule = &rules[i];
 		if ((!rule->expire || rule->expire >= now)
 		 && (ucli == rule->key.client || WIDEIDX == rule->key.client)
-		 && (uses == rule->key.session || WIDEIDX == rule->key.session)
 		 && (uusr == rule->key.user || WIDEIDX == rule->key.user)
 		 && (WIDEIDX == rule->key.permission
 			|| !strcasecmp(perm, name_at(rule->key.permission)))) {
 			/* found */
-			sc = 1 + (rule->key.client != WIDEIDX) + (rule->key.session != WIDEIDX)
-				+ (rule->key.user != WIDEIDX) + (rule->key.permission != WIDEIDX);
+			sc = 1 + (rule->key.client != WIDEIDX)
+				+ (rule->key.user != WIDEIDX)
+				+ (rule->key.permission != WIDEIDX);
 			if (sc > score) {
 				score = sc;
 				found = rule;
@@ -697,6 +691,7 @@ db_test(
 		value->expire = 0;
 		return 0;
 	}
+
 	value->value = name_at(found->value);
 	value->expire = exp2time(found->expire);
 
@@ -857,7 +852,6 @@ db_cleanup(
 			drop_at(i);
 		else {
 			gc_mark(&gc, &rule->key.client);
-			gc_mark(&gc, &rule->key.session);
 			gc_mark(&gc, &rule->key.user);
 			gc_mark(&gc, &rule->key.permission);
 			gc_mark(&gc, &rule->value);
@@ -872,7 +866,6 @@ db_cleanup(
 		while (i < rules_count) {
 			rule = &rules[i];
 			chg = gc_after(&gc, &rule->key.client);
-			chg |= gc_after(&gc, &rule->key.session);
 			chg |= gc_after(&gc, &rule->key.user);
 			chg |= gc_after(&gc, &rule->key.permission);
 			chg |= gc_after(&gc, &rule->value);
