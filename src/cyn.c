@@ -239,9 +239,7 @@ cyn_test(
 	int rc;
 
 	rc = db_test(key, value);
-	if (rc > 0)
-		rc = 0;
-	else {
+	if (rc <= 0) {
 		value->value = DEFAULT;
 		value->expire = 0;
 	}

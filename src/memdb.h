@@ -17,29 +17,8 @@
 
 #pragma once
 
-#define DENY    "no"
-#define ALLOW   "yes"
-#define ASK     "ask"
-#define DEFAULT DENY
-
-#define Data_Any_Char '#'
-#define Data_Wide_Char '*'
-
-#define Data_Any_String "#"
-#define Data_Wide_String "*"
-
-typedef struct data_key data_key_t;
-typedef struct data_value data_value_t;
-
-struct data_key {
-	const char *client;
-	const char *session;
-	const char *user;
-	const char *permission;
-};
-
-struct data_value {
-	const char *value;
-	time_t expire;
-};
-
+extern
+int
+memdb_create(
+	anydb_t **memdb
+);

@@ -17,12 +17,15 @@
 ###########################################################################
 
 set(SERVER_SOURCES
+	anydb.c
 	cyn.c
 	db.c
 	dbinit.c
 	expire.c
 	fbuf.c
+	fdb.c
 	main-cynarad.c
+	memdb.c
 	pollitem.c
 	prot.c
 	queue.c

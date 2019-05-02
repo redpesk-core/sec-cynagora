@@ -22,44 +22,44 @@
 /** open the database for files 'names' and 'rules' (can be NULL) */
 extern
 int
-db_open(
+fdb_open(
 	const char *directory
 );
 
 /** close the database */
 extern
 void
-db_close(
+fdb_close(
 );
 
 /** is the database empty */
 extern
 bool
-db_is_empty(
+fdb_is_empty(
 );
 
 /** sync the database */
 extern
 int
-db_sync(
+fdb_sync(
 );
 
 /** make a backup of the database */
 extern
 int
-db_backup(
+fdb_backup(
 );
 
 /** recover the database from latest backup */
 extern
 int
-db_recover(
+fdb_recover(
 );
 
 /** enumerate */
 extern
 void
-db_for_all(
+fdb_for_all(
 	void *closure,
 	void (*callback)(
 		void *closure,
@@ -71,14 +71,14 @@ db_for_all(
 /** erase rules */
 extern
 int
-db_drop(
+fdb_drop(
 	const data_key_t *key
 );
 
 /** set rules */
 extern
 int
-db_set(
+fdb_set(
 	const data_key_t *key,
 	const data_value_t *value
 );
@@ -86,7 +86,7 @@ db_set(
 /** check rules */
 extern
 int
-db_test(
+fdb_test(
 	const data_key_t *key,
 	data_value_t *value
 );
@@ -94,6 +94,6 @@ db_test(
 /** cleanup the base */
 extern
 int
-db_cleanup(
+fdb_cleanup(
 );
 
