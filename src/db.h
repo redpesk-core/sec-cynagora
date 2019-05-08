@@ -38,22 +38,17 @@ bool
 db_is_empty(
 );
 
-/** sync the database */
+/** enter atomic mode */
 extern
 int
-db_sync(
+db_transaction_begin(
 );
 
-/** make a backup of the database */
+/** leave atomic mode */
 extern
 int
-db_backup(
-);
-
-/** recover the database from latest backup */
-extern
-int
-db_recover(
+db_transaction_end(
+	bool commit
 );
 
 /** enumerate */

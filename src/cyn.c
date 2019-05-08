@@ -155,7 +155,7 @@ cyn_leave(
 	const void *magic,
 	bool commit
 ) {
-	int rc;
+	int rc, rcp;
 	struct callback *c, *e, **p;
 
 	if (!magic)
@@ -169,26 +169,24 @@ cyn_leave(
 	if (!commit)
 		rc = 0;
 	else {
-		db_backup();
-		rc = queue_play();
+		rc = db_transaction_begin();
 		if (rc == 0) {
-			db_cleanup(0);
-			rc = db_sync();
-		}
-		if (rc < 0) {
-			db_recover();
-			db_sync();
-		} else {
-			for (c = observers; c ; c = c->next)
-				c->on_change_cb(c->closure);
+			rcp = queue_play();
+			rc = db_transaction_end(rcp == 0) ?: rcp;
+			if (rcp == 0) {
+				for (c = observers; c ; c = c->next)
+					c->on_change_cb(c->closure);
+			}
 		}
 	}
 	queue_clear();
 
+	/* wake up awaiting client */
 	e = awaiters;
 	if (!e)
 		lock = 0;
 	else {
+		/* the one to awake is at the end of the list */
 		p = &awaiters;
 		while(e->next) {
 			p = &e->next;

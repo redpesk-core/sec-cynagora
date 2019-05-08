@@ -30,6 +30,7 @@
 #include "anydb.h"
 #include "fdb.h"
 #include "memdb.h"
+#include "db.h"
 
 static anydb_t *memdb;
 
@@ -75,26 +76,39 @@ db_is_empty(
 	return fdb_is_empty();
 }
 
-/** synchronize db on files */
+/** enter atomic mode */
 int
-db_sync(
+db_transaction_begin(
 ) {
-	return fdb_sync();
+	int rc1, rc2;
+
+	rc1 = fdb_backup();
+	rc2 = anydb_transaction(memdb, Anydb_Transaction_Start);
+
+	return rc1 ?: rc2;
 }
 
-/** make a backup of the database */
+/** leave atomic mode */
 int
-db_backup(
+db_transaction_end(
+	bool commit
 ) {
-	return fdb_backup();
+	int rc1, rc2, rc3, rc4;
+
+	if (commit) {
+		rc1 = 0;
+		rc2 = anydb_transaction(memdb, Anydb_Transaction_Commit);
+		rc3 = db_cleanup();
+	} else {
+		rc1 = fdb_recover();
+		rc2 = anydb_transaction(memdb, Anydb_Transaction_Cancel);
+		rc3 = 0;
+	}
+	rc4 = fdb_sync();
+
+	return rc1 ?: rc2 ?: rc3 ?: rc4;
 }
 
-/** recover the database from latest backup */
-int
-db_recover(
-) {
-	return fdb_recover();
-}
 
 /** enumerate */
 void

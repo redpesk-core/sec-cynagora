@@ -25,13 +25,19 @@
 #include "data.h"
 #include "anydb.h"
 
-#define RBS 20
-#define SBS 30
+#define RBS 20 /**< rule block size */
+#define SBS 30 /**< string bloc size */
+
+#define TCLE 0 /**< tag for clean */
+#define TDEL 1 /**< tag for deleted */
+#define TMOD 2 /**< tag for modified */
 
 struct rule
 {
 	anydb_key_t key;
 	anydb_value_t value;
+	anydb_value_t saved;
+	uint8_t tag;
 };
 
 struct memdb
@@ -52,6 +58,11 @@ struct memdb
 		uint32_t count;
 		struct rule *values;
 	} rules;
+
+	struct {
+		uint32_t count;
+		bool active;
+	} transaction;
 };
 typedef struct memdb memdb_t;
 
@@ -128,18 +139,85 @@ apply_itf(
 
 	ir = 0;
 	while (ir < memdb->rules.count) {
-		a = oper(closure, &rules[ir].key, &rules[ir].value);
+		if (memdb->transaction.active && rules[ir].tag == TDEL)
+			a = Anydb_Action_Continue;
+		else
+			a = oper(closure, &rules[ir].key, &rules[ir].value);
 		switch (a) {
 		case Anydb_Action_Continue:
 			ir++;
 			break;
 		case Anydb_Action_Update_And_Stop:
+			if (memdb->transaction.active)
+				rules[ir].tag = TMOD;
+			else
+				rules[ir].saved = rules[ir].value;
 			return;
 		case Anydb_Action_Remove_And_Continue:
-			rules[ir] = rules[--memdb->rules.count];
+			if (memdb->transaction.active)
+				rules[ir++].tag = TDEL;
+			else
+				rules[ir] = rules[--memdb->rules.count];
 			break;
 		}
 	}
+}
+
+static
+int
+transaction_itf(
+	void *clodb,
+	anydb_transaction_t oper
+) {
+	memdb_t *memdb = clodb;
+	struct rule *rules;
+	uint32_t ir;
+	uint32_t count;
+
+	switch (oper) {
+	case Anydb_Transaction_Start:
+		if (memdb->transaction.active)
+			return -EINVAL;
+		memdb->transaction.active = true;
+		memdb->transaction.count = memdb->rules.count;
+		break;
+	case Anydb_Transaction_Commit:
+		if (!memdb->transaction.active)
+			return -EINVAL;
+		rules = memdb->rules.values;
+		count = memdb->rules.count;
+		ir = 0;
+		while(ir < count) {
+			switch (rules[ir].tag) {
+			case TCLE:
+				ir++;
+				break;
+			case TDEL:
+				rules[ir] = rules[--count];
+				break;
+			case TMOD:
+				rules[ir++].tag = TCLE;
+				break;
+			}
+		}
+		memdb->rules.count = count;
+		memdb->transaction.active = false;
+		break;
+	case Anydb_Transaction_Cancel:
+		if (!memdb->transaction.active)
+			return -EINVAL;
+		rules = memdb->rules.values;
+		count = memdb->rules.count = memdb->transaction.count;
+		for (ir = 0 ; ir < count ; ir++) {
+			if (rules[ir].tag != TCLE) {
+				rules[ir].value = rules[ir].saved;
+				rules[ir].tag = TCLE;
+			}
+		}
+		memdb->transaction.active = false;
+		break;
+	}
+	return 0;
 }
 
 static
@@ -150,18 +228,26 @@ add_itf(
 	const anydb_value_t *value
 ) {
 	memdb_t *memdb = clodb;
-	struct rule *rules = memdb->rules.values;
+	struct rule *rules;
+	uint32_t count;
+	uint32_t alloc;
 
-	if (memdb->rules.count == memdb->rules.alloc) {
-		rules = realloc(rules, (memdb->rules.alloc + RBS) * sizeof *rules);
+	rules = memdb->rules.values;
+	count = memdb->rules.count;
+	alloc = memdb->rules.alloc;
+	if (count == alloc) {
+		alloc += RBS;
+		rules = realloc(rules, alloc * sizeof *rules);
 		if (!rules)
 			return -ENOMEM;
-		memdb->rules.alloc += RBS;
+		memdb->rules.alloc = alloc;
 		memdb->rules.values = rules;
 	}
-	rules[memdb->rules.count].key = *key;
-	rules[memdb->rules.count].value = *value;
-	memdb->rules.count++;
+	rules = &rules[count];
+	rules->key = *key;
+	rules->saved = rules->value = *value;
+	rules->tag = TCLE;
+	memdb->rules.count = count + 1;
 	return 0;
 }
 
@@ -248,6 +334,7 @@ init(
 
 	memdb->db.itf.index = index_itf;
 	memdb->db.itf.string = string_itf;
+	memdb->db.itf.transaction = transaction_itf;
 	memdb->db.itf.apply = apply_itf;
 	memdb->db.itf.add = add_itf;
 	memdb->db.itf.gc = gc_itf;
@@ -260,6 +347,9 @@ init(
 	memdb->rules.alloc = 0;
 	memdb->rules.count = 0;
 	memdb->rules.values = NULL;
+
+	memdb->transaction.count = 0;
+	memdb->transaction.active = false;
 }
 
 int

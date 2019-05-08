@@ -22,7 +22,14 @@
  */
 typedef uint32_t anydb_idx_t;
 
+/*
+ * Definition of some predefined indexes
+ */
+
+/** The invalid index */
 #define AnyIdx_Invalid	((anydb_idx_t)0xffffffffu)
+
+/**  */
 #define AnyIdx_Any	((anydb_idx_t)0xfffffffeu)
 #define AnyIdx_Wide	((anydb_idx_t)0xfffffffdu)
 #define AnyIdx_None	((anydb_idx_t)0xfffffffcu)
@@ -69,10 +76,19 @@ enum anydb_action
 };
 typedef enum anydb_action anydb_action_t;
 
+enum anydb_transaction
+{
+	Anydb_Transaction_Start = 0,
+	Anydb_Transaction_Commit = 1,
+	Anydb_Transaction_Cancel = 2
+};
+typedef enum anydb_transaction anydb_transaction_t;
+
 struct anydb_itf
 {
 	int (*index)(void *clodb, anydb_idx_t *idx, const char *name, bool create);
 	const char *(*string)(void *clodb, anydb_idx_t idx);
+	int (*transaction)(void *clodb, anydb_transaction_t atomic_op);
 	void (*apply)(void *clodb, anydb_action_t (*oper)(void *closure, const anydb_key_t *key, anydb_value_t *value), void *closure);
 	int (*add)(void *clodb, const anydb_key_t *key, const anydb_value_t *value);
 	void (*gc)(void *clodb);
@@ -87,6 +103,13 @@ struct anydb
 };
 typedef struct anydb anydb_t;
 
+/** manage atomicity of operations */
+extern
+int
+anydb_transaction(
+	anydb_t *db,
+	anydb_transaction_t oper
+);
 
 /** enumerate */
 extern

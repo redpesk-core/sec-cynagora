@@ -322,8 +322,6 @@ int main(int ac, char **av)
 	/* initialisation of the database */
 	if (db_is_empty()) {
 		rc = dbinit_add_file(init);
-		if (rc == 0)
-			rc = db_sync();
 		if (rc < 0) {
 			fprintf(stderr, "can't initialise database: %m\n");
 			return 1;
