@@ -50,7 +50,7 @@ static
 const char
 helptxt[] =
 	"\n"
-	"usage: cynadm [options]...\n"
+	"usage: cynadm [options]... [action [arguments]]\n"
 	"\n"
 	"otpions:\n"
 	"	-s, --socket xxx      set the base xxx for sockets\n"
@@ -58,12 +58,199 @@ helptxt[] =
 	"	-h, --help            print this help and exit\n"
 	"	-v, --version         print the version and exit\n"
 	"\n"
+	"When action is given, cynadm performs the action and exits.\n"
+	"Otherwise cynadm continuously read its input to get the actions.\n"
+	"For a list of actions tpe 'cynadm help'.\n"
+	"\n"
 ;
 
 static
 const char
 versiontxt[] =
 	"cynadm version 1.99.99\n"
+;
+
+static
+const char
+help__text[] =
+	"\n"
+	"Commands are: list, set, drop, check, test, cache, clear, quit, help\n"
+	"Type 'help command' to get help on the command\n"
+	"Type 'help expiration' to get help on expirations\n"
+	"\n"
+;
+
+static
+const char
+help_list_text[] =
+	"\n"
+	"Command: list [client [session [user [permission]]]]\n"
+	"\n"
+	"List the rules matching the optionally given 'client', 'session',\n"
+	"'user', 'permission'.\n"
+	"\n"
+	"This command requires to be connected to the administrator socket.\n"
+	"\n"
+	"The value given can be '#' (sharp) to match any value. When no value\n"
+	"is given, it is implied as being '#'.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  list                         list all rules\n"
+	"  list # # 1001                list the rules of the user 1001\n"
+	"\n"
+;
+
+static
+const char
+help_set_text[] =
+	"\n"
+	"Command: set client session user permission value expiration\n"
+	"\n"
+	"Set the rule associating the given 'client', 'session', 'user'\n"
+	"permission' with the 'value' for a time given by 'expiration'.\n"
+	"\n"
+	"Type 'help expiration' to get help on expirations\n"
+	"\n"
+	"This command requires to be connected to the administrator socket.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  set * * 0 * yes *            set forever the value yes for user 0 and any\n"
+	"                               permission, client or session.\n"
+	"\n"
+	"  set wrt * * X no 1d          set for one day the value no for client xrt and\n"
+	"                               permission X of any user and session.\n"
+	"\n"
+;
+
+static
+const char
+help_drop_text[] =
+	"\n"
+	"Command: drop [client [session [user [permission]]]]\n"
+	"\n"
+	"Removes the rules matching the optionally given 'client', 'session',\n"
+	"'user', 'permission'.\n"
+	"\n"
+	"This command requires to be connected to the administrator socket.\n"
+	"\n"
+	"The value given can be '#' (sharp) to match any value. When no value\n"
+	"is given, it is implied as being '#'.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  drop                         drop all rules\n"
+	"  drop # # 1001                drop the rules of the user 1001\n"
+	"\n"
+;
+
+static
+const char
+help_check_text[] =
+	"\n"
+	"Command: check client session user permission\n"
+	"\n"
+	"Check authorisation for the given 'client', 'session', 'user', 'permission'.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  check wrt W3llcomE 1001 audio        check that client 'wrt' of session\n"
+	"                                       'W3llcomE' for user '1001' has the\n"
+	"                                       'audio' permission\n"
+	"\n"
+;
+
+static
+const char
+help_test_text[] =
+	"\n"
+	"Command: test client session user permission\n"
+	"\n"
+	"Test authorisation for the given 'client', 'session', 'user', 'permission'.\n"
+	"Same as command 'check' except that it doesn't use query agent if it were\n"
+	"needed to avoid asynchronous timely unlimited queries.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  test wrt W3llcomE 1001 audio        check that client 'wrt' of session\n"
+	"                                       'W3llcomE' for user '1001' has the\n"
+	"                                       'audio' permission\n"
+	"\n"
+;
+
+static
+const char
+help_cache_text[] =
+	"\n"
+	"Command: cache client session user permission\n"
+	"\n"
+	"Test cache for authorisation for the given 'client', 'session', 'user', 'permission'.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  cache wrt W3llcomE 1001 audio        check that client 'wrt' of session\n"
+	"                                       'W3llcomE' for user '1001' has the\n"
+	"                                       'audio' permission\n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
+;
+
+static
+const char
+help_clear_text[] =
+	"\n"
+	"Command: clear\n"
+	"\n"
+	"Clear the current cache.\n"
+	"\n"
+;
+
+static
+const char
+help_quit_text[] =
+	"\n"
+	"Command: quit\n"
+	"\n"
+	"Quit the program\n"
+	"\n"
+;
+
+static
+const char
+help_help_text[] =
+	"\n"
+	"Command: help [command | topic]\n"
+	"\n"
+	"Gives help on the command or on the topic.\n"
+	"\n"
+	"Available commands: list, set, drop, check, test, cache, clear, quit, help\n"
+	"Available topics: expiration\n"
+	"\n"
+;
+
+static
+const char
+help_expiration_text[] =
+	"\n"
+	"Expirations limited in the time are expressed using the scheme NyNdNhNmNs\n"
+	"where N are numeric values and ydhms are unit specifications.\n"
+	"Almost all part of the scheme are optional. The default unit is second.\n"
+	"\n"
+	"Unlimited expirations can be expressed using: 0, *, always or forever.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  6y5d                         6 years and 5 days\n"
+	"  1d6h                         1 day and 6 hours\n"
+	"  56                           56 seconds\n"
+	"  forever                      unlimited, no expiration\n"
+	"\n"
 ;
 
 static rcyn_t *rcyn;
@@ -181,10 +368,41 @@ int do_check(int ac, char **av, int (*f)(rcyn_t*,const rcyn_key_t*))
 			fprintf(stdout, "allowed\n");
 		else if (rc == 0)
 			fprintf(stdout, "denied\n");
+		else if (rc == -ENOENT && f == rcyn_cache_check)
+			fprintf(stdout, "not in cache!\n");
 		else
 			fprintf(stderr, "error %s\n", strerror(-rc));
 	}
 	return uc;
+}
+
+int do_help(int ac, char **av)
+{
+	if (ac > 1 && !strcmp(av[1], "list"))
+		fprintf(stdout, "%s", help_list_text);
+	else if (ac > 1 && !strcmp(av[1], "set"))
+		fprintf(stdout, "%s", help_set_text);
+	else if (ac > 1 && !strcmp(av[1], "drop"))
+		fprintf(stdout, "%s", help_drop_text);
+	else if (ac > 1 && !strcmp(av[1], "check"))
+		fprintf(stdout, "%s", help_check_text);
+	else if (ac > 1 && !strcmp(av[1], "test"))
+		fprintf(stdout, "%s", help_test_text);
+	else if (ac > 1 && !strcmp(av[1], "cache"))
+		fprintf(stdout, "%s", help_cache_text);
+	else if (ac > 1 && !strcmp(av[1], "clear"))
+		fprintf(stdout, "%s", help_clear_text);
+	else if (ac > 1 && !strcmp(av[1], "quit"))
+		fprintf(stdout, "%s", help_quit_text);
+	else if (ac > 1 && !strcmp(av[1], "help"))
+		fprintf(stdout, "%s", help_help_text);
+	else if (ac > 1 && !strcmp(av[1], "expiration"))
+		fprintf(stdout, "%s", help_expiration_text);
+	else {
+		fprintf(stdout, "%s", help__text);
+		return 1;
+	}
+	return 2;
 }
 
 int do_any(int ac, char **av)
@@ -215,6 +433,13 @@ int do_any(int ac, char **av)
 		return 1;
 	}
 
+	if (!strcmp(av[0], "quit"))
+		return 0;
+
+	if (!strcmp(av[0], "help") || !strcmp(av[0], "?"))
+		return do_help(ac, av);
+
+	fprintf(stderr, "unknown command %s\n", av[0]);
 	return 0;
 }
 
