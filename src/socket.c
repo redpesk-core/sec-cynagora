@@ -74,6 +74,10 @@ struct entry
  */
 static struct entry entries[] = {
 	{
+		.prefix = "unix:",
+		.type = Type_Unix
+	},
+	{
 		.prefix = "tcp:",
 		.type = Type_Inet
 	},
@@ -82,10 +86,6 @@ static struct entry entries[] = {
 		.type = Type_Systemd,
 		.noreuseaddr = 1,
 		.nolisten = 1
-	},
-	{
-		.prefix = "unix:",
-		.type = Type_Unix
 	}
 };
 
