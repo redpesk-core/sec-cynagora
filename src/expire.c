@@ -31,7 +31,7 @@ time_t txt2exp(const char *txt)
 	time_t r, x;
 
 	/* infinite time */
-	if (!strcmp(txt, "always") || !strcmp(txt, "*"))
+	if (!strcmp(txt, "always") || !strcmp(txt, "forever") || !strcmp(txt, "*"))
 		return 0;
 
 	/* parse */
@@ -61,7 +61,7 @@ size_t exp2txt(time_t expire, char *buffer, size_t buflen)
 	int n;
 
 	if (!expire)
-		strncpy(b, "always", sizeof b);
+		strncpy(b, "forever", sizeof b);
 	else {
 		expire -= time(NULL);
 		n = 0;
