@@ -23,7 +23,7 @@ set(SERVER_SOURCES
 	dbinit.c
 	expire.c
 	fbuf.c
-	fdb.c
+	filedb.c
 	main-cynarad.c
 	memdb.c
 	pollitem.c

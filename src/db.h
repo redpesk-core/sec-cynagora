@@ -92,3 +92,8 @@ int
 db_cleanup(
 );
 
+/** cleanup the base */
+extern
+int
+db_sync(
+);

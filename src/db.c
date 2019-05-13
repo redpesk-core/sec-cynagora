@@ -28,11 +28,12 @@
 
 #include "data.h"
 #include "anydb.h"
-#include "fdb.h"
+#include "filedb.h"
 #include "memdb.h"
 #include "db.h"
 
 static anydb_t *memdb;
+static anydb_t *filedb;
 
 /** check whether the 'text' fit String_Any, String_Wide, NULL or ""  */
 static
@@ -54,7 +55,7 @@ db_open(
 
 	rc = memdb_create(&memdb);
 	if (!rc) {
-		rc = fdb_open(directory);
+		rc = filedb_create(&filedb, directory, "CYNARA");
 		if (rc)
 			anydb_destroy(memdb);
 	}
@@ -65,7 +66,7 @@ db_open(
 void
 db_close(
 ) {
-	fdb_close();
+	anydb_destroy(filedb);
 	anydb_destroy(memdb);
 }
 
@@ -73,7 +74,7 @@ db_close(
 bool
 db_is_empty(
 ) {
-	return fdb_is_empty();
+	return anydb_is_empty(filedb);
 }
 
 /** enter atomic mode */
@@ -82,7 +83,7 @@ db_transaction_begin(
 ) {
 	int rc1, rc2;
 
-	rc1 = fdb_backup();
+	rc1 = anydb_transaction(filedb, Anydb_Transaction_Start);
 	rc2 = anydb_transaction(memdb, Anydb_Transaction_Start);
 
 	return rc1 ?: rc2;
@@ -96,15 +97,15 @@ db_transaction_end(
 	int rc1, rc2, rc3, rc4;
 
 	if (commit) {
-		rc1 = 0;
+		rc1 = anydb_transaction(filedb, Anydb_Transaction_Commit);
 		rc2 = anydb_transaction(memdb, Anydb_Transaction_Commit);
 		rc3 = db_cleanup();
 	} else {
-		rc1 = fdb_recover();
+		rc1 = anydb_transaction(filedb, Anydb_Transaction_Cancel);
 		rc2 = anydb_transaction(memdb, Anydb_Transaction_Cancel);
 		rc3 = 0;
 	}
-	rc4 = fdb_sync();
+	rc4 = db_sync();
 
 	return rc1 ?: rc2 ?: rc3 ?: rc4;
 }
@@ -120,7 +121,7 @@ db_for_all(
 		const data_value_t *value),
 	const data_key_t *key
 ) {
-	fdb_for_all(closure, callback, key);
+	anydb_for_all(filedb, closure, callback, key);
 	anydb_for_all(memdb, closure, callback, key);
 }
 
@@ -129,7 +130,7 @@ int
 db_drop(
 	const data_key_t *key
 ) {
-	fdb_drop(key);
+	anydb_drop(filedb, key);
 	anydb_drop(memdb, key);
 	return 0;
 }
@@ -141,7 +142,7 @@ db_set(
 	const data_value_t *value
 ) {
 	if (is_any_or_wide(key->session))
-		return fdb_set(key, value);
+		return anydb_set(filedb, key, value);
 	else
 		return anydb_set(memdb, key, value);
 }
@@ -156,7 +157,7 @@ db_test(
 	data_value_t v1, v2;
 
 	s1 = anydb_test(memdb, key, &v1);
-	s2 = fdb_test(key, &v2);
+	s2 = anydb_test(filedb, key, &v2);
 	if (s2 > s1) {
 		*value = v2;
 		return s2;
@@ -169,8 +170,16 @@ db_test(
 int
 db_cleanup(
 ) {
-	fdb_cleanup();
+	anydb_cleanup(filedb);
 	anydb_cleanup(memdb);
 	return 0;
+}
+
+int
+db_sync(
+) {
+	int rc1 = anydb_sync(filedb);
+	int rc2 = anydb_sync(memdb);
+	return rc1 ?: rc2;
 }
 

@@ -70,9 +70,10 @@ typedef struct anydb_value anydb_value_t;
  */
 enum anydb_action
 {
-	Anydb_Action_Continue = 0,
-	Anydb_Action_Update_And_Stop = 1,
-	Anydb_Action_Remove_And_Continue = 2
+	Anydb_Action_Stop,
+	Anydb_Action_Continue,
+	Anydb_Action_Update_And_Stop,
+	Anydb_Action_Remove_And_Continue
 };
 typedef enum anydb_action anydb_action_t;
 
@@ -92,6 +93,7 @@ struct anydb_itf
 	void (*apply)(void *clodb, anydb_action_t (*oper)(void *closure, const anydb_key_t *key, anydb_value_t *value), void *closure);
 	int (*add)(void *clodb, const anydb_key_t *key, const anydb_value_t *value);
 	void (*gc)(void *clodb);
+	int (*sync)(void *clodb);
 	void (*destroy)(void *clodb);
 };
 typedef struct anydb_itf anydb_itf_t;
@@ -157,9 +159,23 @@ anydb_cleanup(
 	anydb_t *db
 );
 
+/** is the database empty? */
+extern
+bool
+anydb_is_empty(
+	anydb_t *db
+);
+
 /** destroy the database */
 extern
 void
 anydb_destroy(
+	anydb_t *db
+);
+
+/** synchronize database */
+extern
+int
+anydb_sync(
 	anydb_t *db
 );

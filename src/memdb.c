@@ -144,6 +144,8 @@ apply_itf(
 		else
 			a = oper(closure, &rules[ir].key, &rules[ir].value);
 		switch (a) {
+		case Anydb_Action_Stop:
+			return;
 		case Anydb_Action_Continue:
 			ir++;
 			break;
@@ -253,6 +255,25 @@ add_itf(
 
 static
 void
+gc_mark(
+	anydb_idx_t *renum,
+	anydb_idx_t item
+) {
+	if (item <= AnyIdx_Max)
+		renum[item] = 1;
+}
+
+static
+anydb_idx_t
+gc_new(
+	anydb_idx_t *renum,
+	anydb_idx_t item
+) {
+	return item > AnyIdx_Max ? item : renum[item];
+}
+#include <stdio.h>
+static
+void
 gc_itf(
 	void *clodb
 ) {
@@ -268,11 +289,11 @@ gc_itf(
 		renum[i] = 0;
 
 	for (i = 0 ; i < nr ; i++) {
-		renum[rules[i].key.client] = 1;
-		renum[rules[i].key.session] = 1;
-		renum[rules[i].key.user] = 1;
-		renum[rules[i].key.permission] = 1;
-		renum[rules[i].value.value] = 1;
+		gc_mark(renum, rules[i].key.client);
+		gc_mark(renum, rules[i].key.session);
+		gc_mark(renum, rules[i].key.user);
+		gc_mark(renum, rules[i].key.permission);
+		gc_mark(renum, rules[i].value.value);
 	}
 
 	for (i = j = 0 ; i < ns ; i++) {
@@ -287,16 +308,16 @@ gc_itf(
 	if (ns != j) {
 		memdb->strings.count = ns = j;
 		for (i = 0 ; i < nr ; i++) {
-			rules[i].key.client = renum[rules[i].key.client];
-			rules[i].key.session = renum[rules[i].key.session];
-			rules[i].key.user = renum[rules[i].key.user];
-			rules[i].key.permission = renum[rules[i].key.permission];
-			rules[i].value.value = renum[rules[i].value.value];
+			rules[i].key.client = gc_new(renum, rules[i].key.client);
+			rules[i].key.session = gc_new(renum, rules[i].key.session);
+			rules[i].key.user = gc_new(renum, rules[i].key.user);
+			rules[i].key.permission = gc_new(renum, rules[i].key.permission);
+			rules[i].value.value = gc_new(renum, rules[i].value.value);
 		}
 	}
 
 	i = memdb->strings.alloc;
-	while (ns + SBS > i)
+	while (ns + SBS < i)
 		i -= SBS;
 	if (i != memdb->strings.alloc) {
 		memdb->strings.alloc = i;
@@ -304,7 +325,7 @@ gc_itf(
 	}
 
 	i = memdb->rules.alloc;
-	while (ns + RBS > i)
+	while (nr + RBS < i)
 		i -= RBS;
 	if (i != memdb->rules.alloc) {
 		memdb->rules.alloc = i;
@@ -338,6 +359,7 @@ init(
 	memdb->db.itf.apply = apply_itf;
 	memdb->db.itf.add = add_itf;
 	memdb->db.itf.gc = gc_itf;
+	memdb->db.itf.sync = 0;
 	memdb->db.itf.destroy = destroy_itf;
 
 	memdb->strings.alloc = 0;
