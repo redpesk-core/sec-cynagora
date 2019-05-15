@@ -370,6 +370,8 @@ int do_check(int ac, char **av, int (*f)(rcyn_t*,const rcyn_key_t*))
 			fprintf(stdout, "denied\n");
 		else if (rc == -ENOENT && f == rcyn_cache_check)
 			fprintf(stdout, "not in cache!\n");
+		else if (rc == -EEXIST)
+			fprintf(stderr, "denied but an entry exist\n");
 		else
 			fprintf(stderr, "error %s\n", strerror(-rc));
 	}

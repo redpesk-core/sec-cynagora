@@ -28,8 +28,10 @@ typedef void (list_cb_t)(
 		const data_value_t *value);
 
 typedef int (agent_cb_t)(
+		const char *name,
 		void *agent_closure,
 		const data_key_t *key,
+		const char *value,
 		on_result_cb_t *on_result_cb,
 		void *on_result_closure);
 
@@ -90,17 +92,17 @@ cyn_drop(
 );
 
 extern
-int
-cyn_test(
-	const data_key_t *key,
-	data_value_t *value
-);
-
-extern
 void
 cyn_list(
 	void *closure,
 	list_cb_t *callback,
+	const data_key_t *key
+);
+
+int
+cyn_test_async(
+	on_result_cb_t *on_result_cb,
+	void *closure,
 	const data_key_t *key
 );
 
@@ -115,6 +117,7 @@ cyn_check_async(
 extern
 int
 cyn_agent_add(
+	const char *name,
 	agent_cb_t *agent_cb,
 	void *closure
 );
@@ -122,7 +125,6 @@ cyn_agent_add(
 extern
 int
 cyn_agent_remove(
-	agent_cb_t *agent_cb,
-	void *closure
+	const char *name
 );
 

@@ -159,8 +159,8 @@ putx(
 	va_list l;
 	int rc;
 
-	va_start(l, cli);
 	n = 0;
+	va_start(l, cli);
 	p = va_arg(l, const char *);
 	while (p) {
 		if (n == MAXARGS)
@@ -250,15 +250,16 @@ checkcb(
 ) {
 	client_t *cli = closure;
 	char text[30];
+	const char *etxt;
 
 	if (!value)
 		putx(cli, DEFAULT, "0", NULL);
 	else {
-		exp2txt(value->expire, text, sizeof text);
+		etxt = exp2txt(value->expire, text, sizeof text);
 		if (strcmp(value->value, ALLOW) && strcmp(value->value, DENY))
-			putx(cli, _done_, value, text, NULL);
+			putx(cli, _done_, value->value, etxt, NULL);
 		else
-			putx(cli, value->value, text, NULL);
+			putx(cli, value->value, etxt, NULL);
 	}
 	flushw(cli);
 }

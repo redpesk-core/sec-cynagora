@@ -22,7 +22,6 @@
 #include <string.h>
 #include <errno.h>
 
-
 #include "data.h"
 #include "db.h"
 #include "queue.h"
@@ -35,44 +34,36 @@ struct callback
 		void *any_cb;
 		on_enter_cb_t *on_enter_cb;
 		on_change_cb_t *on_change_cb;
-		agent_cb_t *agent_cb;
 	};
 	void *closure;
 };
 
-struct async_check
+struct agent
 {
-	struct async_check *next;
-	on_result_cb_t *on_result_cb;
+	struct agent *next;
+	agent_cb_t *agent_cb;
 	void *closure;
-	data_key_t key;
-	struct callback *next_agent;
+	uint8_t len;
+	char name[];
 };
 
 /** locking critical section */
 static const void *lock;
 static struct callback *awaiters;
 static struct callback *observers;
-static struct callback *agents;
-static struct async_check *asynchecks;
+static struct agent *agents;
 
 static
 int
 delcb(
 	void *callback,
 	void *closure,
-	struct callback **head,
-	struct async_check *achecks
+	struct callback **head
 ) {
 	struct callback *c;
 
 	while((c = *head)) {
 		if (c->any_cb == callback && c->closure == closure) {
-			while (achecks) {
-				if (achecks->next_agent == c)
-					achecks->next_agent = c->next;
-				achecks = achecks->next;
-			}
 			*head = c->next;
 			free(c);
 			return 1;
@@ -130,7 +121,7 @@ cyn_enter_async_cancel(
 	on_enter_cb_t *enter_cb,
 	void *closure
 ) {
-	return delcb(enter_cb, closure, &awaiters, 0);
+	return delcb(enter_cb, closure, &awaiters);
 }
 
 int
@@ -146,7 +137,7 @@ cyn_on_change_remove(
 	on_change_cb_t *on_change_cb,
 	void *closure
 ) {
-	return delcb(on_change_cb, closure, &observers, 0);
+	return delcb(on_change_cb, closure, &observers);
 }
 
 /** leave critical recoverable section */
@@ -229,19 +220,87 @@ cyn_list(
 	db_for_all(closure, callback, key);
 }
 
-int
-cyn_test(
-	const data_key_t *key,
+static
+data_value_t *
+default_value(
 	data_value_t *value
 ) {
-	int rc;
+	value->value = DEFAULT;
+	value->expire = 0;
+	return value;
+}
 
-	rc = db_test(key, value);
-	if (rc <= 0) {
-		value->value = DEFAULT;
-		value->expire = 0;
-	}
-	return rc;
+static
+struct agent *
+search_agent(
+	const char *name,
+	uint8_t len,
+	struct agent ***ppprev
+) {
+	struct agent *it, **pprev;
+
+	pprev = &agents;
+	while((it = *pprev)
+	  &&  (len != it->len || memcmp(it->name, name, (size_t)len)))
+		pprev = &it->next;
+	*ppprev = pprev;
+	return it;
+}
+
+static
+struct agent *
+required_agent(
+	const char *value
+) {
+	struct agent **pprev;
+	uint8_t len;
+
+	for (len = 0 ; len < UINT8_MAX && value[len] ; len++)
+		if (value[len] == ':')
+			return search_agent(value, len, &pprev);
+	return 0;
+}
+
+struct async_check
+{
+	on_result_cb_t *on_result_cb;
+	void *closure;
+	data_key_t key;
+	data_value_t value;
+	int decount;
+};
+
+static
+void
+async_reply(
+	struct async_check *achk
+) {
+	achk->on_result_cb(achk->closure, &achk->value);
+	free(achk);
+}
+
+static
+void
+async_on_result(
+	void *closure,
+	const data_value_t *value
+);
+
+static
+void
+async_call_agent(
+	struct agent *agent,
+	struct async_check *achk
+) {
+	int rc = agent->agent_cb(
+			agent->name,
+			agent->closure,
+			&achk->key,
+			&achk->value.value[agent->len + 1],
+			async_on_result,
+			achk);
+	if (rc < 0)
+		async_reply(achk);
 }
 
 static
@@ -250,60 +309,51 @@ async_on_result(
 	void *closure,
 	const data_value_t *value
 ) {
-	struct async_check *achk = closure, **pac;
-	struct callback *agent;
-	int rc;
-	data_value_t v;
+	struct async_check *achk = closure;
+	struct agent *agent;
 
-	if (!value) {
-		agent = achk->next_agent;
-		while (agent) {
-			achk->next_agent = agent->next;
-			rc = agent->agent_cb(
-				agent->closure,
-				&achk->key,
-				async_on_result,
-				closure);
-			if (!rc)
-				return;
-			agent = achk->next_agent;
-		}
-		v.value = DEFAULT;
-		v.expire = 0;
-		value = &v;
-	}
-
-	achk->on_result_cb(achk->closure, value);
-	pac = &asynchecks;
-	while (*pac != achk)
-		pac = &(*pac)->next;
-	*pac = achk->next;
-	free(achk);
+	achk->value = *value;
+	agent = required_agent(value->value);
+	if (agent && achk->decount) {
+		achk->decount--;
+		async_call_agent(agent, achk);
+	} else
+		async_reply(achk);
 }
 
-
+static
 int
-cyn_check_async(
+async_check_or_test(
 	on_result_cb_t *on_result_cb,
 	void *closure,
-	const data_key_t *key
+	const data_key_t *key,
+	int agentdeep
 ) {
+	int rc;
 	data_value_t value;
 	size_t szcli, szses, szuse, szper;
 	struct async_check *achk;
+	struct agent *agent;
 	void *ptr;
 
-	cyn_test(key, &value);
-	if (!strcmp(value.value, ALLOW) || !strcmp(value.value, DENY)) {
+	/* get the direct value */
+	rc = db_test(key, &value);
+
+	/* on error or missing result */
+	if (rc <= 0) {
+		default_value(&value);
 		on_result_cb(closure, &value);
-		return 0;
+		return rc;
 	}
 
-	if (!agents) {
+	/* if not an agent or agent not required */
+	agent = required_agent(value.value);
+	if (!agent || !agentdeep) {
 		on_result_cb(closure, &value);
-		return 0;
+		return rc;
 	}
 
+	/* allocate asynchronous query */
 	szcli = key->client ? 1 + strlen(key->client) : 0;
 	szses = key->session ? 1 + strlen(key->session) : 0;
 	szuse = key->user ? 1 + strlen(key->user) : 0;
@@ -314,56 +364,111 @@ cyn_check_async(
 		return -ENOMEM;
 	}
 
-	ptr = achk;
+	/* init the structure */
+	ptr = &achk[1];
 	achk->on_result_cb = on_result_cb;
 	achk->closure = closure;
 	if (!key->client)
 		achk->key.client = 0;
 	else {
 		achk->key.client = ptr;
-		memcpy(ptr, key->client, szcli);
-		ptr += szcli;
+		ptr = mempcpy(ptr, key->client, szcli);
 	}
 	if (!key->session)
 		achk->key.session = 0;
 	else {
 		achk->key.session = ptr;
-		memcpy(ptr, key->session, szses);
-		ptr += szses;
+		ptr = mempcpy(ptr, key->session, szses);
 	}
 	if (!key->user)
 		achk->key.user = 0;
 	else {
 		achk->key.user = ptr;
-		memcpy(ptr, key->user, szuse);
-		ptr += szuse;
+		ptr = mempcpy(ptr, key->user, szuse);
 	}
 	if (!key->permission)
 		achk->key.permission = 0;
 	else {
 		achk->key.permission = ptr;
-		memcpy(ptr, key->permission, szper);
+		ptr = mempcpy(ptr, key->permission, szper);
 	}
-	achk->next_agent = agents;
-	achk->next = asynchecks;
-	asynchecks = achk;
-	async_on_result(achk, 0);
+	achk->value = value;
+	achk->decount = agentdeep;
+
+	/* call the agent */
+	async_call_agent(agent, achk);
 	return 0;
 }
 
 int
+cyn_test_async(
+	on_result_cb_t *on_result_cb,
+	void *closure,
+	const data_key_t *key
+) {
+	return async_check_or_test(on_result_cb, closure, key, 0);
+}
+
+int
+cyn_check_async(
+	on_result_cb_t *on_result_cb,
+	void *closure,
+	const data_key_t *key
+) {
+	return async_check_or_test(on_result_cb, closure, key, 10);
+}
+
+int
 cyn_agent_add(
+	const char *name,
 	agent_cb_t *agent_cb,
 	void *closure
 ) {
-	return addcb(agent_cb, closure, &agents);
+	struct agent *agent, **pprev;
+	size_t length;
+	uint8_t len;
+
+	length = strlen(name);
+	if (length <= 0 || length > UINT8_MAX)
+		return -EINVAL;
+	len = (uint8_t)length++;
+
+	agent = search_agent(name, len, &pprev);
+	if (agent)
+		return -EEXIST;
+
+	agent = malloc(sizeof *agent + length);
+	if (!agent)
+		return -ENOMEM;
+
+	agent->next = 0;
+	agent->agent_cb = agent_cb;
+	agent->closure = closure;
+	agent->len = len;
+	memcpy(agent->name, name, length);
+	*pprev = agent;
+
+	return 0;
 }
 
 int
 cyn_agent_remove(
-	agent_cb_t *agent_cb,
-	void *closure
+	const char *name
 ) {
-	return delcb(agent_cb, closure, &agents, asynchecks);
-}
+	struct agent *agent, **pprev;
+	size_t length;
+	uint8_t len;
 
+	length = strlen(name);
+	if (length <= 0 || length > UINT8_MAX)
+		return -EINVAL;
+	len = (uint8_t)length;
+
+	agent = search_agent(name, len, &pprev);
+	if (!agent)
+		return -ENOENT;
+
+	*pprev = agent->next;
+	free(agent);
+	return 0;
+}

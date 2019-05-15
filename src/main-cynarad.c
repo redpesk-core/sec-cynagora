@@ -41,6 +41,7 @@
 #include "rcyn-server.h"
 #include "rcyn-protocol.h"
 #include "dbinit.h"
+#include "agent-at.h"
 
 #if !defined(DEFAULT_DB_DIR)
 #    define  DEFAULT_DB_DIR      "/var/lib/cynara"
@@ -233,6 +234,9 @@ int main(int ac, char **av)
 	user = user ?: DEFAULT_CYNARA_USER;
 	group = group ?: DEFAULT_CYNARA_GROUP;
 	init = init ?: DEFAULT_INIT_FILE;
+
+	/* activate the agents */
+	agent_at_activate();
 
 	/* compute socket specs */
 	spec_socket_admin = spec_socket_check = spec_socket_agent = 0;

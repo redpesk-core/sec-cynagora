@@ -99,7 +99,6 @@ buf_put_car(
 	return 0;
 }
 
-
 /**
  * Put the 'string' into the 'buf' escaping it at need
  * returns:

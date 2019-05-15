@@ -456,9 +456,6 @@ anydb_test(
 	if (s.score) {
 		value->value = string(db, s.idxval);
 		value->expire = s.expire;
-	} else {
-		value->value = NULL;
-		value->expire = 0;
 	}
 	return s.score;
 }
