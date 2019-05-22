@@ -453,8 +453,16 @@ rcyn_open(
 	rcyn_t *rcyn;
 	int rc;
 
+	/* socket spec */
+	switch(type) {
+	default:
+	case rcyn_Check: socketspec = rcyn_get_socket_check(socketspec); break;
+	case rcyn_Admin: socketspec = rcyn_get_socket_admin(socketspec); break;
+	case rcyn_Agent: socketspec = rcyn_get_socket_agent(socketspec); break;
+	}
+
 	/* allocate the structure */
-	*prcyn = rcyn = malloc(sizeof *rcyn + (socketspec ? strlen(socketspec) : 0));
+	*prcyn = rcyn = malloc(sizeof *rcyn + 1 + strlen(socketspec));
 	if (rcyn == NULL) {
 		rc = -ENOMEM;
 		goto error;
@@ -466,15 +474,7 @@ rcyn_open(
 		goto error2;
 
 	/* socket spec */
-	if (socketspec)
-		strcpy((char*)(rcyn+1), socketspec);
-	else
-		switch(rcyn->type) {
-		default:
-		case rcyn_Check: socketspec = rcyn_default_check_socket_spec; break;
-		case rcyn_Admin: socketspec = rcyn_default_admin_socket_spec; break;
-		case rcyn_Agent: socketspec = rcyn_default_agent_socket_spec; break;
-		}
+	strcpy((char*)(rcyn+1), socketspec);
 
 	/* record type and weakly create cache */
 	cache_create(&rcyn->cache, cache_size < MIN_CACHE_SIZE ? MIN_CACHE_SIZE : cache_size);

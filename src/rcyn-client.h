@@ -155,4 +155,3 @@ rcyn_async_check(
 		int status),
 	void *closure
 );
-

@@ -406,8 +406,7 @@ onrequest(
 			key.session = args[2];
 			key.user = args[3];
 			key.permission = args[4];
-			cyn_test(&key, &value);
-			checkcb(cli, &value);
+			cyn_test_async(checkcb, cli, &key);
 			return;
 		}
 		break;
@@ -667,7 +666,7 @@ rcyn_server_create(
 	}
 
 	/* create the admin server socket */
-	admin_socket_spec = admin_socket_spec ?: rcyn_default_admin_socket_spec;
+	admin_socket_spec = rcyn_get_socket_admin(admin_socket_spec);
 	srv->admin.fd = socket_open(admin_socket_spec, 1);
 	if (srv->admin.fd < 0) {
 		rc = -errno;
@@ -686,7 +685,7 @@ rcyn_server_create(
 	}
 
 	/* create the check server socket */
-	check_socket_spec = check_socket_spec ?: rcyn_default_check_socket_spec;
+	check_socket_spec = rcyn_get_socket_check(check_socket_spec);
 	srv->check.fd = socket_open(check_socket_spec, 1);
 	if (srv->check.fd < 0) {
 		rc = -errno;
@@ -705,7 +704,7 @@ rcyn_server_create(
 	}
 
 	/* create the agent server socket */
-	agent_socket_spec = agent_socket_spec ?: rcyn_default_agent_socket_spec;
+	agent_socket_spec = rcyn_get_socket_agent(agent_socket_spec);
 	srv->agent.fd = socket_open(agent_socket_spec, 1);
 	if (srv->agent.fd < 0) {
 		rc = -errno;

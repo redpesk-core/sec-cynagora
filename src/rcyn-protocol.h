@@ -49,3 +49,21 @@ extern const char
 	rcyn_default_check_socket_spec[],
 	rcyn_default_admin_socket_spec[],
 	rcyn_default_agent_socket_spec[];
+
+extern
+const char *
+rcyn_get_socket_check(
+	const char *value
+);
+
+extern
+const char *
+rcyn_get_socket_admin(
+	const char *value
+);
+
+extern
+const char *
+rcyn_get_socket_agent(
+	const char *value
+);

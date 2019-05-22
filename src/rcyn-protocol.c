@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#include <stdlib.h>
+
 #include "rcyn-protocol.h"
 
 const char
@@ -80,3 +82,30 @@ const char
 	rcyn_default_check_socket_spec[] = RCYN_DEFAULT_CHECK_SOCKET_SPEC,
 	rcyn_default_admin_socket_spec[] = RCYN_DEFAULT_ADMIN_SOCKET_SPEC,
 	rcyn_default_agent_socket_spec[] = RCYN_DEFAULT_AGENT_SOCKET_SPEC;
+
+const char *
+rcyn_get_socket_check(
+	const char *value
+) {
+	return value
+		?: secure_getenv("CYNARA_SOCKET_CHECK")
+		?: rcyn_default_check_socket_spec;
+}
+
+const char *
+rcyn_get_socket_admin(
+	const char *value
+) {
+	return value
+		?: secure_getenv("CYNARA_SOCKET_ADMIN")
+		?: rcyn_default_admin_socket_spec;
+}
+
+const char *
+rcyn_get_socket_agent(
+	const char *value
+) {
+	return value
+		?: secure_getenv("CYNARA_SOCKET_AGENT")
+		?: rcyn_default_agent_socket_spec;
+}
