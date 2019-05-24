@@ -1,4 +1,10 @@
 # initial database for cynara
-System * * * yes always
-User * * * yes always
+* * * * no always          # explicit default rule: NO
+* * @ADMIN * yes always    # users of group @ADMIN can do anything
+* * @NONE * no always      # users of group @NONE can do nothing
+
+# root is in the group @ADMIN
+* * 0 * @:%c:%s:@ADMIN:%p always
+# Client of label System are in the group @ADMIN
+System * * * @:%c:%s:@ADMIN:%p always
 
