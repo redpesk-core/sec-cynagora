@@ -60,10 +60,11 @@ typedef struct item item_t;
 /**
  * The cache structure is a blob of memory ('content')
  * of 'count' bytes of only 'used' bytes.
- * That blob containts at sequence of records of variable length
+ * That blob contains at sequence of records of variable length
  */
 struct cache
 {
+	uint32_t cacheid;
 	uint32_t used;
 	uint32_t count;
 	uint8_t content[1];
@@ -264,10 +265,13 @@ cache_search(
 
 void
 cache_clear(
-	cache_t *cache
+	cache_t *cache,
+	uint32_t cacheid
 ) {
-	if (cache)
+	if (cache && (!cacheid || cache->cacheid != cacheid)) {
+		cache->cacheid = cacheid;
 		cache->used = 0;
+	}
 }
 
 int
@@ -286,8 +290,10 @@ cache_resize(
 		return -ENOMEM;
 
 	nc->count = newsize;
-	if (!c)
+	if (!c) {
+		nc->cacheid = 0;
 		nc->used = 0;
+	}
 	*cache = nc;
 	return 0;
 }

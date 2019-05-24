@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -52,6 +53,9 @@ static const void *lock;
 static struct callback *awaiters;
 static struct callback *observers;
 static struct agent *agents;
+static uint32_t last_changeid;
+static uint32_t last_changeid_string;
+static char changeid_string[12];
 
 static
 int
@@ -90,6 +94,17 @@ addcb(
 	c->next = *head;
 	*head = c;
 	return 0;
+}
+
+static
+void
+changed(
+) {
+	struct callback *c;
+
+	++last_changeid;
+	for (c = observers; c ; c = c->next)
+		c->on_change_cb(c->closure);
 }
 
 /** enter critical recoverable section */
@@ -147,7 +162,7 @@ cyn_leave(
 	bool commit
 ) {
 	int rc, rcp;
-	struct callback *c, *e, **p;
+	struct callback *e, **p;
 
 	if (!magic)
 		return -EINVAL;
@@ -164,10 +179,8 @@ cyn_leave(
 		if (rc == 0) {
 			rcp = queue_play();
 			rc = db_transaction_end(rcp == 0) ?: rcp;
-			if (rcp == 0) {
-				for (c = observers; c ; c = c->next)
-					c->on_change_cb(c->closure);
-			}
+			if (rcp == 0)
+				changed();
 		}
 	}
 	queue_clear();
@@ -471,4 +484,27 @@ cyn_agent_remove(
 	*pprev = agent->next;
 	free(agent);
 	return 0;
+}
+
+void
+cyn_changeid_reset(
+) {
+	last_changeid = 1;
+}
+
+uint32_t
+cyn_changeid(
+) {
+	return last_changeid;
+}
+
+extern
+const char *
+cyn_changeid_string(
+) {
+	if (last_changeid != last_changeid_string) {
+		last_changeid_string = last_changeid;
+		snprintf(changeid_string, sizeof changeid_string, "%u", last_changeid);
+	}
+	return changeid_string;
 }

@@ -4,11 +4,11 @@ protocol
 hello:
 
   c->s rcyn 1
-  s->c yes 1
+  s->c yes 1 CACHEID
 
 invalidate cache:
 
-  s->c clear
+  s->c clear CACHEID
   
 test a permission:
 

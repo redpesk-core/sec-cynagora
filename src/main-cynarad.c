@@ -38,6 +38,7 @@
 
 #include "data.h"
 #include "db.h"
+#include "cyn.h"
 #include "rcyn-server.h"
 #include "rcyn-protocol.h"
 #include "dbinit.h"
@@ -303,21 +304,8 @@ int main(int ac, char **av)
 	cap_clear(caps);
 	rc = cap_set_proc(caps);
 
-	/* initialize server */
-	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
-	if (rc < 0) {
-		fprintf(stderr, "can't initialise server: %m\n");
-		return 1;
-	}
-
 	/* connection to the database */
-	rc = chdir(dbdir);
-	if (rc < 0) {
-		fprintf(stderr, "can not chroot to database directory %s: %m\n", dbdir);
-		return 1;
-	}
-	rc = db_open(".");
+	rc = db_open(dbdir);
 	if (rc < 0) {
 		fprintf(stderr, "can not open database of directory %s: %m\n", dbdir);
 		return 1;
@@ -330,6 +318,17 @@ int main(int ac, char **av)
 			fprintf(stderr, "can't initialise database: %m\n");
 			return 1;
 		}
+	}
+
+	/* reset the change ids */
+	cyn_changeid_reset();
+
+	/* initialize server */
+	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
+	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
+	if (rc < 0) {
+		fprintf(stderr, "can't initialise server: %m\n");
+		return 1;
 	}
 
 	/* ready ! */

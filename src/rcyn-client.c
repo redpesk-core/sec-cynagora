@@ -256,19 +256,23 @@ int
 get_reply(
 	rcyn_t *rcyn
 ) {
+	;
 	int rc;
 
 	prot_next(rcyn->prot);
-	rc = rcyn->reply.count = prot_get(rcyn->prot, &rcyn->reply.fields);
-	if (rc <= 0)
-		return rc;
-	if (0 != strcmp(rcyn->reply.fields[0], _clear_)) {
-		if (0 != strcmp(rcyn->reply.fields[0], _item_))
-			rcyn->pending--;
-		return rc;
+	rc = prot_get(rcyn->prot, &rcyn->reply.fields);
+	if (rc > 0) {
+		if (0 == strcmp(rcyn->reply.fields[0], _clear_)) {
+			cache_clear(rcyn->cache,
+				rc > 1 ? (uint32_t)atol(rcyn->reply.fields[1]) : 0);
+			rc = 0;
+		} else {
+			if (0 != strcmp(rcyn->reply.fields[0], _item_))
+				rcyn->pending--;
+		}
 	}
-	cache_clear(rcyn->cache);
-	return rcyn->reply.count = 0;
+	rcyn->reply.count = rc;
+	return rc;
 }
 
 static
@@ -406,7 +410,6 @@ connection(
 	/* init the client */
 	rcyn->pending = 0;
 	rcyn->reply.count = -1;
-	cache_clear(rcyn->cache);
 	prot_reset(rcyn->prot);
 	rcyn->fd = socket_open(rcyn->socketspec, 0);
 	if (rcyn->fd < 0)
@@ -418,9 +421,11 @@ connection(
 		rc = wait_pending_reply(rcyn);
 		if (rc >= 0) {
 			rc = -EPROTO;
-			if (rcyn->reply.count == 2
+			if (rcyn->reply.count >= 2
 			 && 0 == strcmp(rcyn->reply.fields[0], _yes_)
 			 && 0 == strcmp(rcyn->reply.fields[1], "1")) {
+				cache_clear(rcyn->cache,
+					rcyn->reply.count > 2 ? (uint32_t)atol(rcyn->reply.fields[2]) : 0);
 				rc = async(rcyn, EPOLL_CTL_ADD, EPOLLIN);
 				if (rc >= 0)
 					return 0;
@@ -495,6 +500,13 @@ error2:
 error:
 	*prcyn = NULL;
 	return rc;
+}
+
+void
+rcyn_disconnect(
+	rcyn_t *rcyn
+) {
+	disconnection(rcyn);
 }
 
 void
@@ -701,7 +713,7 @@ void
 rcyn_cache_clear(
 	rcyn_t *rcyn
 ) {
-	cache_clear(rcyn->cache);
+	cache_clear(rcyn->cache, 0);
 }
 
 int

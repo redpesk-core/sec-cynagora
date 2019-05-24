@@ -55,7 +55,7 @@ db_open(
 
 	rc = memdb_create(&memdb);
 	if (!rc) {
-		rc = filedb_create(&filedb, directory, "CYNARA");
+		rc = filedb_create(&filedb, directory, NULL);
 		if (rc)
 			anydb_destroy(memdb);
 	}

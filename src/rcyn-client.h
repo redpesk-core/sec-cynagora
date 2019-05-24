@@ -52,6 +52,12 @@ rcyn_open(
 
 extern
 void
+rcyn_disconnect(
+	rcyn_t *rcyn
+);
+
+extern
+void
 rcyn_close(
 	rcyn_t *rcyn
 );

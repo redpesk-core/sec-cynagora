@@ -299,7 +299,7 @@ onrequest(
 	if (!cli->version) {
 		if (!ckarg(args[0], _rcyn_, 0) || count != 2 || !ckarg(args[1], "1", 0))
 			goto invalid;
-		putx(cli, _yes_, "1", NULL);
+		putx(cli, _yes_, "1", cyn_changeid_string(), NULL);
 		flushw(cli);
 		cli->version = 1;
 		return;
@@ -426,7 +426,7 @@ onchange(
 	client_t *cli = closure;
 	if (cli->checked) {
 		cli->checked = false;
-		putx(cli, _clear_, NULL);
+		putx(cli, _clear_, cyn_changeid_string(), NULL);
 		flushw(cli);
 	}
 }

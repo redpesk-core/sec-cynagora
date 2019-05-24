@@ -128,3 +128,17 @@ cyn_agent_remove(
 	const char *name
 );
 
+extern
+void
+cyn_changeid_reset(
+);
+
+extern
+uint32_t
+cyn_changeid(
+);
+
+extern
+const char *
+cyn_changeid_string(
+);

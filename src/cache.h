@@ -39,7 +39,8 @@ cache_put(
 extern
 void
 cache_clear(
-	cache_t *cache
+	cache_t *cache,
+	uint32_t cacheid
 );
 
 extern
