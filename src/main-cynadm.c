@@ -300,27 +300,132 @@ int get_csup(int ac, char **av, int *used, const char *def)
 	return key.client && key.session && key.user && key.permission ? 0 : -EINVAL;
 }
 
+
+struct listresult {
+	int count;
+	size_t lengths[6];
+	struct listitem {
+		struct listitem *next;
+		const char *items[6];
+	} *head;
+};
+
+struct listitem *listresult_sort(int count, struct listitem *head)
+{
+	int n1, n2, i, r, c1, c2;
+	struct listitem *i1, *i2, **pp;
+
+	if (count == 1)
+		head->next = 0;
+	else {
+		i2 = head;
+		n2 = count >> 1;
+		n1 = 0;
+		while (n1 < n2) {
+			n1++;
+			i2 = i2->next;
+		}
+		n2 = count - n1;
+		i1 = listresult_sort(n1, head);
+		i2 = listresult_sort(n2, i2);
+		pp = &head;
+		while(n1 || n2) {
+			c1 = !n2;
+			c2 = !n1;
+			for (i = 0 ; !c1 && !c2 && i < 4 ; i++) {
+				r = strcmp(i1->items[i], i2->items[i]);
+				c1 = r < 0;
+				c2 = r > 0;
+			}
+			if (c1) {
+				*pp = i1;
+				i1 = i1->next;
+				n1--;
+			} else {
+				*pp = i2;
+				i2 = i2->next;
+				n2--;
+			}
+			pp = &(*pp)->next;
+		}
+		*pp = 0;
+	}
+	return head;
+}
+
 void listcb(void *closure, const rcyn_key_t *k, const rcyn_value_t *v)
 {
-	char buffer[100];
-	int *p = closure;
+	struct listresult *lr = closure;
+	char buffer[100], *p;
+	const char *items[6];
+	struct listitem *it;
+	size_t s, as;
+	int i;
+
 	exp2txt(v->expire, buffer, sizeof buffer);
-	fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n", k->client, k->session, k->user, k->permission, v->value, buffer);
-	(*p)++;
+	items[0] = k->client;
+	items[1] = k->session;
+	items[2] = k->user;
+	items[3] = k->permission;
+	items[4] = v->value;
+	items[5] = buffer;
+
+	as = 0;
+	for (i = 0 ; i < 6 ; i++) {
+		s = strlen(items[i]);
+		as += s;
+		if (s > lr->lengths[i])
+			lr->lengths[i] = s;
+	}
+	it = malloc(sizeof *it + as + 6);
+	if (!it)
+		fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			k->client, k->session, k->user, k->permission,
+			v->value, buffer);
+	else {
+		p = (char*)(it + 1);
+		for (i = 0 ; i < 6 ; i++) {
+			it->items[i] = p;
+			p = 1 + stpcpy(p, items[i]);
+		}
+		it->next = lr->head;
+		lr->head = it;
+	}
+	lr->count++;
 }
 
 int do_list(int ac, char **av)
 {
-	int count, uc, rc;
+	int uc, rc;
+	struct listresult lr;
+	struct listitem *it;
 
 	rc = get_csup(ac, av, &uc, "#");
 	if (rc == 0) {
-		count = 0;
-		rc = rcyn_get(rcyn, &key, listcb, &count);
+		memset(&lr, 0, sizeof lr);
+		rc = rcyn_get(rcyn, &key, listcb, &lr);
 		if (rc < 0)
 			fprintf(stderr, "error %s\n", strerror(-rc));
-		else
-			fprintf(stdout, "%d entries found\n", count);
+		else {
+			it = lr.head = listresult_sort(lr.count, lr.head);
+			while(it) {
+				fprintf(stdout, "%*s %*s %*s %*s %*s %*s\n",
+					(int)lr.lengths[0], it->items[0],
+					(int)lr.lengths[1], it->items[1],
+					(int)lr.lengths[2], it->items[2],
+					(int)lr.lengths[3], it->items[3],
+					(int)lr.lengths[4], it->items[4],
+					(int)lr.lengths[5], it->items[5]);
+				it = it->next;
+			}
+			fprintf(stdout, "%d entries found\n", lr.count);
+		}
+		/* free list */
+		while(lr.head) {
+			it = lr.head;
+			lr.head = it->next;
+			free(it);
+		}
 	}
 	return uc;
 }
