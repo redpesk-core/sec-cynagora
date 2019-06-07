@@ -1,10 +1,15 @@
+#--------------------------------------------------------------------
 # initial database for cynara
-* * * * no always          # explicit default rule: NO
-* * @ADMIN * yes always    # users of group @ADMIN can do anything
-* * @NONE * no always      # users of group @NONE can do nothing
+# format: space/tab separated fields
+# fields: CLIENT SESSION USER PERMISSION ACTION EXPIRATION
+#--------------------------------------------------------------------
+* * *      * no  forever   # explicit default rule: NO
+* * @ADMIN * yes forever   # users of group @ADMIN can do anything
+* * @NONE  * no  forever   # users of group @NONE can do nothing
 
-# root is in the group @ADMIN
-* * 0 * @:%c:%s:@ADMIN:%p always
-# Client of label System are in the group @ADMIN
-System * * * @:%c:%s:@ADMIN:%p always
+#--------------------------------------------------------------------
+# User "0" and clients "System" is in the group "@ADMIN"
+#--------------------------------------------------------------------
+*      * 0 * @:%c:%s:@ADMIN:%p forever
+System * * * @:%c:%s:@ADMIN:%p forever
 
