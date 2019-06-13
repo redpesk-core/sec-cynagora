@@ -26,6 +26,7 @@ const char
 	_enter_[] = "enter",
 	_get_[] = "get",
 	_leave_[] = "leave",
+	_log_[] = "log",
 	_rcyn_[] = "rcyn",
 	_set_[] = "set",
 	_test_[] = "test";
@@ -40,6 +41,8 @@ const char
 	_error_[] = "error",
 	_item_[] = "item",
 	_no_[] = "no",
+	_on_[] = "on",
+	_off_[] = "off",
 	_yes_[] = "yes";
 
 #if !defined(RCYN_DEFAULT_SOCKET_SCHEME)

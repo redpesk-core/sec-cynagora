@@ -195,48 +195,6 @@ putxkv(
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 static
 int
 wait_input(
@@ -677,6 +635,31 @@ rcyn_get(
 	}
 	return rc;
 }
+
+int
+rcyn_log(
+	rcyn_t *rcyn,
+	int on,
+	int off
+) {
+	int rc;
+
+	if (rcyn->type != rcyn_Admin)
+		return -EPERM;
+	if (rcyn->async.requests != NULL)
+		return -EINPROGRESS;
+
+	rc = ensure_opened(rcyn);
+	if (rc < 0)
+		return rc;
+
+	rc = putxkv(rcyn, _log_, off ? _off_ : on ? _on_ : 0, 0, 0);
+	if (rc >= 0)
+		rc = wait_done(rcyn);
+
+	return rc < 0 ? rc : rcyn->reply.count < 2 ? 0 : !strcmp(rcyn->reply.fields[1], _on_);
+}
+
 
 int
 rcyn_drop(

@@ -24,6 +24,7 @@ extern const char
 	_enter_[],
 	_get_[],
 	_leave_[],
+	_log_[],
 	_rcyn_[],
 	_set_[],
 	_test_[];
@@ -38,6 +39,8 @@ extern const char
 	_error_[],
 	_item_[],
 	_no_[],
+	_off_[],
+	_on_[],
 	_yes_[];
 
 extern const char

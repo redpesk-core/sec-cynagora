@@ -110,11 +110,11 @@ dolog(
 	const char *fields[]
 ) {
 	static const char types[3][6] = { "check", "agent", "admin" };
-	static const char dir[2] = { '<', '>' };
+	static const char dir[2] = { '>', '<' };
 
 	int i;
 
-	fprintf(stderr, "%p.%s %c%c", cli, types[cli->type], dir[!c2s], dir[!c2s]);
+	fprintf(stderr, "%p%c%c%s", cli, dir[!c2s], dir[!c2s], types[cli->type]);
 	for (i = 0 ; i < count ; i++)
 		fprintf(stderr, " %s", fields[i]);
 	fprintf(stderr, "\n");
@@ -317,6 +317,7 @@ onrequest(
 	int count,
 	const char *args[]
 ) {
+	bool nextlog;
 	int rc;
 	data_key_t key;
 	data_value_t value;
@@ -410,6 +411,20 @@ onrequest(
 			rc = cyn_leave(cli, count == 2 && ckarg(args[1], _commit_, 0));
 			cli->entered = false;
 			send_done_or_error(cli, rc);
+			return;
+		}
+		if (ckarg(args[0], _log_, 1) && count <= 2) {
+			nextlog = rcyn_server_log;
+			if (cli->type != rcyn_Admin)
+				break;
+			if (count == 2) {
+				if (!ckarg(args[1], _on_, 0) && !ckarg(args[1], _off_, 0))
+					break;
+				nextlog = ckarg(args[1], _on_, 0);
+			}
+			putx(cli, _done_, nextlog ? _on_ : _off_, NULL);
+			flushw(cli);
+			rcyn_server_log = nextlog;
 			return;
 		}
 		break;

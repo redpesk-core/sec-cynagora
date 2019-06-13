@@ -47,6 +47,11 @@ leave critical (admin)
   c->s leave [commit|rollback]
   s->c done|error ...
 
+set/get logging status (admin)
+
+  c->s log [on|off]
+  s->c done (on|off)
+
 register agent (agent):
 
   c->s agent NAME [ARGS...]

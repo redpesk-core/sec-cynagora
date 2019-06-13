@@ -112,6 +112,14 @@ rcyn_get(
 
 extern
 int
+rcyn_log(
+	rcyn_t *rcyn,
+	int on,
+	int off
+);
+
+extern
+int
 rcyn_drop(
 	rcyn_t *rcyn,
 	const rcyn_key_t *key

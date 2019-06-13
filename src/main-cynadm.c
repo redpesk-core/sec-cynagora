@@ -29,6 +29,7 @@
 #include "rcyn-protocol.h"
 #include "expire.h"
 
+
 #define _HELP_        'h'
 #define _SOCKET_      's'
 #define _VERSION_     'v'
@@ -74,7 +75,7 @@ static
 const char
 help__text[] =
 	"\n"
-	"Commands are: list, set, drop, check, test, cache, clear, quit, help\n"
+	"Commands are: list, set, drop, check, test, cache, clear, quit, log, help\n"
 	"Type 'help command' to get help on the command\n"
 	"Type 'help expiration' to get help on expirations\n"
 	"\n"
@@ -176,6 +177,21 @@ help_test_text[] =
 	"  test wrt W3llcomE 1001 audio        check that client 'wrt' of session\n"
 	"                                       'W3llcomE' for user '1001' has the\n"
 	"                                       'audio' permission\n"
+	"\n"
+;
+
+static
+const char
+help_log_text[] =
+	"\n"
+	"Command: log [on|off]\n"
+	"\n"
+	"With the 'on' or 'off' arguments, set the logging state to what required.\n"
+	"In all cases, prints the logging state.\n"
+	"\n"
+	"Examples:\n"
+	"\n"
+	"  log on                  activates the logging\n"
 	"\n"
 ;
 
@@ -483,6 +499,28 @@ int do_check(int ac, char **av, int (*f)(rcyn_t*,const rcyn_key_t*))
 	return uc;
 }
 
+int do_log(int ac, char **av)
+{
+	int uc, rc;
+	int on = 0, off = 0;
+	int n = plink(ac, av, &uc, 2);
+
+	if (n > 1) {
+		on = !strcmp(av[1], "on");
+		off = !strcmp(av[1], "off");
+		if (!on && !off) {
+			fprintf(stderr, "bad argument '%s'\n", av[1]);
+			return uc;
+		}
+	}
+	rc = rcyn_log(rcyn, on, off);
+	if (rc < 0)
+		fprintf(stderr, "error %s\n", strerror(-rc));
+	else
+		fprintf(stdout, "logging %s\n", rc ? "on" : "off");
+	return uc;
+}
+
 int do_help(int ac, char **av)
 {
 	if (ac > 1 && !strcmp(av[1], "list"))
@@ -499,6 +537,8 @@ int do_help(int ac, char **av)
 		fprintf(stdout, "%s", help_cache_text);
 	else if (ac > 1 && !strcmp(av[1], "clear"))
 		fprintf(stdout, "%s", help_clear_text);
+	else if (ac > 1 && !strcmp(av[1], "log"))
+		fprintf(stdout, "%s", help_log_text);
 	else if (ac > 1 && !strcmp(av[1], "quit"))
 		fprintf(stdout, "%s", help_quit_text);
 	else if (ac > 1 && !strcmp(av[1], "help"))
@@ -534,6 +574,9 @@ int do_any(int ac, char **av)
 
 	if (!strcmp(av[0], "cache"))
 		return do_check(ac, av, rcyn_cache_check);
+
+	if (!strcmp(av[0], "log"))
+		return do_log(ac, av);
 
 	if (!strcmp(av[0], "clear")) {
 		rcyn_cache_clear(rcyn);
