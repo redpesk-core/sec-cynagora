@@ -22,6 +22,10 @@ struct rcyn_server;
 typedef struct rcyn_server rcyn_server_t;
 
 extern
+int
+rcyn_server_log;
+
+extern
 void
 rcyn_server_destroy(
 	rcyn_server_t *server

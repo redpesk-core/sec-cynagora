@@ -61,6 +61,7 @@
 #define _GROUP_       'g'
 #define _HELP_        'h'
 #define _INIT_        'i'
+#define _LOG_         'l'
 #define _MAKEDBDIR_   'm'
 #define _MAKESOCKDIR_ 'M'
 #define _OWNSOCKDIR_  'O'
@@ -72,7 +73,7 @@
 
 static
 const char
-shortopts[] = "d:g:hi:mMOoS:u:v"
+shortopts[] = "d:g:hi:lmMOoS:u:v"
 #if defined(WITH_SYSTEMD_ACTIVATION)
 	"s"
 #endif
@@ -85,6 +86,7 @@ longopts[] = {
 	{ "group", 1, NULL, _GROUP_ },
 	{ "help", 0, NULL, _HELP_ },
 	{ "init", 1, NULL, _INIT_ },
+	{ "log", 0, NULL, _LOG_ },
 	{ "make-db-dir", 0, NULL, _MAKEDBDIR_ },
 	{ "make-socket-dir", 0, NULL, _MAKESOCKDIR_ },
 	{ "own-db-dir", 0, NULL, _OWNDBDIR_ },
@@ -112,6 +114,7 @@ helptxt[] =
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
 	"	                        (default: "DEFAULT_INIT_FILE"\n"
+	"       -l, --log             activate log of transactions\n"
 	"	-d, --dbdir xxx       set the directory of database\n"
 	"	                        (default: "DEFAULT_DB_DIR")\n"
 	"	-m, --make-db-dir     make the database directory\n"
@@ -144,6 +147,7 @@ int main(int ac, char **av)
 	int makedbdir = 0;
 	int owndbdir = 0;
 	int ownsockdir = 0;
+	int flog = 0;
 	int help = 0;
 	int version = 0;
 	int error = 0;
@@ -179,6 +183,9 @@ int main(int ac, char **av)
 			break;
 		case _INIT_:
 			init = optarg;
+			break;
+		case _LOG_:
+			flog = 1;
 			break;
 		case _MAKEDBDIR_:
 			makedbdir = 1;
@@ -315,7 +322,7 @@ int main(int ac, char **av)
 	if (db_is_empty()) {
 		rc = dbinit_add_file(init);
 		if (rc < 0) {
-			fprintf(stderr, "can't initialise database: %m\n");
+			fprintf(stderr, "can't initialize database: %m\n");
 			return 1;
 		}
 	}
@@ -324,10 +331,12 @@ int main(int ac, char **av)
 	cyn_changeid_reset();
 
 	/* initialize server */
+	setvbuf(stderr, NULL, _IOLBF, 1000);
+	rcyn_server_log = flog;
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
 	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
 	if (rc < 0) {
-		fprintf(stderr, "can't initialise server: %m\n");
+		fprintf(stderr, "can't initialize server: %m\n");
 		return 1;
 	}
 

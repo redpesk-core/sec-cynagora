@@ -39,12 +39,16 @@
 #include "socket.h"
 #include "pollitem.h"
 
+/** should log? */
+int
+rcyn_server_log = 0;
+
+/** local enumeration of socket/client kind */
 typedef enum rcyn_type {
 	rcyn_Check,
 	rcyn_Agent,
 	rcyn_Admin
 } rcyn_type_t;
-
 
 /** structure that represents a rcyn client */
 struct client
@@ -53,7 +57,7 @@ struct client
 	prot_t *prot;
 
 	/** type of client */
-	rcyn_type_t type;
+	unsigned type: 2;
 
 	/** the version of the protocol used */
 	unsigned version: 4;
@@ -96,6 +100,25 @@ struct rcyn_server
 	/** the check socket */
 	pollitem_t check;
 };
+
+static
+void
+dolog(
+	client_t *cli,
+	int c2s,
+	int count,
+	const char *fields[]
+) {
+	static const char types[3][6] = { "check", "agent", "admin" };
+	static const char dir[2] = { '<', '>' };
+
+	int i;
+
+	fprintf(stderr, "%p.%s %c%c", cli, types[cli->type], dir[!c2s], dir[!c2s]);
+	for (i = 0 ; i < count ; i++)
+		fprintf(stderr, " %s", fields[i]);
+	fprintf(stderr, "\n");
+}
 
 /**
  * Check 'arg' against 'value' beginning at offset accepting it if 'arg' prefixes 'value'
@@ -159,6 +182,7 @@ putx(
 	va_list l;
 	int rc;
 
+	/* store temporary in fields */
 	n = 0;
 	va_start(l, cli);
 	p = va_arg(l, const char *);
@@ -169,6 +193,12 @@ putx(
 		p = va_arg(l, const char *);
 	}
 	va_end(l);
+
+	/* emit the log */
+	if (rcyn_server_log)
+		dolog(cli, 0, n, fields);
+
+	/* send now */
 	rc = prot_put(cli->prot, n, fields);
 	if (rc == -ECANCELED) {
 		rc = flushw(cli);
@@ -294,6 +324,10 @@ onrequest(
 	/* just ignore empty lines */
 	if (count == 0)
 		return;
+
+	/* emit the log */
+	if (rcyn_server_log)
+		dolog(cli, 1, count, args);
 
 	/* version hand-shake */
 	if (!cli->version) {
