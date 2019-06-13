@@ -22,7 +22,7 @@ struct rcyn_server;
 typedef struct rcyn_server rcyn_server_t;
 
 extern
-int
+bool
 rcyn_server_log;
 
 extern

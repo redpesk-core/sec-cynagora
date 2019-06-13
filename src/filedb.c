@@ -492,6 +492,7 @@ apply_itf(
 			rule->expire = time2exp(value.expire);
 			filedb->need_cleanup = true;
 			filedb->is_changed = true;
+			filedb->frules.saved = (uint32_t)((void*)rule - filedb->frules.buffer);
 			return;
 		case Anydb_Action_Remove_And_Continue:
 			*rule = filedb->rules[--filedb->rules_count];

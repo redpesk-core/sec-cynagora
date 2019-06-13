@@ -332,7 +332,7 @@ int main(int ac, char **av)
 
 	/* initialize server */
 	setvbuf(stderr, NULL, _IOLBF, 1000);
-	rcyn_server_log = flog;
+	rcyn_server_log = (bool)flog;
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
 	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
 	if (rc < 0) {

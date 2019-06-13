@@ -40,7 +40,7 @@
 #include "pollitem.h"
 
 /** should log? */
-int
+bool
 rcyn_server_log = 0;
 
 /** local enumeration of socket/client kind */
