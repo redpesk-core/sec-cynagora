@@ -56,6 +56,3 @@ cache_create(
 	cache_t **cache,
 	uint32_t size
 );
-
-
-

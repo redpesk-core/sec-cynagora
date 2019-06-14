@@ -38,6 +38,7 @@
 #include "socket.h"
 
 #define MIN_CACHE_SIZE 400
+#define CACHESIZE(x)  ((x) >= MIN_CACHE_SIZE ? (x) : (x) ? MIN_CACHE_SIZE : 0)
 
 struct asreq;
 typedef struct asreq asreq_t;
@@ -440,7 +441,7 @@ rcyn_open(
 	strcpy((char*)(rcyn+1), socketspec);
 
 	/* record type and weakly create cache */
-	cache_create(&rcyn->cache, cache_size < MIN_CACHE_SIZE ? MIN_CACHE_SIZE : cache_size);
+	cache_create(&rcyn->cache, CACHESIZE(cache_size));
 	rcyn->type = type;
 	rcyn->socketspec = socketspec;
 	rcyn->async.controlcb = NULL;
@@ -550,7 +551,7 @@ check_or_test(
 		rc = wait_pending_reply(rcyn);
 		if (rc >= 0) {
 			rc = status_check(rcyn, &expire);
-			if (rc >= 0)
+			if (rcyn->cache && rc >= 0)
 				cache_put(rcyn->cache, key, rc, expire);
 		}
 	}
@@ -689,7 +690,7 @@ rcyn_cache_resize(
 	rcyn_t *rcyn,
 	uint32_t size
 ) {
-	return cache_resize(&rcyn->cache, size < MIN_CACHE_SIZE ? MIN_CACHE_SIZE : size);
+	return cache_resize(&rcyn->cache, CACHESIZE(size));
 }
 
 void

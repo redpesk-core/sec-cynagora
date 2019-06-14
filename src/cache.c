@@ -255,10 +255,12 @@ cache_search(
 ) {
 	item_t *item;
 
-	item = search(cache, key);
-	if (item) {
-		hit(cache, item);
-		return (int)item->value;
+	if (cache) {
+		item = search(cache, key);
+		if (item) {
+			hit(cache, item);
+			return (int)item->value;
+		}
 	}
 	return -ENOENT;
 }
@@ -281,18 +283,23 @@ cache_resize(
 ) {
 	cache_t *c = *cache, *nc;
 
-	if (c)
-		while (c->used > newsize)
-			drop_lre(c);
+	if (newsize == 0) {
+		free(c);
+		nc = NULL;
+	} else {
+		if (c)
+			while (c->used > newsize)
+				drop_lre(c);
 
-	nc = realloc(c, newsize - 1 + sizeof *c);
-	if (nc == NULL)
-		return -ENOMEM;
+		nc = realloc(c, newsize - 1 + sizeof *c);
+		if (nc == NULL)
+			return -ENOMEM;
 
-	nc->count = newsize;
-	if (!c) {
-		nc->cacheid = 0;
-		nc->used = 0;
+		nc->count = newsize;
+		if (!c) {
+			nc->cacheid = 0;
+			nc->used = 0;
+		}
 	}
 	*cache = nc;
 	return 0;
@@ -306,6 +313,5 @@ cache_create(
 	*cache = NULL;
 	return cache_resize(cache, size);
 }
-
 
 
