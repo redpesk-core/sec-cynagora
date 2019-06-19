@@ -13,12 +13,12 @@ invalidate cache:
 test a permission:
 
   c->s test CLIENT SESSION USER PERMISSION
-  s->c [yes|no|done VALUE] [EXPIRE]
+  s->c (done|yes|no) [EXPIRE]
 
 check a permission:
 
   c->s check CLIENT SESSION USER PERMISSION
-  s->c [yes|no|done VALUE] [EXPIRE]
+  s->c (yes|no) [EXPIRE]
 
 erase (admin):
 

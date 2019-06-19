@@ -274,25 +274,51 @@ exp2txt(
 /** callback of checking */
 static
 void
+testcheckcb(
+	void *closure,
+	const data_value_t *value,
+	bool ischeck
+) {
+	client_t *cli = closure;
+	char text[30];
+	const char *etxt, *vtxt;
+
+	if (!value) {
+		vtxt = _no_;
+		etxt = 0;
+	} else {
+		if (!strcmp(value->value, ALLOW))
+			vtxt = _yes_;
+		else if (!strcmp(value->value, DENY) || ischeck)
+			vtxt = _no_;
+		else
+			vtxt = _done_;
+		etxt = exp2txt(value->expire, text, sizeof text);
+	}
+	putx(cli, vtxt, etxt, NULL);
+	flushw(cli);
+}
+
+/** callback of checking */
+static
+void
 checkcb(
 	void *closure,
 	const data_value_t *value
 ) {
-	client_t *cli = closure;
-	char text[30];
-	const char *etxt;
-
-	if (!value)
-		putx(cli, DEFAULT, "0", NULL);
-	else {
-		etxt = exp2txt(value->expire, text, sizeof text);
-		if (strcmp(value->value, ALLOW) && strcmp(value->value, DENY))
-			putx(cli, _done_, value->value, etxt, NULL);
-		else
-			putx(cli, value->value, etxt, NULL);
-	}
-	flushw(cli);
+	testcheckcb(closure, value, true);
 }
+
+/** callback of testing */
+static
+void
+testcb(
+	void *closure,
+	const data_value_t *value
+) {
+	testcheckcb(closure, value, false);
+}
+
 
 /** callback of getting list of entries */
 static
@@ -455,7 +481,7 @@ onrequest(
 			key.session = args[2];
 			key.user = args[3];
 			key.permission = args[4];
-			cyn_test_async(checkcb, cli, &key);
+			cyn_test_async(testcb, cli, &key);
 			return;
 		}
 		break;

@@ -287,25 +287,22 @@ status_check(
 	rcyn_t *rcyn,
 	time_t *expire
 ) {
-	int rc, exp;
+	int rc;
 
-	if (!strcmp(rcyn->reply.fields[0], _yes_)) {
+	if (!strcmp(rcyn->reply.fields[0], _yes_))
 		rc = 1;
-		exp = 1;
-	} else if (!strcmp(rcyn->reply.fields[0], _no_)) {
+	else if (!strcmp(rcyn->reply.fields[0], _no_))
 		rc = 0;
-		exp = 1;
-	} else if (!strcmp(rcyn->reply.fields[0], _done_)) {
+	else if (!strcmp(rcyn->reply.fields[0], _done_))
 		rc = -EEXIST;
-		exp = 2;
-	} else {
+	else
 		rc = -EPROTO;
-		exp = rcyn->reply.count;
-	}
-	if (exp < rcyn->reply.count)
-		*expire = strtoll(rcyn->reply.fields[exp], NULL, 10);
+
+	if (rcyn->reply.count >= 2)
+		*expire = strtoll(rcyn->reply.fields[1], NULL, 10);
 	else
 		*expire = 0;
+
 	return rc;
 }
 
