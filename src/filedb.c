@@ -523,6 +523,10 @@ transaction_itf(
 	case Anydb_Transaction_Cancel:
 		rc = recoverdb(filedb);
 		break;
+	default:
+		errno = EINVAL;
+		rc = -1;
+		break;
 	}
 	return rc;
 }
