@@ -21,12 +21,14 @@ set(SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/systemd/system"
 
 CONFIGURE_FILE(cynara-admin.socket.in       cynara-admin.socket @ONLY)
 CONFIGURE_FILE(cynara-check.socket.in       cynara-check.socket @ONLY)
+CONFIGURE_FILE(cynara-agent.socket.in       cynara-agent.socket @ONLY)
 
 INSTALL(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/cynara.service
     ${CMAKE_CURRENT_SOURCE_DIR}/cynara.target
     ${CMAKE_CURRENT_BINARY_DIR}/cynara-admin.socket
     ${CMAKE_CURRENT_BINARY_DIR}/cynara-check.socket
+    ${CMAKE_CURRENT_BINARY_DIR}/cynara-agent.socket
     DESTINATION
     ${SYSTEMD_UNIT_DIR}
 )

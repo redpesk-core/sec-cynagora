@@ -14,6 +14,7 @@ Restart=always
 
 Sockets=cynara-admin.socket
 Sockets=cynara-check.socket
+Sockets=cynara-agent.socket
 SmackProcessLabel=System
 
 #UMask=0000
