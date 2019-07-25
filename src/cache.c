@@ -53,7 +53,7 @@ struct item
 	int8_t value;
 
 	/** fake ending character */
-	char strings;
+	char strings[];
 };
 typedef struct item item_t;
 
@@ -67,7 +67,7 @@ struct cache
 	uint32_t cacheid;
 	uint32_t used;
 	uint32_t count;
-	uint8_t content[1];
+	uint8_t content[];
 };
 
 static
@@ -199,7 +199,7 @@ search(
 		if (item->expire && item->expire < now)
 			drop_at(cache, iter);
 		else {
-			if (match(&item->strings, key))
+			if (match(item->strings, key))
 				found = item;
 			iter += item->length;
 		}
@@ -224,7 +224,7 @@ cache_put(
 	item = search(cache, key);
 	if (item == NULL) {
 		/* create an item */
-		size = (size_t)(&((item_t*)0)->strings)
+		size = sizeof *item
 			+ strlen(key->client)
 			+ strlen(key->session)
 			+ strlen(key->user)
@@ -239,7 +239,7 @@ cache_put(
 			drop_lre(cache);
 		item = itemat(cache, cache->used);
 		item->length = length;
-		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy(&item->strings, key->client), key->session), key->user), key->permission);
+		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy(item->strings, key->client), key->session), key->user), key->permission);
 		cache->used += (uint32_t)size;
 	}
 	item->expire = expire;
@@ -291,7 +291,7 @@ cache_resize(
 			while (c->used > newsize)
 				drop_lre(c);
 
-		nc = realloc(c, newsize - 1 + sizeof *c);
+		nc = realloc(c, newsize + sizeof *c);
 		if (nc == NULL)
 			return -ENOMEM;
 
