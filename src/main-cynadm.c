@@ -425,7 +425,7 @@ int do_list(int ac, char **av)
 		else {
 			it = lr.head = listresult_sort(lr.count, lr.head);
 			while(it) {
-				fprintf(stdout, "%*s %*s %*s %*s %*s %*s\n",
+				fprintf(stdout, "%-*s %-*s %-*s %-*s %-*s %-*s\n",
 					(int)lr.lengths[0], it->items[0],
 					(int)lr.lengths[1], it->items[1],
 					(int)lr.lengths[2], it->items[2],
