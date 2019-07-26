@@ -417,16 +417,18 @@ int do_list(int ac, char **av)
 		if (rc < 0)
 			fprintf(stderr, "error %s\n", strerror(-rc));
 		else {
-			it = lr.head = listresult_sort(lr.count, lr.head);
-			while(it) {
-				fprintf(stdout, "%-*s %-*s %-*s %-*s %-*s %-*s\n",
-					(int)lr.lengths[0], it->items[0],
-					(int)lr.lengths[1], it->items[1],
-					(int)lr.lengths[2], it->items[2],
-					(int)lr.lengths[3], it->items[3],
-					(int)lr.lengths[4], it->items[4],
-					(int)lr.lengths[5], it->items[5]);
-				it = it->next;
+			if (lr.count) {
+				it = lr.head = listresult_sort(lr.count, lr.head);
+				while(it) {
+					fprintf(stdout, "%-*s %-*s %-*s %-*s %-*s %-*s\n",
+						(int)lr.lengths[0], it->items[0],
+						(int)lr.lengths[1], it->items[1],
+						(int)lr.lengths[2], it->items[2],
+						(int)lr.lengths[3], it->items[3],
+						(int)lr.lengths[4], it->items[4],
+						(int)lr.lengths[5], it->items[5]);
+					it = it->next;
+				}
 			}
 			fprintf(stdout, "%d entries found\n", lr.count);
 		}
