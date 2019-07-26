@@ -92,7 +92,7 @@ drop_at(
 	e = pos + l;
 	cache->used -= l;
 	if (cache->used > e)
-		memmove(&cache->content[pos], &cache->content[e], cache->used - e);
+		memmove(&cache->content[pos], &cache->content[e], cache->used - pos);
 }
 
 static
@@ -172,13 +172,18 @@ match(
 	const rcyn_key_t *key
 ) {
 	head = cmp(head, key->client);
-	if (head)
+	if (head) {
 		head = cmp(head, key->session);
-	if (head)
-		head = cmp(head, key->user);
-	if (head)
-		head = cmpi(head, key->permission);
-	return !!head;
+		if (head) {
+			head = cmp(head, key->user);
+			if (head) {
+				head = cmpi(head, key->permission);
+				if (head)
+					return 1;
+			}
+		}
+	}
+	return 0;
 }
 
 static
