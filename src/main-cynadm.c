@@ -209,12 +209,6 @@ help_cache_text[] =
 	"                                       'W3llcomE' for user '1001' has the\n"
 	"                                       'audio' permission\n"
 	"\n"
-	"\n"
-	"\n"
-	"\n"
-	"\n"
-	"\n"
-	"\n"
 ;
 
 static
