@@ -28,7 +28,8 @@
 #define Data_Any_String "#"
 #define Data_Wide_String "*"
 
-typedef struct data_key data_key_t;
+typedef enum data_keyidx data_keyidx_t;
+typedef union data_key data_key_t;
 typedef struct data_value data_value_t;
 
 enum data_keyidx {
@@ -39,16 +40,16 @@ enum data_keyidx {
 	KeyIdx_Count
 };
 
-struct data_key {
-	union {
-		struct {
-			const char *client;
-			const char *session;
-			const char *user;
-			const char *permission;
-		};
-		const char *keys[KeyIdx_Count];
+union data_key {
+	/* name access */
+	struct {
+		const char *client;
+		const char *session;
+		const char *user;
+		const char *permission;
 	};
+	/* arrayed access, see data_keyidx_t */
+	const char *keys[KeyIdx_Count];
 };
 
 struct data_value {
