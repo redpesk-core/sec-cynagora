@@ -19,6 +19,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <sys/epoll.h>
 
@@ -41,9 +43,12 @@ struct cynara_async *aclient;
 struct cynara_configuration *conf;
 struct cynara *client;
 char buffer[4000];
+int bufill;
 char *str[40];
 int nstr;
 int pollfd;
+int pending;
+int ending;
 
 #define BUCKET "BUCK"
 
@@ -167,10 +172,14 @@ void asyncb(cynara_check_id check_id, cynara_async_call_cause cause,
            int response, void *user_response_data)
 {
 	printf("RECEIVE %d %d\n", cause, response);
+	pending--;
+	if (ending && !pending)
+		exit(0);
 }
 
 void asy_check(char *cli, char *ses, char *usr, char *perm, int simple)
 {
+	pending++;
 	if (simple)
 		CKEX(cynara_async_create_simple_request(aclient, cli, ses, usr, perm, NULL, asyncb, NULL));
 	else
@@ -202,9 +211,42 @@ void asyncstscb(int old_fd, int new_fd, cynara_async_status status, void *data)
 	}
 }
 
+int action()
+{
+	if (is("admin", "listall", 0))
+		adm_list("#", "#", "#");
+	else if (is("admin", "list", 3))
+		adm_list(str[2], str[3], str[4]);
+	else if (is("admin", "check", 3))
+		adm_check(str[2], str[3], str[4]);
+	else if (is("admin", "set", 4))
+		adm_set();
+	else if (is("admin", "erase", 3))
+		adm_erase(str[2], str[3], str[4]);
+	else if (is("admin", "desc", 0))
+		adm_desc();
+	else if (is("async", "cache", 4))
+		asy_cache(str[2], str[3], str[4], str[5]);
+	else if (is("async", "check", 4))
+		asy_check(str[2], str[3], str[4], str[5], 0);
+	else if (is("async", "test", 4))
+		asy_check(str[2], str[3], str[4], str[5], 1);
+	else if (is("sync", "check", 4))
+		syn_check(str[2], str[3], str[4], str[5], 0);
+	else if (is("sync", "test", 4))
+		syn_check(str[2], str[3], str[4], str[5], 1);
+	else if (nstr > 0 && !strcmp(str[0], "exit"))
+		return 1;
+	else if (nstr > 0 && str[0][0] != '#')
+		printf("ERROR bad input\n");
+	return 0;
+}
+
 int main(int ac, char **av)
 {
 	struct epoll_event ev;
+	char *p;
+	int rc;
 
 	pollfd = epoll_create(10);
 	ev.data.fd = 0;
@@ -223,49 +265,48 @@ int main(int ac, char **av)
 	CKEX(cynara_initialize(&client, conf));
 	cynara_configuration_destroy(conf);
 
+	fcntl(0, F_SETFL, O_NONBLOCK);
+	bufill = 0;
 	for(;;) {
 		epoll_wait(pollfd, &ev, 1, -1);
 
-		if (ev.data.fd) {
+		if (ev.data.fd == 0) {
+			if (ev.events & EPOLLIN) {
+				rc = (int)sizeof buffer - bufill;
+				rc = (int)read(0, buffer, rc);
+				if (rc == 0)
+					break;
+				if (rc > 0) {
+					bufill += rc;
+					while((p = memchr(buffer, '\n', bufill))) {
+						/* process one line */
+						*p++ = 0;
+						str[nstr = 0] = strtok(buffer, " \t");
+						while(str[nstr])
+							str[++nstr] = strtok(NULL, " \t");
+						if (action())
+							goto terminate;
+						/* next line if any */
+						bufill -= (int)(p - buffer);
+						if (!bufill)
+							break;
+						memmove(buffer, p, bufill);
+					}
+				}
+			}
+			if (ev.events & EPOLLHUP) {
+				if (!pending)
+					break;
+				epoll_ctl(pollfd, EPOLL_CTL_DEL, 0, &ev);
+				ending = 1;
+			}
+		}
+		else  {
 			cynara_async_process(aclient);
-			continue;
 		}
 
-		if (!fgets(buffer, sizeof buffer, stdin))
-			break;
-
-		str[nstr = 0] = strtok(buffer, " \t\n");
-		while(str[nstr])
-			str[++nstr] = strtok(NULL, " \t\n");
-
-		if (is("admin", "listall", 0))
-			adm_list("#", "#", "#");
-		else if (is("admin", "list", 3))
-			adm_list(str[2], str[3], str[4]);
-		else if (is("admin", "check", 3))
-			adm_check(str[2], str[3], str[4]);
-		else if (is("admin", "set", 4))
-			adm_set();
-		else if (is("admin", "erase", 3))
-			adm_erase(str[2], str[3], str[4]);
-		else if (is("admin", "desc", 0))
-			adm_desc();
-		else if (is("async", "cache", 4))
-			asy_cache(str[2], str[3], str[4], str[5]);
-		else if (is("async", "check", 4))
-			asy_check(str[2], str[3], str[4], str[5], 0);
-		else if (is("async", "test", 4))
-			asy_check(str[2], str[3], str[4], str[5], 1);
-		else if (is("sync", "check", 4))
-			syn_check(str[2], str[3], str[4], str[5], 0);
-		else if (is("sync", "test", 4))
-			syn_check(str[2], str[3], str[4], str[5], 1);
-		else if (nstr > 0 && !strcmp(str[0], "exit"))
-			break;
-		else if (nstr > 0 && str[0][0] != '#')
-			printf("ERROR bad input\n");
 	}
-
+terminate:
 	cynara_finish(client);
 	cynara_async_finish(aclient);
 	cynara_admin_finish(admin);

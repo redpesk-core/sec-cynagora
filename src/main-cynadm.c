@@ -22,8 +22,12 @@
 #include <string.h>
 #include <getopt.h>
 #include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <time.h>
 #include <signal.h>
+#include <poll.h>
+#include <sys/epoll.h>
 
 #include "rcyn-client.h"
 #include "rcyn-protocol.h"
@@ -152,7 +156,7 @@ help_check_text[] =
 	"\n"
 	"Command: check client session user permission\n"
 	"\n"
-	"Check authorisation for the given 'client', 'session', 'user', 'permission'.\n"
+	"Check authorization for the given 'client', 'session', 'user', 'permission'.\n"
 	"\n"
 	"Examples:\n"
 	"\n"
@@ -164,11 +168,22 @@ help_check_text[] =
 
 static
 const char
+help_acheck_text[] =
+	"\n"
+	"Command: acheck client session user permission\n"
+	"\n"
+	"Check asynchronously authorization for the given 'client', 'session', 'user', 'permission'.\n"
+	"Same as check but don't wait the answer.\n"
+	"\n"
+;
+
+static
+const char
 help_test_text[] =
 	"\n"
 	"Command: test client session user permission\n"
 	"\n"
-	"Test authorisation for the given 'client', 'session', 'user', 'permission'.\n"
+	"Test authorization for the given 'client', 'session', 'user', 'permission'.\n"
 	"Same as command 'check' except that it doesn't use query agent if it were\n"
 	"needed to avoid asynchronous timely unlimited queries.\n"
 	"\n"
@@ -177,6 +192,17 @@ help_test_text[] =
 	"  test wrt W3llcomE 1001 audio        check that client 'wrt' of session\n"
 	"                                       'W3llcomE' for user '1001' has the\n"
 	"                                       'audio' permission\n"
+	"\n"
+;
+
+static
+const char
+help_atest_text[] =
+	"\n"
+	"Command: atest client session user permission\n"
+	"\n"
+	"Test asynchronously authorization for the given 'client', 'session', 'user', 'permission'.\n"
+	"Same as test but don't wait the answer.\n"
 	"\n"
 ;
 
@@ -201,7 +227,7 @@ help_cache_text[] =
 	"\n"
 	"Command: cache client session user permission\n"
 	"\n"
-	"Test cache for authorisation for the given 'client', 'session', 'user', 'permission'.\n"
+	"Test cache for authorization for the given 'client', 'session', 'user', 'permission'.\n"
 	"\n"
 	"Examples:\n"
 	"\n"
@@ -265,8 +291,10 @@ help_expiration_text[] =
 
 static rcyn_t *rcyn;
 static char buffer[4000];
+static int bufill;
 static char *str[40];
 static int nstr;
+static int pending;
 
 rcyn_key_t key;
 rcyn_value_t value;
@@ -495,6 +523,33 @@ int do_check(int ac, char **av, int (*f)(rcyn_t*,const rcyn_key_t*))
 	return uc;
 }
 
+void acheck_cb(void *closure, int status)
+{
+	if (status > 0)
+		fprintf(stdout, "allowed\n");
+	else if (status == 0)
+		fprintf(stdout, "denied\n");
+	else
+		fprintf(stderr, "error %s\n", strerror(-status));
+	pending--;
+}
+
+int do_acheck(int ac, char **av, bool simple)
+{
+	int uc, rc;
+
+	rc = get_csup(ac, av, &uc, NULL);
+	if (rc == 0) {
+		pending++;
+		rc = rcyn_async_check(rcyn, &key, simple, acheck_cb, NULL);
+		if (rc < 0) {
+			fprintf(stderr, "error %s\n", strerror(-rc));
+			pending--;
+		}
+	}
+	return uc;
+}
+
 int do_log(int ac, char **av)
 {
 	int uc, rc;
@@ -527,8 +582,12 @@ int do_help(int ac, char **av)
 		fprintf(stdout, "%s", help_drop_text);
 	else if (ac > 1 && !strcmp(av[1], "check"))
 		fprintf(stdout, "%s", help_check_text);
+	else if (ac > 1 && !strcmp(av[1], "acheck"))
+		fprintf(stdout, "%s", help_acheck_text);
 	else if (ac > 1 && !strcmp(av[1], "test"))
 		fprintf(stdout, "%s", help_test_text);
+	else if (ac > 1 && !strcmp(av[1], "atest"))
+		fprintf(stdout, "%s", help_atest_text);
 	else if (ac > 1 && !strcmp(av[1], "cache"))
 		fprintf(stdout, "%s", help_cache_text);
 	else if (ac > 1 && !strcmp(av[1], "clear"))
@@ -565,8 +624,14 @@ int do_any(int ac, char **av)
 	if (!strcmp(av[0], "check"))
 		return do_check(ac, av, rcyn_check);
 
+	if (!strcmp(av[0], "acheck"))
+		return do_acheck(ac, av, 0);
+
 	if (!strcmp(av[0], "test"))
 		return do_check(ac, av, rcyn_test);
+
+	if (!strcmp(av[0], "atest"))
+		return do_acheck(ac, av, 1);
 
 	if (!strcmp(av[0], "cache"))
 		return do_check(ac, av, rcyn_cache_check);
@@ -602,6 +667,22 @@ void do_all(int ac, char **av)
 	}
 }
 
+int async_ctl(void *closure, int op, int fd, uint32_t events)
+{
+	int *pfd = closure;
+
+	switch(op) {
+	case EPOLL_CTL_ADD:
+	case EPOLL_CTL_MOD:
+		*pfd = fd;
+		break;
+	case EPOLL_CTL_DEL:
+		*pfd = -1;
+		break;
+	}
+	return 0;
+}
+
 int main(int ac, char **av)
 {
 	int opt;
@@ -610,6 +691,8 @@ int main(int ac, char **av)
 	int version = 0;
 	int error = 0;
 	const char *socket = NULL;
+	struct pollfd fds[2];
+	char *p;
 
 	/* scan arguments */
 	for (;;) {
@@ -649,7 +732,14 @@ int main(int ac, char **av)
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
 	rc = rcyn_open(&rcyn, rcyn_Admin, 5000, socket);
 	if (rc < 0) {
-		fprintf(stderr, "initialisation failed: %s\n", strerror(-rc));
+		fprintf(stderr, "initialization failed: %s\n", strerror(-rc));
+		return 1;
+	}
+
+	fds[1].fd = -1;
+	rc = rcyn_async_setup(rcyn, async_ctl, &fds[1].fd);
+	if (rc < 0) {
+		fprintf(stderr, "asynchronous setup failed: %s\n", strerror(-rc));
 		return 1;
 	}
 
@@ -658,20 +748,55 @@ int main(int ac, char **av)
 		return 0;
 	}
 
+	fcntl(0, F_SETFL, O_NONBLOCK);
+	bufill = 0;
+	fds[0].fd = 0;
+	fds[0].events = fds[1].events = POLLIN;
 	for(;;) {
-		if (!fgets(buffer, sizeof buffer, stdin))
-			break;
-
-		str[nstr = 0] = strtok(buffer, " \t\n");
-		while(str[nstr])
-			str[++nstr] = strtok(NULL, " \t\n");
-
-		ac = 0;
-		while(ac < nstr) {
-			rc = do_any(nstr - ac, &str[ac]);
-			if (rc <= 0)
-				exit(1);
-			ac += rc;
+		rc = poll(fds, 2, -1);
+		if (fds[0].revents & POLLIN) {
+			rc = (int)sizeof buffer - bufill;
+			rc = (int)read(0, buffer, rc);
+			if (rc == 0)
+				break;
+			if (rc > 0) {
+				bufill += rc;
+				while((p = memchr(buffer, '\n', bufill))) {
+					/* process one line */
+					*p++ = 0;
+					str[nstr = 0] = strtok(buffer, " \t");
+					while(str[nstr])
+						str[++nstr] = strtok(NULL, " \t");
+					ac = 0;
+					while(ac < nstr) {
+						rc = do_any(nstr - ac, &str[ac]);
+						if (rc <= 0)
+							exit(1);
+						ac += rc;
+					}
+					bufill -= (int)(p - buffer);
+					if (!bufill)
+						break;
+					memmove(buffer, p, bufill);
+				}
+			}
+		}
+		if (fds[0].revents & POLLHUP) {
+			if (!pending)
+				break;
+			fds[0].fd = -1;
+		}
+		if (fds[1].revents & POLLIN) {
+			rc = rcyn_async_process(rcyn);
+			if (rc < 0)
+				fprintf(stderr, "asynchronous processing failed: %s\n", strerror(-rc));
+			if (fds[0].fd < 0 && !pending)
+				break;
+		}
+		if (fds[1].revents & POLLHUP) {
+			if (fds[0].fd < 0)
+				break;
+			fds[1].fd = -1;
 		}
 	}
 	return 0;
