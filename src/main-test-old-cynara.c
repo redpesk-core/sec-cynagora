@@ -198,6 +198,7 @@ void asyncstscb(int old_fd, int new_fd, cynara_async_status status, void *data)
 {
 	struct epoll_event ev;
 
+	memset(&ev, 0, sizeof ev);
 	ev.data.fd = new_fd;
 	ev.events = (status == CYNARA_STATUS_FOR_RW ? EPOLLOUT : 0)|EPOLLIN;
 	if (old_fd == new_fd) {
@@ -249,6 +250,7 @@ int main(int ac, char **av)
 	int rc;
 
 	pollfd = epoll_create(10);
+	memset(&ev, 0, sizeof ev);
 	ev.data.fd = 0;
 	ev.events = EPOLLIN;
 	epoll_ctl(pollfd, EPOLL_CTL_ADD, 0, &ev);
@@ -268,6 +270,7 @@ int main(int ac, char **av)
 	fcntl(0, F_SETFL, O_NONBLOCK);
 	bufill = 0;
 	for(;;) {
+		memset(&ev, 0, sizeof ev);
 		epoll_wait(pollfd, &ev, 1, -1);
 
 		if (ev.data.fd == 0) {
