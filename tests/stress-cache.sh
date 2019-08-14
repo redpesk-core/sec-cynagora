@@ -23,7 +23,7 @@ for((y = 0 ; y < 10 ; y++)); do
     sleep .05
   done
 done |
-valgrind cynadm -s $d/cynara.check
+valgrind cynadm -c 2000 -e -s $d/cynara.check
 echo ----------- STOP ------------------
 
 # terminate

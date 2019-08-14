@@ -33,18 +33,23 @@
 #include "rcyn-protocol.h"
 #include "expire.h"
 
+#define DEFAULT_CACHE_SIZE 5000
 
+#define _CACHE_       'c'
+#define _ECHO_        'e'
 #define _HELP_        'h'
 #define _SOCKET_      's'
 #define _VERSION_     'v'
 
 static
 const char
-shortopts[] = "hs:v";
+shortopts[] = "c:ehs:v";
 
 static
 const struct option
 longopts[] = {
+	{ "cache", 1, NULL, _CACHE_ },
+	{ "echo", 0, NULL, _ECHO_ },
 	{ "help", 0, NULL, _HELP_ },
 	{ "socket", 1, NULL, _SOCKET_ },
 	{ "version", 0, NULL, _VERSION_ },
@@ -60,6 +65,9 @@ helptxt[] =
 	"otpions:\n"
 	"	-s, --socket xxx      set the base xxx for sockets\n"
 	"	                        (default: %s)\n"
+	"	-e, --echo            print the evaluated command\n"
+	"	-c, --cache xxx       set the cache size to xxx bytes\n"
+	"	                        (default: %d)\n"
 	"	-h, --help            print this help and exit\n"
 	"	-v, --version         print the version and exit\n"
 	"\n"
@@ -295,6 +303,7 @@ static int bufill;
 static char *str[40];
 static int nstr;
 static int pending;
+static int echo;
 
 rcyn_key_t key;
 rcyn_value_t value;
@@ -658,6 +667,11 @@ void do_all(int ac, char **av)
 {
 	int rc;
 
+	if (echo) {
+		for (rc = 0 ; rc < ac ; rc++)
+			fprintf(stdout, "%s%s", rc ? " " : "", av[rc]);
+		fprintf(stdout, "\n");
+	}
 	while(ac) {
 		rc = do_any(ac, av);
 		if (rc <= 0)
@@ -690,7 +704,10 @@ int main(int ac, char **av)
 	int help = 0;
 	int version = 0;
 	int error = 0;
-	const char *socket = NULL;
+	uint32_t cachesize = DEFAULT_CACHE_SIZE;
+	unsigned long ul;
+	char *socket = NULL;
+	char *cache = NULL;
 	struct pollfd fds[2];
 	char *p;
 
@@ -701,6 +718,17 @@ int main(int ac, char **av)
 			break;
 
 		switch(opt) {
+		case _CACHE_:
+			cache = optarg;
+			ul = strtoul(optarg, &cache, 0);
+			if (*cache || ul > UINT32_MAX)
+				error = 1;
+			else
+				cachesize = (uint32_t)ul;
+			break;
+		case _ECHO_:
+			echo = 1;
+			break;
 		case _HELP_:
 			help = 1;
 			break;
@@ -718,7 +746,7 @@ int main(int ac, char **av)
 
 	/* handles help, version, error */
 	if (help) {
-		fprintf(stdout, helptxt, rcyn_default_admin_socket_spec);
+		fprintf(stdout, helptxt, rcyn_default_admin_socket_spec, DEFAULT_CACHE_SIZE);
 		return 0;
 	}
 	if (version) {
@@ -730,7 +758,7 @@ int main(int ac, char **av)
 
 	/* initialize server */
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = rcyn_open(&rcyn, rcyn_Admin, 5000, socket);
+	rc = rcyn_open(&rcyn, rcyn_Admin, cachesize, socket);
 	if (rc < 0) {
 		fprintf(stderr, "initialization failed: %s\n", strerror(-rc));
 		return 1;
@@ -767,13 +795,7 @@ int main(int ac, char **av)
 					str[nstr = 0] = strtok(buffer, " \t");
 					while(str[nstr])
 						str[++nstr] = strtok(NULL, " \t");
-					ac = 0;
-					while(ac < nstr) {
-						rc = do_any(nstr - ac, &str[ac]);
-						if (rc <= 0)
-							exit(1);
-						ac += rc;
-					}
+					do_all(nstr, str);
 					bufill -= (int)(p - buffer);
 					if (!bufill)
 						break;
