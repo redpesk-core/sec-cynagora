@@ -447,8 +447,10 @@ void cynara_async_finish(cynara_async *p_cynara)
 int cynara_async_check_cache(cynara_async *p_cynara, const char *client, const char *client_session,
                              const char *user, const char *privilege)
 {
+	int rc;
 	rcyn_key_t key = { client, client_session, user, privilege };
-	return from_check_status(rcyn_cache_check(p_cynara->rcyn, &key));
+	rc = from_check_status(rcyn_cache_check(p_cynara->rcyn, &key));
+	return rc;
 }
 
 static void reqcb(void *closure, int status)
@@ -500,7 +502,9 @@ int cynara_async_create_request(cynara_async *p_cynara, const char *client,
                                 cynara_check_id *p_check_id, cynara_response_callback callback,
                                 void *user_response_data)
 {
-	return create_reqasync(p_cynara, client, client_session, user, privilege, p_check_id, callback, user_response_data, false);
+	int rc;
+	rc = create_reqasync(p_cynara, client, client_session, user, privilege, p_check_id, callback, user_response_data, false);
+	return rc;
 }
 
 int cynara_async_create_simple_request(cynara_async *p_cynara, const char *client,
@@ -508,13 +512,17 @@ int cynara_async_create_simple_request(cynara_async *p_cynara, const char *clien
                                        const char *privilege, cynara_check_id *p_check_id,
                                        cynara_response_callback callback, void *user_response_data)
 {
-	return create_reqasync(p_cynara, client, client_session, user, privilege, p_check_id, callback, user_response_data, true);
+	int rc;
+	rc = create_reqasync(p_cynara, client, client_session, user, privilege, p_check_id, callback, user_response_data, true);
+	return rc;
 }
 
 
 int cynara_async_process(cynara_async *p_cynara)
 {
-	return rcyn_async_process(p_cynara->rcyn);
+	int rc;
+	rc = rcyn_async_process(p_cynara->rcyn);
+	return rc;
 }
 
 int cynara_async_cancel_request(cynara_async *p_cynara, cynara_check_id check_id)
