@@ -107,8 +107,10 @@ drop_lre(
 	while (iter < cache->used) {
 		item = itemat(cache, iter);
 		hit = item->hit;
-		if (hit < hmin)
+		if (hit <= hmin) {
 			found = iter;
+			hmin = hit;
+		}
 		iter += item->length;
 	}
 	if (found < cache->used)
