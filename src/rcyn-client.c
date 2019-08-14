@@ -215,7 +215,6 @@ int
 get_reply(
 	rcyn_t *rcyn
 ) {
-	;
 	int rc;
 
 	prot_next(rcyn->prot);
