@@ -114,7 +114,7 @@ helptxt[] =
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
 	"	                        (default: "DEFAULT_INIT_FILE"\n"
-	"       -l, --log             activate log of transactions\n"
+	"	-l, --log             activate log of transactions\n"
 	"	-d, --dbdir xxx       set the directory of database\n"
 	"	                        (default: "DEFAULT_DB_DIR")\n"
 	"	-m, --make-db-dir     make the database directory\n"
