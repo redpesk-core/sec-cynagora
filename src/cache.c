@@ -91,7 +91,7 @@ drop_at(
 	l = itemat(cache, pos)->length;
 	e = pos + l;
 	cache->used -= l;
-	if (cache->used > e)
+	if (cache->used > pos)
 		memmove(&cache->content[pos], &cache->content[e], cache->used - pos);
 }
 
