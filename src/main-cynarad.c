@@ -120,7 +120,7 @@ helptxt[] =
 	"	-m, --make-db-dir     make the database directory\n"
 	"	-o, --own-db-dir      set user and group on database directory\n"
 	"\n"
-	"	-S, --socketdir xxx   set the base xxx for sockets\n"
+	"	-S, --socketdir xxx   set the base directory xxx for sockets\n"
 	"	                        (default: %s)\n"
 	"	-M, --make-socket-dir make the socket directory\n"
 	"	-O, --own-socket-dir  set user and group on socket directory\n"
