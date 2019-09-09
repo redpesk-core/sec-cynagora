@@ -180,7 +180,7 @@ init_names(
 			p = realloc(ns, all * sizeof *ns);
 			if (p == NULL) {
 				free(ns);
-				fprintf(stderr, "out of memory");
+				fprintf(stderr, "out of memory\n");
 				goto error;
 			}
 			ns = p;
@@ -197,7 +197,7 @@ init_names(
 	return 0;
 
 bad_file:
-	fprintf(stderr, "bad file %s", filedb->fnames.name);
+	fprintf(stderr, "bad file %s\n", filedb->fnames.name);
 	errno = ENOEXEC;
 error:
 	return -1;
@@ -370,7 +370,7 @@ recoverdb(
 	}
 	return rc;
 error:
-	fprintf(stderr, "db recovery impossible: %m");
+	fprintf(stderr, "db recovery impossible: %m\n");
 	exit(5);
 	return rc;
 }
@@ -435,7 +435,7 @@ index_itf(
 	if (!(up & 1023)) {
 		p = realloc(filedb->names_sorted, (up + 1024) * sizeof *p);
 		if (p == NULL) {
-			fprintf(stderr, "out of memory");
+			fprintf(stderr, "out of memory\n");
 			return -1;
 		}
 		filedb->names_sorted = p;
