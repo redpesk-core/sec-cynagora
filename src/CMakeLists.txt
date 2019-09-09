@@ -51,8 +51,7 @@ add_compile_definitions(_GNU_SOURCE)
 ###########################################
 ADD_LIBRARY(cynara SHARED ${LIB_SOURCES})
 target_compile_definitions(cynara PRIVATE
-	RCYN_DEFAULT_CHECK_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.check"
-	RCYN_DEFAULT_ADMIN_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.admin"
+	RCYN_DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 )
 SET_TARGET_PROPERTIES(cynara PROPERTIES
 	VERSION ${CYNARA_VERSION}
@@ -73,8 +72,7 @@ target_compile_definitions(cynarad PRIVATE
 	DEFAULT_DB_DIR="${DEFAULT_DB_DIR}"
 	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
-	RCYN_DEFAULT_CHECK_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.check"
-	RCYN_DEFAULT_ADMIN_SOCKET_SPEC="unix:${DEFAULT_SOCKET_DIR}/cynara.admin"
+	RCYN_DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 )
 target_link_libraries(cynarad cap)
 install(TARGETS cynarad

@@ -46,7 +46,7 @@ add_definitions(-DCYNARA_VERSION="${CYNARA_VERSION}")
 set(SYSTEMD ON CACHE BOOL "should use systemd")
 set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynara"
 	CACHE PATH "directory path of the database")
-set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}"
+set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynara"
 	CACHE PATH "directory path of the sockets")
 set(DEFAULT_CONFIG_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security"
 	CACHE PATH "directory of configuration")
