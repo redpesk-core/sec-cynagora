@@ -66,6 +66,7 @@ add_compile_options(-ffunction-sections -fdata-sections)
 add_compile_options(-fPIC)
 add_compile_options(-g)
 add_compile_options(-fstack-protector -D_FORTIFY_SOURCE=2 -O2)
+add_compile_options(-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.)
 
 set(CMAKE_C_FLAGS_PROFILING    "-g -O2 -pg")
 set(CMAKE_C_FLAGS_DEBUG        "-g -ggdb --fstack-protector -D_FORTIFY_SOURCE=2")
