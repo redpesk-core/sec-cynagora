@@ -153,11 +153,7 @@ agent_at_cb(
 	return cyn_test_async(on_result_cb, on_result_closure, &atkey);
 }
 
-/**
- * Activate the AT-agent
- *
- * @return 0 in case of success of a negative value in -errno style.
- */
+/* see agent-at.h */
 int
 agent_at_activate(
 ) {

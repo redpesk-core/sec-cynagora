@@ -17,6 +17,11 @@
 
 #pragma once
 
+/**
+ * Activate the AT-agent
+ *
+ * @return 0 in case of success of a negative value in -errno style.
+ */
 extern
 int
 agent_at_activate(

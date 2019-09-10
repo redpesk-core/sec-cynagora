@@ -28,35 +28,100 @@
 #include "queue.h"
 #include "cyn.h"
 
+#if !CYN_SEARCH_DEEP_MAX
+# define CYN_SEARCH_DEEP_MAX 10
+#endif
+
+/**
+ * items of the list of observers or awaiters
+ */
 struct callback
 {
+	/** link to the next item of the list */
 	struct callback *next;
 	union {
+		/** any callback value */
 		void *any_cb;
+		/** awaiter callback */
 		on_enter_cb_t *on_enter_cb;
+		/** observer callback */
 		on_change_cb_t *on_change_cb;
 	};
+	/** closure of the callback */
 	void *closure;
 };
 
+/**
+ * items of the list of agents
+ */
 struct agent
 {
+	/** link to the next item of the list */
 	struct agent *next;
+
+	/** agent callback */
 	agent_cb_t *agent_cb;
+
+	/** closure of the callback */
 	void *closure;
+
+	/** length of the name */
 	uint8_t len;
+
+	/** name of the agent */
 	char name[];
+};
+
+/**
+ * structure handling an asynchronous check
+ */
+struct async_check
+{
+	/** callback for handling result of the check */
+	on_result_cb_t *on_result_cb;
+
+	/** closure of the callback */
+	void *closure;
+
+	/** key of the check */
+	data_key_t key;
+
+	/** value of the check */
+	data_value_t value;
+
+	/** down counter for recursivity limitation */
+	int decount;
 };
 
 /** locking critical section */
 static const void *lock;
+
+/** head of the list of critical section awaiters */
 static struct callback *awaiters;
+
+/** head of the list of change observers */
 static struct callback *observers;
+
+/** head of the list of agents */
 static struct agent *agents;
+
+/** last changeid */
 static uint32_t last_changeid;
+
+/** changeid of the current 'changeid_string' */
 static uint32_t last_changeid_string;
+
+/** string buffer for changeid */
 static char changeid_string[12];
 
+/**
+ * Delete from the list represented by 'head' the entry for
+ * 'callback' and 'closure'
+ * @param callback
+ * @param closure
+ * @param head
+ * @return 0 if entry found and removed, -ENOENT if not found
+ */
 static
 int
 delcb(
@@ -70,13 +135,21 @@ delcb(
 		if (c->any_cb == callback && c->closure == closure) {
 			*head = c->next;
 			free(c);
-			return 1;
+			return 0;
 		}
 		head = &c->next;
 	}
-	return 0;
+	return -ENOENT;
 }
 
+/**
+ * Adds at head of the list represented by 'head' the entry for
+ * 'callback' and 'closure'
+ * @param callback
+ * @param closure
+ * @param head
+ * @return 0 if correctly added or -ENOMEM in case of allocation failure
+ */
 static
 int
 addcb(
@@ -88,7 +161,7 @@ addcb(
 
 	c = malloc(sizeof *c);
 	if (c == NULL)
-		return -(errno = ENOMEM);
+		return -ENOMEM;
 	c->any_cb = callback;
 	c->closure = closure;
 	c->next = *head;
@@ -96,6 +169,10 @@ addcb(
 	return 0;
 }
 
+/**
+ * Call when database changed.
+ * Calls all observers to notify them the change
+ */
 static
 void
 changed(
@@ -107,30 +184,36 @@ changed(
 		c->on_change_cb(c->closure);
 }
 
-/** enter critical recoverable section */
+/* see cyn.h */
 int
 cyn_enter(
 	const void *magic
 ) {
+	if (!magic)
+		return -EINVAL;
 	if (lock)
 		return -EBUSY;
 	lock = magic;
 	return 0;
 }
 
+/* see cyn.h */
 int
 cyn_enter_async(
 	on_enter_cb_t *enter_cb,
-	void *closure
+	void *magic
 ) {
+	if (!magic)
+		return -EINVAL;
 	if (lock)
-		return addcb(enter_cb, closure, &awaiters);
+		return addcb(enter_cb, magic, &awaiters);
 
-	lock = closure;
-	enter_cb(closure);
+	lock = magic;
+	enter_cb(magic);
 	return 0;
 }
 
+/* see cyn.h */
 int
 cyn_enter_async_cancel(
 	on_enter_cb_t *enter_cb,
@@ -139,6 +222,7 @@ cyn_enter_async_cancel(
 	return delcb(enter_cb, closure, &awaiters);
 }
 
+/* see cyn.h */
 int
 cyn_on_change_add(
 	on_change_cb_t *on_change_cb,
@@ -147,6 +231,7 @@ cyn_on_change_add(
 	return addcb(on_change_cb, closure, &observers);
 }
 
+/* see cyn.h */
 int
 cyn_on_change_remove(
 	on_change_cb_t *on_change_cb,
@@ -155,7 +240,7 @@ cyn_on_change_remove(
 	return delcb(on_change_cb, closure, &observers);
 }
 
-/** leave critical recoverable section */
+/* see cyn.h */
 int
 cyn_leave(
 	const void *magic,
@@ -205,6 +290,7 @@ cyn_leave(
 	return rc;
 }
 
+/* see cyn.h */
 int
 cyn_set(
 	const data_key_t *key,
@@ -215,6 +301,7 @@ cyn_set(
 	return queue_set(key, value);
 }
 
+/* see cyn.h */
 int
 cyn_drop(
 	const data_key_t *key
@@ -224,6 +311,7 @@ cyn_drop(
 	return queue_drop(key);
 }
 
+/* see cyn.h */
 void
 cyn_list(
 	void *closure,
@@ -233,6 +321,11 @@ cyn_list(
 	db_for_all(closure, callback, key);
 }
 
+/**
+ * initialize value to its default
+ * @param value to initialize
+ * @return the initialized value
+ */
 static
 data_value_t *
 default_value(
@@ -243,6 +336,13 @@ default_value(
 	return value;
 }
 
+/**
+ * Search the agent of name and return its item in the list
+ * @param name of the agent to find (optionally zero terminated)
+ * @param len length of the name
+ * @param ppprev for catching the pointer referencing the return item
+ * @return 0 if not found or the pointer to the item of the found agent
+ */
 static
 struct agent *
 search_agent(
@@ -260,6 +360,12 @@ search_agent(
 	return it;
 }
 
+/**
+ * Return the agent required by the value or 0 if no agent is required
+ * or if the agent is not found.
+ * @param value string where agent is the prefix followed by one colon
+ * @return the item of the required agent or 0 when no agent is required
+ */
 static
 struct agent *
 required_agent(
@@ -274,14 +380,6 @@ required_agent(
 	return 0;
 }
 
-struct async_check
-{
-	on_result_cb_t *on_result_cb;
-	void *closure;
-	data_key_t key;
-	data_value_t value;
-	int decount;
-};
 
 static
 void
@@ -334,13 +432,12 @@ async_on_result(
 		async_reply(achk);
 }
 
-static
 int
-async_check_or_test(
+cyn_query_async(
 	on_result_cb_t *on_result_cb,
 	void *closure,
 	const data_key_t *key,
-	int agentdeep
+	int maxdepth
 ) {
 	int rc;
 	data_value_t value;
@@ -361,7 +458,7 @@ async_check_or_test(
 
 	/* if not an agent or agent not required */
 	agent = required_agent(value.value);
-	if (!agent || !agentdeep) {
+	if (!agent || maxdepth <= 0) {
 		on_result_cb(closure, &value);
 		return rc;
 	}
@@ -406,31 +503,34 @@ async_check_or_test(
 		ptr = mempcpy(ptr, key->permission, szper);
 	}
 	achk->value = value;
-	achk->decount = agentdeep;
+	achk->decount = maxdepth;
 
 	/* call the agent */
 	async_call_agent(agent, achk);
 	return 0;
 }
 
+/* see cyn.h */
 int
 cyn_test_async(
 	on_result_cb_t *on_result_cb,
 	void *closure,
 	const data_key_t *key
 ) {
-	return async_check_or_test(on_result_cb, closure, key, 0);
+	return cyn_query_async(on_result_cb, closure, key, 0);
 }
 
+/* see cyn.h */
 int
 cyn_check_async(
 	on_result_cb_t *on_result_cb,
 	void *closure,
 	const data_key_t *key
 ) {
-	return async_check_or_test(on_result_cb, closure, key, 10);
+	return cyn_query_async(on_result_cb, closure, key, CYN_SEARCH_DEEP_MAX);
 }
 
+/* see cyn.h */
 int
 cyn_agent_add(
 	const char *name,
@@ -464,6 +564,7 @@ cyn_agent_add(
 	return 0;
 }
 
+/* see cyn.h */
 int
 cyn_agent_remove(
 	const char *name
@@ -486,22 +587,25 @@ cyn_agent_remove(
 	return 0;
 }
 
+/* see cyn.h */
 void
 cyn_changeid_reset(
 ) {
 	last_changeid = 1;
 }
 
+/* see cyn.h */
 uint32_t
 cyn_changeid(
 ) {
 	return last_changeid;
 }
 
-extern
+/* see cyn.h */
 const char *
 cyn_changeid_string(
 ) {
+	/* regenerate the string on need */
 	if (last_changeid != last_changeid_string) {
 		last_changeid_string = last_changeid;
 		snprintf(changeid_string, sizeof changeid_string, "%u", last_changeid);

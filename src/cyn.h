@@ -18,15 +18,40 @@
 
 #pragma once
 
-typedef void (on_enter_cb_t)(void *closure);
+/**
+ * Callback for entering asynchronousely the critical section
+ * When called it receives the 'magic' argument given when
+ * 'cyn_enter_async' was called.
+ */
+typedef void (on_enter_cb_t)(void *magic);
+
+/**
+ * Callback for being notified of changes in database
+ * When called it receives the 'closure' argument given when
+ * 'cyn_on_change_add' was called.
+ */
 typedef void (on_change_cb_t)(void *closure);
+
+/**
+ * Callback for receiving the result of a test or check
+ * When called, receives the result 'value' of the request and
+ * the 'closure' given when calling asynchronous query function.
+ */
 typedef void (on_result_cb_t)(void *closure, const data_value_t *value);
 
+/**
+ * Callback for listing data of the database.
+ * When call receives the 'closure' given when 'cyn_list' is called
+ * and the pair 'key', 'value' of the listed item.
+ */
 typedef void (list_cb_t)(
 		void *closure,
 		const data_key_t *key,
 		const data_value_t *value);
 
+/**
+ * Callback for querying agents
+ */
 typedef int (agent_cb_t)(
 		const char *name,
 		void *agent_closure,
@@ -35,14 +60,38 @@ typedef int (agent_cb_t)(
 		on_result_cb_t *on_result_cb,
 		void *on_result_closure);
 
-/** enter critical recoverable section */
+/**
+ * Enter in the critical recoverable section if possible
+ *
+ * @param magic a pointer not null that must be used in 'cyn_leave'
+ * @return 0       entered
+ *         -EBUSY  critical section already locked
+ *         -EINVAL magic == NULL
+ *
+ * @see cyn_leave, cyn_enter_async
+ */
 extern
 int
 cyn_enter(
 	const void *magic
 );
 
-/** leave critical recoverable section */
+/**
+ * Leave the entered the critical recoverable section if possible
+ *
+ * @param magic a pointer not null that must be the one passed to
+ *              'cyn_enter' or 'cyn_enter_async'
+ * @param commit if true, the changes are committed to database, conversely
+ *               if false, the changes made since entering the critical
+ *               section are discarded
+ * @return 0 success
+ *         -EALREADY already unlocked
+ *         -EINVAL magic == NULL
+ *         -EPERM  magic doesn't match the magic that entered
+ *         other negative codes: error when commiting the database
+ *
+ * @see cyn_enter, cyn_enter_async
+ */
 extern
 int
 cyn_leave(
@@ -50,20 +99,50 @@ cyn_leave(
 	bool commit
 );
 
+/**
+ * Enter asynchronously in the critical recoverable section if possible.
+ * If the critical recoverable section is free, lock it with magic,
+ * call the callback 'enter_cb' and returns 0. Otherwise, if the critical
+ * section is already taken, the functions enqueue the entering request
+ * and the callback will be called when the critical recoverable section is
+ * available.
+ *
+ * @param enter_cb the entering callback
+ * @param magic a pointer not null that must be used in 'cyn_leave'
+ * @return 0  entered or or queued
+ *         -ENOMEM critical section already locked but request can't be queued
+ *         -EINVAL magic == NULL
+ *
+ * @see cyn_leave, cyn_enter
+ */
 extern
 int
 cyn_enter_async(
 	on_enter_cb_t *enter_cb,
-	void *closure
+	void *magic
 );
 
+/**
+ * Cancel a an asynchonous waiter to enter
+ * @param enter_cb the enter callback of the waiter
+ * @param magic the closure of the waiter
+ * @return 0 if entry found and removed, -ENOENT if not found
+ */
 extern
 int
 cyn_enter_async_cancel(
 	on_enter_cb_t *enter_cb,
-	void *closure
+	void *magic
 );
 
+/**
+ * Add an observer to the list of observers
+ *
+ * @param on_change_cb callback receiving change events
+ * @param closure closure of the callback
+ * @return 0 success
+ *         -ENOMEM can't queue the observer
+ */
 extern
 int
 cyn_on_change_add(
@@ -71,6 +150,12 @@ cyn_on_change_add(
 	void *closure
 );
 
+/**
+ * Removes an on change observer
+ * @param on_change_cb the callback of the observer
+ * @param closure the closure of the observer
+ * @return 0 if entry found and removed, -ENOENT if not found
+ */
 extern
 int
 cyn_on_change_remove(
@@ -78,6 +163,14 @@ cyn_on_change_remove(
 	void *closure
 );
 
+/**
+ * Set or add the rule key/value to the change list to commit
+ * @param key the key of the rule
+ * @param value the value of the rule for the key
+ * @return 0 on success
+ *         -EPERM if not locked in critical recoverable section
+ *         other negative codes: error when queuing the change
+ */
 extern
 int
 cyn_set(
@@ -85,6 +178,13 @@ cyn_set(
 	const data_value_t *value
 );
 
+/**
+ * Drop any rule matching the key
+ * @param key the key of the rule
+ * @return 0 on success
+ *         -EPERM if not locked in critical recoverable section
+ *         other negative codes: error when queuing the change
+ */
 extern
 int
 cyn_drop(
@@ -99,6 +199,16 @@ cyn_list(
 	const data_key_t *key
 );
 
+extern
+int
+cyn_query_async(
+	on_result_cb_t *on_result_cb,
+	void *closure,
+	const data_key_t *key,
+	int maxdepth
+);
+
+extern
 int
 cyn_test_async(
 	on_result_cb_t *on_result_cb,
