@@ -45,6 +45,7 @@ parse(
 ) {
 	size_t iout, ikey, inf;
 	const char *val;
+	int sub;
 
 	iout = 0;
 	for (ikey = 0 ; ikey < KeyIdx_Count ; ikey++) {
@@ -66,29 +67,26 @@ parse(
 				switch(spec[1]) {
 				case 'c':
 					val = rkey->client;
+					sub = 1;
 					break;
 				case 's':
 					val = rkey->session;
+					sub = 1;
 					break;
 				case 'u':
 					val = rkey->user;
+					sub = 1;
 					break;
 				case 'p':
 					val = rkey->permission;
+					sub = 1;
 					break;
 				default:
 					/* none */
-					val = 0;
+					sub = 0;
+					break;
 				}
-				if (val) {
-					/* substitution of the value */
-					while (*val) {
-						if (iout < szbuf)
-							buffer[iout] = *val;
-						iout++;
-						val++;
-					}
-				} else {
+				if (!sub) {
 					/* no substitution */
 					if (spec[1] != ':' && spec[1] != '%') {
 						/* only escape % and : */
@@ -99,6 +97,14 @@ parse(
 					if (iout < szbuf)
 						buffer[iout] = spec[1];
 					iout++;
+				} else if (val) {
+					/* substitution of the value */
+					while (*val) {
+						if (iout < szbuf)
+							buffer[iout] = *val;
+						iout++;
+						val++;
+					}
 				}
 				spec += 2;
 			}
@@ -136,8 +142,7 @@ agent_at_cb(
 	void *agent_closure,
 	const data_key_t *key,
 	const char *value,
-	on_result_cb_t *on_result_cb,
-	void *on_result_closure
+	cyn_query_t *query
 ) {
 	data_key_t atkey;
 	char *block;
@@ -150,7 +155,7 @@ agent_at_cb(
 	/* initialize the derived key */
 	parse(value, key, &atkey, block, size);
 	/* ask for the derived key */
-	return cyn_test_async(on_result_cb, on_result_closure, &atkey);
+	return cyn_subquery_async(query, (on_result_cb_t*)cyn_reply_query, query, &atkey);
 }
 
 /* see agent-at.h */

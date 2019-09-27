@@ -18,6 +18,8 @@
 
 #pragma once
 
+#define CYN_VERSION 99
+
 /**
  * Callback for entering asynchronousely the critical section
  * When called it receives the 'magic' argument given when
@@ -50,6 +52,12 @@ typedef void (list_cb_t)(
 		const data_value_t *value);
 
 /**
+ * Opaque structure for agent subqueries and responses.
+ */
+typedef struct cyn_query cyn_query_t;
+
+
+/**
  * Callback for querying agents
  */
 typedef int (agent_cb_t)(
@@ -57,8 +65,7 @@ typedef int (agent_cb_t)(
 		void *agent_closure,
 		const data_key_t *key,
 		const char *value,
-		on_result_cb_t *on_result_cb,
-		void *on_result_closure);
+		cyn_query_t *query);
 
 /**
  * Enter in the critical recoverable section if possible
@@ -222,6 +229,22 @@ cyn_check_async(
 	on_result_cb_t *on_result_cb,
 	void *closure,
 	const data_key_t *key
+);
+
+extern
+int
+cyn_subquery_async(
+	cyn_query_t *query,
+	on_result_cb_t *on_result_cb,
+	void *closure,
+	const data_key_t *key
+);
+
+extern
+void
+cyn_reply_query(
+	cyn_query_t *query,
+	const data_value_t *value
 );
 
 extern

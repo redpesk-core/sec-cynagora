@@ -75,7 +75,7 @@ struct agent
 /**
  * structure handling an asynchronous check
  */
-struct async_check
+struct cyn_query
 {
 	/** callback for handling result of the check */
 	on_result_cb_t *on_result_cb;
@@ -380,57 +380,80 @@ required_agent(
 	return 0;
 }
 
-
-static
-void
-async_reply(
-	struct async_check *achk
-) {
-	achk->on_result_cb(achk->closure, &achk->value);
-	free(achk);
-}
-
-static
-void
-async_on_result(
-	void *closure,
-	const data_value_t *value
-);
-
 static
 void
 async_call_agent(
 	struct agent *agent,
-	struct async_check *achk
+	cyn_query_t *query,
+	const data_value_t *value
 ) {
 	int rc = agent->agent_cb(
 			agent->name,
 			agent->closure,
-			&achk->key,
-			&achk->value.value[agent->len + 1],
-			async_on_result,
-			achk);
+			&query->key,
+			&value->value[agent->len + 1],
+			query);
 	if (rc < 0)
-		async_reply(achk);
+		cyn_reply_query(query, value);
 }
 
 static
-void
-async_on_result(
+cyn_query_t *
+alloc_query(
+	on_result_cb_t *on_result_cb,
 	void *closure,
-	const data_value_t *value
+	const data_key_t *key,
+	int maxdepth
 ) {
-	struct async_check *achk = closure;
-	struct agent *agent;
+	size_t szcli, szses, szuse, szper;
+	cyn_query_t *query;
+	void *ptr;
 
-	achk->value = *value;
-	agent = required_agent(value->value);
-	if (agent && achk->decount) {
-		achk->decount--;
-		async_call_agent(agent, achk);
-	} else
-		async_reply(achk);
+	/* allocate asynchronous query */
+	szcli = key->client ? 1 + strlen(key->client) : 0;
+	szses = key->session ? 1 + strlen(key->session) : 0;
+	szuse = key->user ? 1 + strlen(key->user) : 0;
+	szper = key->permission ? 1 + strlen(key->permission) : 0;
+	query = malloc(szcli + szses + szuse + szper + sizeof *query);
+	if (query) {
+		/* init the structure */
+		ptr = &query[1];
+		query->on_result_cb = on_result_cb;
+		query->closure = closure;
+		if (!key->client)
+			query->key.client = 0;
+		else {
+			query->key.client = ptr;
+			ptr = mempcpy(ptr, key->client, szcli);
+		}
+		if (!key->session)
+			query->key.session = 0;
+		else {
+			query->key.session = ptr;
+			ptr = mempcpy(ptr, key->session, szses);
+		}
+		if (!key->user)
+			query->key.user = 0;
+		else {
+			query->key.user = ptr;
+			ptr = mempcpy(ptr, key->user, szuse);
+		}
+		if (!key->permission)
+			query->key.permission = 0;
+		else {
+			query->key.permission = ptr;
+			ptr = mempcpy(ptr, key->permission, szper);
+		}
+		query->decount = maxdepth;
+	}
+	return query;
 }
+
+
+
+
+
+
 
 int
 cyn_query_async(
@@ -441,10 +464,8 @@ cyn_query_async(
 ) {
 	int rc;
 	data_value_t value;
-	size_t szcli, szses, szuse, szper;
-	struct async_check *achk;
+	cyn_query_t *query;
 	struct agent *agent;
-	void *ptr;
 
 	/* get the direct value */
 	rc = db_test(key, &value);
@@ -464,49 +485,14 @@ cyn_query_async(
 	}
 
 	/* allocate asynchronous query */
-	szcli = key->client ? 1 + strlen(key->client) : 0;
-	szses = key->session ? 1 + strlen(key->session) : 0;
-	szuse = key->user ? 1 + strlen(key->user) : 0;
-	szper = key->permission ? 1 + strlen(key->permission) : 0;
-	achk = malloc(szcli + szses + szuse + szper + sizeof *achk);
-	if (!achk) {
+	query = alloc_query(on_result_cb, closure, key, maxdepth);
+	if (!query) {
 		on_result_cb(closure, &value);
 		return -ENOMEM;
 	}
 
-	/* init the structure */
-	ptr = &achk[1];
-	achk->on_result_cb = on_result_cb;
-	achk->closure = closure;
-	if (!key->client)
-		achk->key.client = 0;
-	else {
-		achk->key.client = ptr;
-		ptr = mempcpy(ptr, key->client, szcli);
-	}
-	if (!key->session)
-		achk->key.session = 0;
-	else {
-		achk->key.session = ptr;
-		ptr = mempcpy(ptr, key->session, szses);
-	}
-	if (!key->user)
-		achk->key.user = 0;
-	else {
-		achk->key.user = ptr;
-		ptr = mempcpy(ptr, key->user, szuse);
-	}
-	if (!key->permission)
-		achk->key.permission = 0;
-	else {
-		achk->key.permission = ptr;
-		ptr = mempcpy(ptr, key->permission, szper);
-	}
-	achk->value = value;
-	achk->decount = maxdepth;
-
 	/* call the agent */
-	async_call_agent(agent, achk);
+	async_call_agent(agent, query, &value);
 	return 0;
 }
 
@@ -529,6 +515,29 @@ cyn_check_async(
 ) {
 	return cyn_query_async(on_result_cb, closure, key, CYN_SEARCH_DEEP_MAX);
 }
+
+int
+cyn_subquery_async(
+	cyn_query_t *query,
+	on_result_cb_t *on_result_cb,
+	void *closure,
+	const data_key_t *key
+) {
+	return cyn_query_async(on_result_cb, closure, key, query->decount - 1);
+}
+
+void
+cyn_reply_query(
+	cyn_query_t *query,
+	const data_value_t *value
+) {
+	query->on_result_cb(query->closure, value);
+	free(query);
+}
+
+
+
+
 
 /* see cyn.h */
 int
