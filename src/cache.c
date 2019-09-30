@@ -14,7 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF CACHE IN CLIENTS                                         */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -64,12 +68,25 @@ typedef struct item item_t;
  */
 struct cache
 {
+	/** used for clearing */
 	uint32_t cacheid;
+
+	/** count of bytes used */
 	uint32_t used;
+
+	/** count of bytes allocated */
 	uint32_t count;
+
+	/** content of the cache */
 	uint8_t content[];
 };
 
+/**
+ * return the item at a given position
+ * @param cache the cache
+ * @param pos the position of the item
+ * @return the item
+ */
 static
 inline
 item_t *
@@ -80,6 +97,11 @@ itemat(
 	return (item_t*)(&cache->content[pos]);
 }
 
+/**
+ * Removes the item at position pos
+ * @param cache the cache
+ * @param pos the position of the item to remove
+ */
 static
 void
 drop_at(
@@ -95,6 +117,10 @@ drop_at(
 		memmove(&cache->content[pos], &cache->content[e], cache->used - pos);
 }
 
+/**
+ * Removes the oldest hit target
+ * @param cache the cache
+ */
 static
 void
 drop_lre(
@@ -117,6 +143,11 @@ drop_lre(
 		drop_at(cache, found);
 }
 
+/**
+ * tells the target is used
+ * @param cache the cache
+ * @param target the target to hit
+ */
 static
 void
 hit(
@@ -141,6 +172,34 @@ hit(
 	}
 }
 
+/**
+ * Compare the head with a string and either return NULL if it doesn't match or
+ * otherwise return the pointer to the next string for heading.
+ * @param head head of scan
+ * @param other string to compare
+ * @return NULL if no match or pointer to the strings that follows head if match
+ */
+static
+const char*
+cmp(
+	const char *head,
+	const char *other
+) {
+	char c;
+	while((c = *head++) == *other++)
+		if (!c)
+			return head;
+	return NULL;
+}
+
+/**
+ * Compare in a case independant method the head with a string and either
+ * return NULL if it doesn't match or otherwise return the pointer to the
+ * next string for heading.
+ * @param head head of scan
+ * @param other string to compare
+ * @return NULL if no match or pointer to the strings that follows head if match
+ */
 static
 const char*
 cmpi(
@@ -154,21 +213,14 @@ cmpi(
 	return 0;
 }
 
+/**
+ * Check if a head of strings matche the key
+ * @param head the head of strings
+ * @param key the key
+ * @return true if matches or false other wise
+ */
 static
-const char*
-cmp(
-	const char *head,
-	const char *other
-) {
-	char c;
-	while((c = *head++) == *other++)
-		if (!c)
-			return head;
-	return 0;
-}
-
-static
-int
+bool
 match(
 	const char *head,
 	const rcyn_key_t *key
@@ -181,13 +233,19 @@ match(
 			if (head) {
 				head = cmpi(head, key->permission);
 				if (head)
-					return 1;
+					return true;
 			}
 		}
 	}
-	return 0;
+	return false;
 }
 
+/**
+ * Search the item matching key and return it. Also remove expired entries
+ * @param cache the cache
+ * @param key the key to search
+ * @return the found item or NULL if not found
+ */
 static
 item_t*
 search(
@@ -214,6 +272,7 @@ search(
 	return found;
 }
 
+/* see cache.h */
 int
 cache_put(
 	cache_t *cache,
@@ -255,6 +314,7 @@ cache_put(
 	return 0;
 }
 
+/* see cache.h */
 int
 cache_search(
 	cache_t *cache,
@@ -272,6 +332,7 @@ cache_search(
 	return -ENOENT;
 }
 
+/* see cache.h */
 void
 cache_clear(
 	cache_t *cache,
@@ -283,35 +344,43 @@ cache_clear(
 	}
 }
 
+/* see cache.h */
 int
 cache_resize(
 	cache_t **cache,
 	uint32_t newsize
 ) {
-	cache_t *c = *cache, *nc;
+	cache_t *oldcache = *cache, *newcache;
 
 	if (newsize == 0) {
-		free(c);
-		nc = NULL;
+		/* erase all */
+		free(oldcache);
+		newcache = NULL;
 	} else {
-		if (c)
-			while (c->used > newsize)
-				drop_lre(c);
+		/* coerce cache values if downsizing */
+		if (oldcache) {
+			while (oldcache->used > newsize)
+				drop_lre(oldcache);
+		}
 
-		nc = realloc(c, newsize + sizeof *c);
-		if (nc == NULL)
+		/* reallocate the cache */
+		newcache = realloc(oldcache, newsize + sizeof *oldcache);
+		if (newcache == NULL)
 			return -ENOMEM;
 
-		nc->count = newsize;
-		if (!c) {
-			nc->cacheid = 0;
-			nc->used = 0;
+		/* init */
+		newcache->count = newsize;
+		if (!oldcache) {
+			newcache->cacheid = 0;
+			newcache->used = 0;
 		}
 	}
-	*cache = nc;
+	/* update cache */
+	*cache = newcache;
 	return 0;
 }
 
+/* see cache.h */
 int
 cache_create(
 	cache_t **cache,

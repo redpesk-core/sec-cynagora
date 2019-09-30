@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF QUEUE OF DATABASE MODIFIERS                              */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,7 +37,16 @@
  */
 struct queue
 {
-	uint32_t read, write, capacity;
+	/** read index within queue */
+	uint32_t read;
+
+	/** write index within queue */
+	uint32_t write;
+
+	/** capacity of the queue */
+	uint32_t capacity;
+
+	/** the memory of the queue */
 	void *queue;
 };
 typedef struct queue queue_t;
@@ -40,6 +54,13 @@ typedef struct queue queue_t;
 /** the queue */
 static queue_t queue;
 
+/**
+ * Read data from the queue
+ *
+ * @param data where to store the data
+ * @param length length of the data to read
+ * @return true on success or false on error
+ */
 static
 bool
 qread(
@@ -54,6 +75,12 @@ qread(
 	return true;
 }
 
+/**
+ * Get a time from the queue
+ *
+ * @param value where to store the time
+ * @return true on success or false on error
+ */
 static
 bool
 qget_time(
@@ -62,6 +89,12 @@ qget_time(
 	return qread(value, sizeof *value);
 }
 
+/**
+ * Get a string from the queue
+ *
+ * @param text where to store the string
+ * @return true on success or false on error
+ */
 static
 bool
 qget_string(
@@ -76,6 +109,13 @@ qget_string(
 	return true;
 }
 
+/**
+ * Write the data to the queue
+ *
+ * @param data data to write
+ * @param length length of the data
+ * @return true on success or false on error
+ */
 static
 bool
 qwrite(
@@ -100,6 +140,12 @@ qwrite(
 	return true;
 }
 
+/**
+ * Put the time in the queue
+ *
+ * @param value the value to put
+ * @return true on success or false on error
+ */
 static
 bool
 qput_time(
@@ -108,6 +154,13 @@ qput_time(
 	return qwrite(&value, sizeof value);
 }
 
+/**
+ * Put the text in the queue
+ *
+ * @param text the text to put
+ *
+ * @return true on success or false on error
+ */
 static
 bool
 qput_string(
@@ -115,13 +168,16 @@ qput_string(
 ) {
 	size_t len;
 	text = text ?: "";
+
 	/* check length */
 	len = strnlen(text, MAX_NAME_LENGTH + 1);
 	if (len > MAX_NAME_LENGTH)
 		return false;
+
 	return qwrite(text, 1 + (uint32_t)len);
 }
 
+/* see queue.h */
 int
 queue_drop(
 	const data_key_t *key
@@ -130,10 +186,11 @@ queue_drop(
 		&& qput_string(key->session)
 		&& qput_string(key->user)
 		&& qput_string(key->permission)
-		&& qput_string(0)
+		&& qput_string(NULL)
 			? 0 : -(errno = ENOMEM);
 }
 
+/* see queue.h */
 int
 queue_set(
 	const data_key_t *key,
@@ -148,13 +205,14 @@ queue_set(
 			? 0 : -(errno = ENOMEM);
 }
 
-
+/* see queue.h */
 void
 queue_clear(
 ) {
 	queue.write = 0;
 }
 
+/* see queue.h */
 int
 queue_play(
 ) {

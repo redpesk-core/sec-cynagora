@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* HIGH LEVEL ABSTRACTION OF THE DATABASES                                    */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -31,13 +36,38 @@
 #define USER_MATCH_SCORE	1
 #define PERMISSION_MATCH_SCORE	1
 
+/**
+ * helper for searching items
+ */
+union searchkey {
+	struct {
+		/** client id */
+		anydb_idx_t idxcli;
+
+		/** session id */
+		anydb_idx_t idxses;
+
+		/** user id */
+		anydb_idx_t idxusr;
+
+		/** permission string */
+		const char *strperm;
+	};
+	anydb_key_t key;
+};
+typedef union searchkey searchkey_t;
+
 /******************************************************************************/
 /******************************************************************************/
 /*** UTILITIES                                                              ***/
 /******************************************************************************/
 /******************************************************************************/
 
-/** check whether the 'text' fit String_Any, NULL or ""  */
+/**
+ * Check whether the 'text' fit String_Any, NULL or ""
+ * @param text the text to check
+ * @return true if text matches ANY possible values
+ */
 static
 bool
 is_any(
@@ -46,7 +76,11 @@ is_any(
 	return text == NULL || text[0] == 0 || (!text[1] && text[0] == Data_Any_Char);
 }
 
-/** check whether the 'text' fit String_Any, String_Wide, NULL or ""  */
+/**
+ * check whether the 'text' fit String_Any, String_Wide, NULL or ""
+ * @param text the text to check
+ * @return true if text matches ANY or WIDE possible values
+ */
 static
 bool
 is_any_or_wide(
@@ -56,7 +90,12 @@ is_any_or_wide(
 		|| (!text[1] && (text[0] == Data_Any_Char || text[0] == Data_Wide_Char));
 }
 
-/** return the name of 'index' */
+/**
+ * Get the name stored for index
+ * @param db the anydb database to query
+ * @param idx the index of the string to get
+ * @return the name or NULL if doesn't exist
+ */
 static
 const char*
 string(
@@ -70,7 +109,14 @@ string(
 	return db->itf.string(db->clodb, idx);
 }
 
-/** search the index of 'name' and create it if 'create' */
+/**
+ * Search the index of 'name' and create it if 'create'
+ * @param db the anydb database to query
+ * @param idx where to store the result if needed
+ * @param name name to search and/or create
+ * @param create if not nul, the name is created if it doesn't exist
+ * @return 0 in case of success of -errno
+ */
 static
 int
 idx(
@@ -79,27 +125,39 @@ idx(
 	const char *name,
 	bool create
 ) {
-	/* special names */
+	/* handle special names */
 	if (!name || !name[0]) {
+		/* no name or empty name means ANY */
 		*idx = AnyIdx_Any;
 		return 0;
 	}
+	/* handle special names of one character  */
 	if (!name[1]) {
 		if (name[0] == Data_Any_Char) {
+			/* Single char for ANY */
 			*idx = AnyIdx_Any;
 			return 0;
 		}
 		if (name[0] == Data_Wide_Char) {
+			/* Single char for WIDE */
 			*idx = AnyIdx_Wide;
 			return 0;
 		}
 	}
 
-	/* other case */
+	/* other case: ask the database backend */
 	return db->itf.index(db->clodb, idx, name, create);
 }
 
-/** search the index of 'name' and create it if 'create' */
+/**
+ * Search the index of 'name' and create it if 'create'
+ * Return the index for WIDE if name matches ANY or WIDE
+ * @param db the backend database
+ * @param idx where to store the found index
+ * @param name the name to search or create
+ * @param create not nul for authorizing creation of the index for name
+ * @return 0 on success
+ */
 static
 int
 idx_but_any(
@@ -117,7 +175,14 @@ idx_but_any(
 	return db->itf.index(db->clodb, idx, name, create);
 }
 
-/** search the index of 'name' and create it if 'create' */
+/**
+ * Return the index of 'name' in the database 'db'. In option 'create' it.
+ * If the name encode ANY or WIDE returns WIDE.
+ * @param db the backend database
+ * @param name the name to search or create
+ * @param create not nul for authorizing creation of the index for name
+ * @return the found index or AnyIdx_None if not found.
+ */
 static
 anydb_idx_t
 idx_or_none_but_any(
@@ -134,11 +199,124 @@ idx_or_none_but_any(
 
 /******************************************************************************/
 /******************************************************************************/
+/*** SEARCH KEYS                                                            ***/
+/******************************************************************************/
+/******************************************************************************/
+
+static
+bool
+searchkey_prepare_match(anydb_t *db,
+	const data_key_t *key,
+	searchkey_t *skey,
+	bool create
+) {
+	if (idx(db, &skey->idxcli, key->client, create)
+	 || idx(db, &skey->idxses, key->session, create)
+	 || idx(db, &skey->idxusr, key->user, create))
+		return false; /* one of the idx doesn't exist */
+	skey->strperm = is_any(key->permission) ? NULL : key->permission;
+
+	return true;
+}
+
+static
+bool
+searchkey_match(
+	anydb_t *db,
+	const anydb_key_t *key,
+	const searchkey_t *skey
+) {
+	return (skey->idxcli == AnyIdx_Any || skey->idxcli == key->client)
+	    && (skey->idxses == AnyIdx_Any || skey->idxses == key->session)
+	    && (skey->idxusr == AnyIdx_Any || skey->idxusr == key->user)
+	    && (!skey->strperm || !strcasecmp(skey->strperm, string(db, key->permission)));
+}
+
+static
+int
+searchkey_prepare_is(
+	anydb_t *db,
+	const data_key_t *key,
+	searchkey_t *skey,
+	bool create
+) {
+	int rc;
+
+	rc = idx_but_any(db, &skey->idxcli, key->client, create);
+	if (!rc) {
+		rc = idx_but_any(db, &skey->idxses, key->session, create);
+		if (!rc) {
+			rc = idx_but_any(db, &skey->idxusr, key->user, create);
+			if (!rc)
+				skey->strperm = key->permission;
+		}
+	}
+	return rc;
+}
+
+static
+bool
+searchkey_is(
+	anydb_t *db,
+	const anydb_key_t *key,
+	const searchkey_t *skey
+) {
+	return skey->idxcli == key->client
+	    && skey->idxses == key->session
+	    && skey->idxusr == key->user
+	    && !strcasecmp(skey->strperm, string(db, key->permission));
+}
+
+static
+void
+searchkey_prepare_test(
+	anydb_t *db,
+	const data_key_t *key,
+	searchkey_t *skey,
+	bool create
+) {
+	skey->idxcli = idx_or_none_but_any(db, key->client, create);
+	skey->idxses = idx_or_none_but_any(db, key->session, create);
+	skey->idxusr = idx_or_none_but_any(db, key->user, create);
+	skey->strperm = key->permission;
+}
+
+static
+unsigned
+searchkey_test(
+	anydb_t *db,
+	const anydb_key_t *key,
+	const searchkey_t *skey
+) {
+	unsigned sc;
+
+	if ((key->client  != AnyIdx_Wide && skey->idxcli != key->client)
+	 || (key->session != AnyIdx_Wide && skey->idxses != key->session)
+	 || (key->user    != AnyIdx_Wide && skey->idxusr != key->user)
+	 || (key->permission != AnyIdx_Wide
+	        && strcasecmp(skey->strperm, string(db, key->permission)))) {
+		sc = 0;
+	} else {
+		sc = 1;
+		if (key->client != AnyIdx_Wide)
+			sc += CLIENT_MATCH_SCORE;
+		if (key->session != AnyIdx_Wide)
+			sc += SESSION_MATCH_SCORE;
+		if (key->user != AnyIdx_Wide)
+			sc += USER_MATCH_SCORE;
+		if (key->permission != AnyIdx_Wide)
+			sc += PERMISSION_MATCH_SCORE;
+	}
+	return sc;
+}
+
+/******************************************************************************/
+/******************************************************************************/
 /*** FOR ALL                                                                ***/
 /******************************************************************************/
 /******************************************************************************/
 
-/** manage atomicity of operations */
+/* see anydb.h */
 int
 anydb_transaction(
 	anydb_t *db,
@@ -157,17 +335,14 @@ anydb_transaction(
 
 struct for_all_s
 {
-	anydb_t *db;
+	anydb_t *db;          /* targeted database */
+	time_t now;           /* also drop expired items */
+	searchkey_t skey;
 	void *closure;
 	void (*callback)(
 		void *closure,
 		const data_key_t *key,
 		const data_value_t *value);
-	anydb_idx_t idxcli;
-	anydb_idx_t idxses;
-	anydb_idx_t idxusr;
-	const char *strperm;
-	time_t now;
 };
 
 static
@@ -181,48 +356,41 @@ for_all_cb(
 	data_key_t k;
 	data_value_t v;
 
+	/* drop expired items */
 	if (value->expire && value->expire <= s->now)
 		return Anydb_Action_Remove_And_Continue;
 
-	if ((s->idxcli == AnyIdx_Any || s->idxcli == key->client)
-	 && (s->idxses == AnyIdx_Any || s->idxses == key->session)
-	 && (s->idxusr == AnyIdx_Any || s->idxusr == key->user)) {
+	if (searchkey_match(s->db, key, &s->skey)) {
+		k.client = string(s->db, key->client);
+		k.session = string(s->db, key->session);
+		k.user = string(s->db, key->user);
 		k.permission = string(s->db, key->permission);
-		if (!s->strperm || !strcasecmp(s->strperm, k.permission)) {
-			k.client = string(s->db, key->client);
-			k.session = string(s->db, key->session);
-			k.user = string(s->db, key->user);
-			v.value = string(s->db, value->value);
-			v.expire = value->expire;
-			s->callback(s->closure, &k, &v);
-		}
+		v.value = string(s->db, value->value);
+		v.expire = value->expire;
+		s->callback(s->closure, &k, &v);
 	}
 	return Anydb_Action_Continue;
 }
 
-/** enumerate */
+/* see anydb.h */
 void
 anydb_for_all(
 	anydb_t *db,
-	void *closure,
 	void (*callback)(
 		void *closure,
 		const data_key_t *key,
 		const data_value_t *value),
+	void *closure,
 	const data_key_t *key
 ) {
 	struct for_all_s s;
 
+	if (!searchkey_prepare_match(db, key, &s.skey, false))
+		return; /* nothing to do! because one of the idx doesn't exist */
+
 	s.db = db;
 	s.closure = closure;
 	s.callback = callback;
-
-	if (idx(db, &s.idxcli, key->client, false)
-	 || idx(db, &s.idxses, key->session, false)
-	 || idx(db, &s.idxusr, key->user, false))
-		return; /* nothing to do! because one of the idx doesn't exist */
-	s.strperm = is_any(key->permission) ? NULL : key->permission;
-
 	s.now = time(NULL);
 	db->itf.apply(db->clodb, for_all_cb, &s);
 }
@@ -233,16 +401,15 @@ anydb_for_all(
 /******************************************************************************/
 /******************************************************************************/
 
+/* structure for dropping items */
 struct drop_s
 {
-	anydb_t *db;
-	anydb_idx_t idxcli;
-	anydb_idx_t idxses;
-	anydb_idx_t idxusr;
-	const char *strperm;
-	time_t now;
+	anydb_t *db;          /* targeted database */
+	time_t now;           /* also drop expired items */
+	searchkey_t skey;     /* the search key */
 };
 
+/* callback for dropping items */
 static
 anydb_action_t
 drop_cb(
@@ -252,57 +419,50 @@ drop_cb(
 ) {
 	struct drop_s *s = closure;
 
+	/* drop expired items */
 	if (value->expire && value->expire <= s->now)
 		return Anydb_Action_Remove_And_Continue;
 
-	if ((s->idxcli == AnyIdx_Any || s->idxcli == key->client)
-	 && (s->idxses == AnyIdx_Any || s->idxses == key->session)
-	 && (s->idxusr == AnyIdx_Any || s->idxusr == key->user)
-	 && (!s->strperm || !strcasecmp(s->strperm, string(s->db, key->permission))))
+	/* remove if matches the key */
+	if (searchkey_match(s->db, key, &s->skey))
 		return Anydb_Action_Remove_And_Continue;
 
+	/* continue to next */
 	return Anydb_Action_Continue;
 }
 
-/** drop rules */
-int
+/* see anydb.h */
+void
 anydb_drop(
 	anydb_t *db,
 	const data_key_t *key
 ) {
 	struct drop_s s;
 
+	if (!searchkey_prepare_match(db, key, &s.skey, false))
+		return; /* nothing to do! because one of the idx doesn't exist */
+
 	s.db = db;
-
-	if (idx(db, &s.idxcli, key->client, false)
-	 || idx(db, &s.idxses, key->session, false)
-	 || idx(db, &s.idxusr, key->user, false))
-		return 0; /* nothing to do! because one of the idx doesn't exist */
-	s.strperm = is_any(key->permission) ? NULL : key->permission;
-
 	s.now = time(NULL);
 	db->itf.apply(db->clodb, drop_cb, &s);
-	return 0;
 }
 
 /******************************************************************************/
 /******************************************************************************/
-/*** ADD                                                                    ***/
+/*** SET                                                                    ***/
 /******************************************************************************/
 /******************************************************************************/
 
+/* structure for setting values */
 struct set_s
 {
-	anydb_t *db;
-	anydb_idx_t idxcli;
-	anydb_idx_t idxses;
-	anydb_idx_t idxusr;
-	anydb_idx_t idxval;
-	time_t expire;
-	const char *strperm;
-	time_t now;
+	anydb_t *db;          /* targeted database */
+	time_t now;           /* also drop expired items */
+	searchkey_t skey;     /* searching key */
+	anydb_value_t value;  /* value to set */
 };
 
+/* callback for setting values */
 static
 anydb_action_t
 set_cb(
@@ -312,22 +472,21 @@ set_cb(
 ) {
 	struct set_s *s = closure;
 
+	/* drop expired items */
 	if (value->expire && value->expire <= s->now)
 		return Anydb_Action_Remove_And_Continue;
 
-	if (s->idxcli == key->client
-	 && s->idxses == key->session
-	 && s->idxusr == key->user
-	 && !strcasecmp(s->strperm, string(s->db, key->permission))) {
-		value->value = s->idxval;
-		value->expire = s->expire;
-		s->db = NULL;
+	if (searchkey_is(s->db, key, &s->skey)) {
+		value->value = s->value.value;
+		value->expire = s->value.expire;
+		s->db = NULL; /* indicates that is found */
 		return Anydb_Action_Update_And_Stop;
 	}
 
 	return Anydb_Action_Continue;
 }
 
+/* see anydb.h */
 int
 anydb_set(
 	anydb_t *db,
@@ -336,41 +495,25 @@ anydb_set(
 ) {
 	int rc;
 	struct set_s s;
-	anydb_key_t k;
-	anydb_value_t v;
 
-	s.db = db;
-	s.strperm = key->permission;
-	s.expire = value->expire;
+	rc = searchkey_prepare_is(db, key, &s.skey, true);
+	if (rc)
+		goto error;
 
-	rc = idx_but_any(db, &s.idxcli, key->client, true);
-	if (rc)
-		goto error;
-	rc = idx_but_any(db, &s.idxses, key->session, true);
-	if (rc)
-		goto error;
-	rc = idx_but_any(db, &s.idxusr, key->user, true);
-	if (rc)
-		goto error;
-	rc = idx(db, &s.idxval, value->value, true);
+	rc = idx(db, &s.value.value, value->value, true);
 	if (rc)
 		goto error;
 
+	s.db = db;
+	s.value.expire = value->expire;
 	s.now = time(NULL);
 	db->itf.apply(db->clodb, set_cb, &s);
 	if (s.db) {
-		if (idx(db, &k.permission, s.strperm, true))
-			goto error;
-		k.client = s.idxcli;
-		k.user = s.idxusr;
-		k.session = s.idxses;
-		v.value = s.idxval;
-		v.expire = s.expire;
-		rc = db->itf.add(db->clodb, &k, &v);
-		if (rc)
-			goto error;
+		/* no item to alter so must be added */
+		rc = idx(db, &s.skey.key.permission, key->permission, true);
+		if (!rc)
+			rc = db->itf.add(db->clodb, &s.skey.key, &s.value);
 	}
-	return 0;
 error:
 	return rc;
 }
@@ -381,19 +524,17 @@ error:
 /******************************************************************************/
 /******************************************************************************/
 
+/* structure for testing rule */
 struct test_s
 {
-	anydb_t *db;
-	anydb_idx_t idxcli;
-	anydb_idx_t idxses;
-	anydb_idx_t idxusr;
-	const char *strperm;
-	int score;
-	anydb_idx_t idxval;
-	time_t expire;
+	anydb_t *db;          /* targeted database */
 	time_t now;
+	unsigned score;
+	searchkey_t skey;
+	anydb_value_t value;
 };
 
+/* callback for testing rule */
 static
 anydb_action_t
 test_cb(
@@ -402,35 +543,22 @@ test_cb(
 	anydb_value_t *value
 ) {
 	struct test_s *s = closure;
-	int sc;
+	unsigned sc;
 
+	/* drop expired items */
 	if (value->expire && value->expire <= s->now)
 		return Anydb_Action_Remove_And_Continue;
 
-	if ((s->idxcli == key->client || key->client == AnyIdx_Wide)
-	 && (s->idxses == key->session || key->session == AnyIdx_Wide)
-	 && (s->idxusr == key->user || key->user == AnyIdx_Wide)
-	 && (AnyIdx_Wide == key->permission
-	     || !strcasecmp(s->strperm, string(s->db, key->permission)))) {
-		sc = 1;
-		if (key->client != AnyIdx_Wide)
-			sc += CLIENT_MATCH_SCORE;
-		if (key->session != AnyIdx_Wide)
-			sc += SESSION_MATCH_SCORE;
-		if (key->user != AnyIdx_Wide)
-			sc += USER_MATCH_SCORE;
-		if (key->permission != AnyIdx_Wide)
-			sc += PERMISSION_MATCH_SCORE;
-		if (sc > s->score) {
-			s->score = sc;
-			s->idxval = value->value;
-			s->expire = value->expire;
-		}
+	sc = searchkey_test(s->db, key, &s->skey);
+	if (sc > s->score) {
+		s->score = sc;
+		s->value = *value;
 	}
 	return Anydb_Action_Continue;
 }
 
-int
+/* see anydb.h */
+unsigned
 anydb_test(
 	anydb_t *db,
 	const data_key_t *key,
@@ -438,27 +566,19 @@ anydb_test(
 ) {
 	struct test_s s;
 
+	searchkey_prepare_test(db, key, &s.skey, true);
+
 	s.db = db;
 	s.now = time(NULL);
-	s.strperm = key->permission;
-	s.expire = value->expire;
-
-	s.idxcli = idx_or_none_but_any(db, key->client, true);
-	s.idxses = idx_or_none_but_any(db, key->session, true);
-	s.idxusr = idx_or_none_but_any(db, key->user, true);
-
-	s.expire = -1;
-	s.idxval = AnyIdx_Invalid;
 	s.score = 0;
-
 	db->itf.apply(db->clodb, test_cb, &s);
-
 	if (s.score) {
-		value->value = string(db, s.idxval);
-		value->expire = s.expire;
+		value->value = string(db, s.value.value);
+		value->expire = s.value.expire;
 	}
 	return s.score;
 }
+
 
 /******************************************************************************/
 /******************************************************************************/
@@ -466,6 +586,7 @@ anydb_test(
 /******************************************************************************/
 /******************************************************************************/
 
+/* callback for computing if empty */
 static
 anydb_action_t
 is_empty_cb(
@@ -473,18 +594,23 @@ is_empty_cb(
 	const anydb_key_t *key,
 	anydb_value_t *value
 ) {
-	bool *result = closure;
-	*result = false;
+	time_t *t = closure;
+	if (value->expire && value->expire <= *t)
+		return Anydb_Action_Remove_And_Continue;
+	*t = 0;
 	return Anydb_Action_Stop;
 }
 
+/* see anydb.h */
 bool
 anydb_is_empty(
 	anydb_t *db
 ) {
-	bool result = true;
-	db->itf.apply(db->clodb, is_empty_cb, &result);
-	return result;
+	time_t t;
+
+	t = time(NULL);
+	db->itf.apply(db->clodb, is_empty_cb, &t);
+	return !t;
 }
 
 /******************************************************************************/
@@ -493,6 +619,7 @@ anydb_is_empty(
 /******************************************************************************/
 /******************************************************************************/
 
+/* cleanup callback */
 static
 anydb_action_t
 cleanup_cb(
@@ -500,12 +627,11 @@ cleanup_cb(
 	const anydb_key_t *key,
 	anydb_value_t *value
 ) {
-	if (value->expire && value->expire <= *(time_t*)closure)
-		return Anydb_Action_Remove_And_Continue;
-
-	return Anydb_Action_Continue;
+	return value->expire && value->expire <= *(time_t*)closure
+		? Anydb_Action_Remove_And_Continue : Anydb_Action_Continue;
 }
 
+/* see anydb.h */
 void
 anydb_cleanup(
 	anydb_t *db
@@ -519,10 +645,25 @@ anydb_cleanup(
 
 /******************************************************************************/
 /******************************************************************************/
+/*** SYNCHRONIZE                                                            ***/
+/******************************************************************************/
+/******************************************************************************/
+
+/* see anydb.h */
+int
+anydb_sync(
+	anydb_t *db
+) {
+	return db->itf.sync ? db->itf.sync(db->clodb) : 0;
+}
+
+/******************************************************************************/
+/******************************************************************************/
 /*** DESTROY                                                                ***/
 /******************************************************************************/
 /******************************************************************************/
 
+/* see anydb.h */
 void
 anydb_destroy(
 	anydb_t *db

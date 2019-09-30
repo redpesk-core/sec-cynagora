@@ -14,9 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF SERVER PART OF RCYN-PROTOCOL                             */
+/******************************************************************************/
+/******************************************************************************/
 
 struct rcyn_server;
 typedef struct rcyn_server rcyn_server_t;

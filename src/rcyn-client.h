@@ -14,9 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF CLIENT PART OF RCYN-PROTOCOL                             */
+/******************************************************************************/
+/******************************************************************************/
+
 
 typedef struct rcyn rcyn_t;
 typedef enum rcyn_type rcyn_type_t;

@@ -14,22 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF EPOLL HELPER                                             */
+/******************************************************************************/
+/******************************************************************************/
 
 /** structure for using epoll easily */
 typedef struct pollitem pollitem_t;
 
+/**
+ * Structure for using epoll easily
+ */
 struct pollitem
 {
 	/** callback on event */
 	void (*handler)(pollitem_t *pollitem, uint32_t events, int pollfd);
 
-	/** data */
+	/** data of any kind free to use */
 	void *closure;
 
-	/** file */
+	/** file descriptor */
 	int fd;
 };
 
+/**
+ * Add a pollitem to epoll
+ *
+ * @param pollitem the pollitem to add
+ * @param events expected events
+ * @param pollfd file descriptor of the epoll
+ * @return 0 on success or -1 with errno set accordingly to epoll_ctl
+ */
 extern
 int
 pollitem_add(
@@ -38,6 +55,14 @@ pollitem_add(
 	int pollfd
 );
 
+/**
+ * Modify a pollitem of epoll
+ *
+ * @param pollitem the pollitem to modify
+ * @param events expected events
+ * @param pollfd file descriptor of the epoll
+ * @return 0 on success or -1 with errno set accordingly to epoll_ctl
+ */
 extern
 int
 pollitem_mod(
@@ -46,6 +71,13 @@ pollitem_mod(
 	int pollfd
 );
 
+/**
+ * Delete a pollitem from epoll
+ *
+ * @param pollitem the pollitem to delete
+ * @param pollfd file descriptor of the epoll
+ * @return 0 on success or -1 with errno set accordingly to epoll_ctl
+ */
 extern
 int
 pollitem_del(
@@ -53,6 +85,15 @@ pollitem_del(
 	int pollfd
 );
 
+/**
+ * Wait one event on epoll and dispatch it to its pollitem callback
+ *
+ * @param pollfd file descriptor of the epoll
+ * @param timeout time to wait
+ * @return 0 on timeout
+ *         1 if a callback was called
+ *         -1 with errno set accordingly to epoll_wait
+ */
 extern
 int
 pollitem_wait_dispatch(

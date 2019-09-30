@@ -14,14 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF QUEUE OF DATABASE MODIFIERS                              */
+/******************************************************************************/
+/******************************************************************************/
 
-
+/**
+ * Queue droping the key
+ *
+ * @param key the key for dropping
+ * @return 0 on success or -ENOMEM on memory depletion
+ */
 extern
 int
 queue_drop(
 	const data_key_t *key
 );
 
+/**
+ * Queue setting of the key with the value
+ *
+ * @param key the key to set
+ * @param value the value to set to the key
+ * @return 0 on success or -ENOMEM on memory depletion
+ */
 extern
 int
 queue_set(
@@ -29,14 +47,21 @@ queue_set(
 	const data_value_t *value
 );
 
+/**
+ * Clear the content of the queue
+ */
 extern
 void
 queue_clear(
 );
 
+/**
+ * Play the content of the queue to alter the database accordingly to what
+ * is recorded
+ *
+ * @return 0 in case of success or a negative error code like -errno
+ */
 extern
 int
 queue_play(
 );
-
-

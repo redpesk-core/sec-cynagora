@@ -14,18 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* CONVERTION OF EXPIRATIONS TO AND FROM TEXT                                 */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <time.h>
 #include <string.h>
 #include <stdio.h>
+
+#include "expire.h"
 
 static const int SEC = 1;
 static const int MIN = 60;
 static const int HOUR = 60*60;
 static const int DAY = 24*60*60;
 static const int WEEK = 7*24*60*60;
-static const int YEAR = 365*24*60*60;
+static const int YEAR = 365*24*60*60 + 24*60*60/4;
 
+/* see expire.h */
 time_t txt2exp(const char *txt)
 {
 	time_t r, x;
@@ -39,7 +47,7 @@ time_t txt2exp(const char *txt)
 	while(*txt) {
 		x = 0;
 		while('0' <= *txt && *txt <= '9')
-			x = 10 * x + (time_t)(*txt++ - '0');
+			x = (x << 3) + (x << 1) + (time_t)(*txt++ - '0');
 		switch(*txt) {
 		case 'y': r += x * YEAR; txt++; break;
 		case 'w': r += x * WEEK; txt++; break;
@@ -54,6 +62,7 @@ time_t txt2exp(const char *txt)
 	return r;
 }
 
+/* see expire.h */
 size_t exp2txt(time_t expire, char *buffer, size_t buflen)
 {
 	char b[100];

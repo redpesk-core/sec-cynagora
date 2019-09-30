@@ -14,11 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF LOCAL CYNARA API                                         */
+/******************************************************************************/
+/******************************************************************************/
 
-#define CYN_VERSION 99
+#define CYN_VERSION 100
 
 /**
  * Callback for entering asynchronousely the critical section
@@ -120,7 +123,7 @@ cyn_leave(
  *         -ENOMEM critical section already locked but request can't be queued
  *         -EINVAL magic == NULL
  *
- * @see cyn_leave, cyn_enter
+ * @see cyn_leave, cyn_enter, cyn_enter_async_cancel
  */
 extern
 int
@@ -131,9 +134,12 @@ cyn_enter_async(
 
 /**
  * Cancel a an asynchonous waiter to enter
+ *
  * @param enter_cb the enter callback of the waiter
  * @param magic the closure of the waiter
  * @return 0 if entry found and removed, -ENOENT if not found
+ *
+ * @see cyn_enter_async
  */
 extern
 int
@@ -149,6 +155,8 @@ cyn_enter_async_cancel(
  * @param closure closure of the callback
  * @return 0 success
  *         -ENOMEM can't queue the observer
+ *
+ * @see cyn_on_change_remove
  */
 extern
 int
@@ -159,9 +167,12 @@ cyn_on_change_add(
 
 /**
  * Removes an on change observer
+ *
  * @param on_change_cb the callback of the observer
  * @param closure the closure of the observer
  * @return 0 if entry found and removed, -ENOENT if not found
+ *
+ * @see cyn_on_change_add
  */
 extern
 int
@@ -172,6 +183,7 @@ cyn_on_change_remove(
 
 /**
  * Set or add the rule key/value to the change list to commit
+ *
  * @param key the key of the rule
  * @param value the value of the rule for the key
  * @return 0 on success
@@ -187,6 +199,7 @@ cyn_set(
 
 /**
  * Drop any rule matching the key
+ *
  * @param key the key of the rule
  * @return 0 on success
  *         -EPERM if not locked in critical recoverable section
@@ -198,14 +211,37 @@ cyn_drop(
 	const data_key_t *key
 );
 
+/**
+ * Enumerate all items matching the key
+ *
+ * @param callback callback function called for each found item
+ * @param closure the closure to the callback
+ * @param key the key to select items
+ */
 extern
 void
 cyn_list(
-	void *closure,
 	list_cb_t *callback,
+	void *closure,
 	const data_key_t *key
 );
 
+/**
+ * Query the value for the given key.
+ *
+ * Note that the callback can be called during the call to that function.
+ *
+ * Note also that the callback will always be called either before the
+ * function returns or else later.
+ *
+ * @param on_result_cb callback function receiving the result
+ * @param closure closure for the callback
+ * @param key key to be queried
+ * @param maxdepth maximum imbrication of agent resolution
+ * @return 0 if there was no error or return the error code
+ *
+ * @see cyn_test_async, cyn_check_async
+ */
 extern
 int
 cyn_query_async(
@@ -215,6 +251,21 @@ cyn_query_async(
 	int maxdepth
 );
 
+/**
+ * Same as cyn_query_async but with a maxdepth of 0
+ *
+ * Note that the callback can be called during the call to that function.
+ *
+ * Note also that the callback will always be called either before the
+ * function returns or else later.
+ *
+ * @param on_result_cb callback function receiving the result
+ * @param closure closure for the callback
+ * @param key key to be queried
+ * @return
+ *
+ * @see cyn_query_async, cyn_check_async
+ */
 extern
 int
 cyn_test_async(
@@ -223,6 +274,21 @@ cyn_test_async(
 	const data_key_t *key
 );
 
+/**
+ * Same as cyn_query_async but with a default maxdepth for agent subqueries
+ *
+ * Note that the callback can be called during the call to that function.
+ *
+ * Note also that the callback will always be called either before the
+ * function returns or else later.
+ *
+ * @param on_result_cb callback function receiving the result
+ * @param closure closure for the callback
+ * @param key key to be queried
+ * @return 0 or -ENOMEM if some error occured
+ *
+ * @see cyn_query_async, cyn_test_async
+ */
 extern
 int
 cyn_check_async(
@@ -231,22 +297,53 @@ cyn_check_async(
 	const data_key_t *key
 );
 
+/**
+ * Makes a recursive query asynchronous
+ *
+ * Note that the callback can be called during the call to that function.
+ *
+ * Note also that the callback will always be called either before the
+ * function returns or else later.
+ *
+ * @param query the query
+ * @param on_result_cb callback function receiving the result
+ * @param closure closure for the callback
+ * @param key key to be queried
+ * @return
+ */
 extern
 int
-cyn_subquery_async(
+cyn_query_subquery_async(
 	cyn_query_t *query,
 	on_result_cb_t *on_result_cb,
 	void *closure,
 	const data_key_t *key
 );
 
+/**
+ * Send the reply to a query
+ *
+ * @param query the query to reply
+ * @param value the reply value
+ */
 extern
 void
-cyn_reply_query(
+cyn_query_reply(
 	cyn_query_t *query,
 	const data_value_t *value
 );
 
+/**
+ * Add the agent of name
+ *
+ * @param name name of the agent to add
+ * @param agent_cb callback of the agent
+ * @param closure closure of the callback of the agent
+ * @return 0 in case of success
+ *         -EINVAL if the name is too long
+ *         -EEXIST if an agent of the same name is already recorded
+ *         -ENOMEM if out of memory
+ */
 extern
 int
 cyn_agent_add(
@@ -255,22 +352,47 @@ cyn_agent_add(
 	void *closure
 );
 
+/**
+ * Remove the agent of 'name'
+ *
+ * @param name name of the agent to remove
+ * @return 0 in case of successful removal
+ *         -EINVAL if the name is too long
+ *         -ENOENT if the agent isn't recorded
+ */
 extern
 int
 cyn_agent_remove(
 	const char *name
 );
 
+/**
+ * Reset the changeid
+ *
+ * @see cyn_changeid, cyn_changeid_string
+ */
 extern
 void
 cyn_changeid_reset(
 );
 
+/**
+ * Get the current changeid
+ * @return the current changeid
+ *
+ * @see cyn_changeid_rest, cyn_changeid_string
+ */
 extern
 uint32_t
 cyn_changeid(
 );
 
+/**
+ * Get the current changeid as a string
+ * @return the string of the current change id
+ *
+ * @see cyn_changeid_rest, cyn_changeid
+ */
 extern
 const char *
 cyn_changeid_string(

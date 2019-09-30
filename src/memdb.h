@@ -14,9 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF IN MEMORY DATABASE WITHOUT FILE BACKEND                  */
+/******************************************************************************/
+/******************************************************************************/
 
+/**
+ * Create the object handling the memory database
+ * @param memdb pointer to the handling object to return
+ */
 extern
 int
 memdb_create(

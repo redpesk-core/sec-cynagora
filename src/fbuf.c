@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF BUFFERED FILES                                           */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <assert.h>
 #include <stdlib.h>
@@ -31,16 +36,28 @@
 
 #include "fbuf.h"
 
-/** compute the size to allocate for ensuring 'sz' bytes */
+/**
+ * compute the size to allocate for ensuring 'sz' bytes
+ * @param sz the expected size
+ * @return a size greater than sz
+ */
 static
 uint32_t
 get_asz(
 	uint32_t sz
 ) {
-	return (sz & 0xfffffc00) + 0x000004cf;
+	uint32_t r = (sz & 0xfffffc00) + 0x000004cf;
+	return r > sz ? r : UINT32_MAX;
 }
 
-/** open in 'fb' the file of 'name' */
+/**
+ * Open in 'fb' the file of 'name'
+ * @param fb the fbuf
+ * @param name the name of the file to read
+ * @return 0 on success
+ *         -EFBIG if the file is too big
+ *         -errno system error
+ */
 static
 int
 read_file(
@@ -91,7 +108,7 @@ error:
 	return rc;
 }
 
-/** open in 'fb' the file of 'name' */
+/* see fbuf.h */
 int
 fbuf_open(
 	fbuf_t	*fb,
@@ -105,18 +122,19 @@ fbuf_open(
 	memset(fb, 0, sizeof *fb);
 
 	/* save name */
-	fb->name = strdup(name);
+	sz = strlen(name);
+	fb->name = malloc(sz + 1);
 	if (fb->name == NULL)
 		goto error;
+	mempcpy(fb->name, name, sz + 1);
 
 	/* open the backup */
 	if (backup != NULL)
 		fb->backup = strdup(backup);
 	else {
-		sz = strlen(name);
 		fb->backup = malloc(sz + 2);
 		if (fb->backup != NULL) {
-			memcpy(fb->backup, name, sz);
+			mempcpy(fb->backup, name, sz);
 			fb->backup[sz] = '~';
 			fb->backup[sz + 1] = 0;
 		}
@@ -129,6 +147,7 @@ fbuf_open(
 	if (rc < 0)
 		goto error;
 
+	/* any read data is already saved */
 	fb->saved = fb->used;
 	return 0;
 
@@ -139,7 +158,7 @@ error:
 	return rc;
 }
 
-/** close the file 'fb' */
+/* see fbuf.h */
 void
 fbuf_close(
 	fbuf_t	*fb
@@ -150,7 +169,7 @@ fbuf_close(
 	memset(fb, 0, sizeof *fb);
 }
 
-/** write to file 'fb' the unsaved bytes and flush the content to the file */
+/* see fbuf.h */
 int
 fbuf_sync(
 	fbuf_t	*fb
@@ -173,6 +192,8 @@ fbuf_sync(
 	close(fd);
 	if (rcs < 0)
 		goto error;
+	if ((uint32_t)rcs != fb->used)
+		goto error; /* TODO: set some errno? */
 
 	fb->size = fb->saved = fb->used;
 	return 0;
@@ -183,29 +204,29 @@ error:
 	return rc;
 }
 
-/** allocate enough memory in 'fb' to store 'count' bytes */
+/* see fbuf.h */
 int
 fbuf_ensure_capacity(
 	fbuf_t	*fb,
-	uint32_t count
+	uint32_t capacity
 ) {
-	uint32_t capacity;
+	uint32_t asz;
 	void *buffer;
 
-	if (count > fb->capacity) {
-		capacity = get_asz(count);
-		buffer = realloc(fb->buffer, capacity);
+	if (capacity > fb->capacity) {
+		asz = get_asz(capacity);
+		buffer = realloc(fb->buffer, asz);
 		if (buffer == NULL) {
-			fprintf(stderr, "alloc %u for file %s failed: %m\n", capacity, fb->name);
+			fprintf(stderr, "alloc %u for file %s failed: %m\n", asz, fb->name);
 			return -ENOMEM;
 		}
 		fb->buffer = buffer;
-		fb->capacity = capacity;
+		fb->capacity = asz;
 	}
 	return 0;
 }
 
-/** put at 'offset' in the memory of 'fb' the 'count' bytes pointed by 'buffer' */
+/* see fbuf.h */
 int
 fbuf_put(
 	fbuf_t	*fb,
@@ -214,12 +235,13 @@ fbuf_put(
 	uint32_t offset
 ) {
 	int rc;
-	uint32_t end = offset + count;
+	uint32_t end;
 
 	/* don't call me for nothing */
 	assert(count);
 
 	/* grow as necessary */
+	end = offset + count;
 	if (end > fb->used) {
 		rc = fbuf_ensure_capacity(fb, end);
 		if (rc < 0)
@@ -236,7 +258,7 @@ fbuf_put(
 	return 0;
 }
 
-/** append at end in the memory of 'fb' the 'count' bytes pointed by 'buffer' */
+/* see fbuf.h */
 int
 fbuf_append(
 	fbuf_t	*fb,
@@ -249,7 +271,7 @@ fbuf_append(
 	return fbuf_put(fb, buffer, count, fb->used);
 }
 
-/** check or make identification of file 'fb' by 'id' of 'len' */
+/* see fbuf.h */
 int
 fbuf_identify(
 	fbuf_t	*fb,
@@ -265,12 +287,11 @@ fbuf_identify(
 		return 0;
 
 	/* bad identification */
-	errno = ENOKEY;
 	fprintf(stderr, "identification of file %s failed: %m\n", fb->name);
 	return -ENOKEY;
 }
 
-/** check or make identification by 'uuid' of file 'fb' */
+/* see fbuf.h */
 int
 fbuf_open_identify(
 	fbuf_t	*fb,
@@ -281,16 +302,18 @@ fbuf_open_identify(
 ) {
 	int rc;
 
+	/* open the files */
 	rc = fbuf_open(fb, name, backup);
 	if (rc == 0) {
+		/* check identifier */
 		rc = fbuf_identify(fb, id, idlen);
 		if (rc < 0)
-			fbuf_close(fb);
+			fbuf_close(fb); /* close if error */
 	}
 	return rc;
 }
 
-/** make a backup */
+/* see fbuf.h */
 int
 fbuf_backup(
 	fbuf_t	*fb
@@ -299,7 +322,7 @@ fbuf_backup(
 	return link(fb->name, fb->backup);
 }
 
-/** recover from latest backup */
+/* see fbuf.h */
 int
 fbuf_recover(
 	fbuf_t	*fb

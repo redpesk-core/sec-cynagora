@@ -14,7 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+/******************************************************************************/
+/******************************************************************************/
+/* COMPATIBILITY LAYER TO PREVIOUS CYNARA                                     */
+/******************************************************************************/
+/******************************************************************************/
 /*
 cynara_admin_initialize(&m_CynaraAdmin),
 cynara_admin_finish(m_CynaraAdmin);

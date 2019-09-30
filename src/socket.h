@@ -14,8 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF SOCKET OPENING FOLLOWING SPECIFICATION                   */
+/******************************************************************************/
+/******************************************************************************/
 
 extern int socket_open(const char *uri, int server);
 

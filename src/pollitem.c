@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF EPOLL HELPER                                             */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdint.h>
 #include <sys/epoll.h>
 
-/*
-#include <stddef.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <poll.h>
-#include <limits.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-*/
-
 #include "pollitem.h"
 
+/**
+ * Wraps the call to epoll_ctl for operation 'op'
+ *
+ * @param pollitem the pollitem to process
+ * @param events the expected events
+ * @param pollfd the file descriptor for epoll
+ * @param op the operation to perform
+ * @return 0 on success or -1 with errno set accordingly to epoll_ctl
+ */
 static
 int
 pollitem_do(
@@ -47,6 +46,7 @@ pollitem_do(
 	return epoll_ctl(pollfd, op, pollitem->fd, &ev);
 }
 
+/* see pollitem.h */
 int
 pollitem_add(
 	pollitem_t *pollitem,
@@ -56,6 +56,7 @@ pollitem_add(
 	return pollitem_do(pollitem, events, pollfd, EPOLL_CTL_ADD);
 }
 
+/* see pollitem.h */
 int
 pollitem_mod(
 	pollitem_t *pollitem,
@@ -65,6 +66,7 @@ pollitem_mod(
 	return pollitem_do(pollitem, events, pollfd, EPOLL_CTL_MOD);
 }
 
+/* see pollitem.h */
 int
 pollitem_del(
 	pollitem_t *pollitem,
@@ -73,6 +75,7 @@ pollitem_del(
 	return pollitem_do(pollitem, 0, pollfd, EPOLL_CTL_DEL);
 }
 
+/* see pollitem.h */
 int
 pollitem_wait_dispatch(
 	int pollfd,

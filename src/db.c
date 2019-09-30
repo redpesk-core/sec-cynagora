@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* INTERNAL DATABASE IMPLEMENTATION                                           */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <assert.h>
 #include <stdlib.h>
@@ -34,8 +39,13 @@
 
 static anydb_t *memdb;
 static anydb_t *filedb;
+static bool modifiable;
 
-/** check whether the 'text' fit String_Any, String_Wide, NULL or ""  */
+/**
+ * check whether the 'text' fit String_Any, String_Wide, NULL or ""
+ * @param text the text to check
+ * @return true if ANY or WIDE
+ */
 static
 bool
 is_any_or_wide(
@@ -46,7 +56,7 @@ is_any_or_wide(
 }
 
 
-/** open the database for files 'names' and 'rules' (can be NULL) */
+/* see db.h */
 int
 db_open(
 	const char *directory
@@ -62,7 +72,7 @@ db_open(
 	return rc;
 }
 
-/** close the database */
+/* see db.h */
 void
 db_close(
 ) {
@@ -70,31 +80,40 @@ db_close(
 	anydb_destroy(memdb);
 }
 
-/** is the database empty */
+/* see db.h */
 bool
 db_is_empty(
 ) {
 	return anydb_is_empty(filedb);
 }
 
-/** enter atomic mode */
+/* see db.h */
 int
 db_transaction_begin(
 ) {
-	int rc1, rc2;
+	int rc1, rc2, rc;
+
+	if (modifiable)
+		return -EALREADY;
 
 	rc1 = anydb_transaction(filedb, Anydb_Transaction_Start);
 	rc2 = anydb_transaction(memdb, Anydb_Transaction_Start);
 
-	return rc1 ?: rc2;
+	rc = rc1 ?: rc2;
+	modifiable = !rc;
+
+	return rc;
 }
 
-/** leave atomic mode */
+/* see db.h */
 int
 db_transaction_end(
 	bool commit
 ) {
 	int rc1, rc2, rc3, rc4;
+
+	if (!modifiable)
+		return -EALREADY;
 
 	if (commit) {
 		rc1 = anydb_transaction(filedb, Anydb_Transaction_Commit);
@@ -106,54 +125,61 @@ db_transaction_end(
 		rc3 = 0;
 	}
 	rc4 = db_sync();
+	modifiable = false;
 
 	return rc1 ?: rc2 ?: rc3 ?: rc4;
 }
 
 
-/** enumerate */
+/* see db.h */
 void
 db_for_all(
-	void *closure,
 	void (*callback)(
 		void *closure,
 		const data_key_t *key,
 		const data_value_t *value),
+	void *closure,
 	const data_key_t *key
 ) {
-	anydb_for_all(filedb, closure, callback, key);
-	anydb_for_all(memdb, closure, callback, key);
+	anydb_for_all(filedb, callback, closure, key);
+	anydb_for_all(memdb, callback, closure, key);
 }
 
-/** drop rules */
+/* see db.h */
 int
 db_drop(
 	const data_key_t *key
 ) {
+	if (!modifiable)
+		return -EACCES;
+
 	anydb_drop(filedb, key);
 	anydb_drop(memdb, key);
 	return 0;
 }
 
-/** set rules */
+/* see db.h */
 int
 db_set(
 	const data_key_t *key,
 	const data_value_t *value
 ) {
-	if (is_any_or_wide(key->session))
-		return anydb_set(filedb, key, value);
-	else
-		return anydb_set(memdb, key, value);
+	anydb_t *db;
+
+	if (!modifiable)
+		return -EACCES;
+
+	db = is_any_or_wide(key->session) ? filedb : memdb;
+	return anydb_set(db, key, value);
 }
 
-/** check rules */
-int
+/* see db.h */
+unsigned
 db_test(
 	const data_key_t *key,
 	data_value_t *value
 ) {
-	int s1, s2;
+	unsigned s1, s2;
 	data_value_t v1, v2;
 
 	s1 = anydb_test(memdb, key, &v1);
@@ -161,12 +187,13 @@ db_test(
 	if (s2 > s1) {
 		*value = v2;
 		return s2;
-	} else {
-		*value = v1;
-		return s1;
 	}
+	if (s1)
+		*value = v1;
+	return s1;
 }
 
+/* see db.h */
 int
 db_cleanup(
 ) {
@@ -175,6 +202,7 @@ db_cleanup(
 	return 0;
 }
 
+/* see db.h */
 int
 db_sync(
 ) {

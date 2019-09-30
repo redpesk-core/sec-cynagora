@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* READING DATABASE RULE FILES FOR INITIALISATION                             */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <time.h>
@@ -28,7 +33,7 @@
 #include "expire.h"
 #include "dbinit.h"
 
-/** initialize the database from file of 'path' */
+/* see dbinit.h */
 int dbinit_add_file(const char *path)
 {
 	int rc, lino;
@@ -115,8 +120,10 @@ error2:
 	fclose(f);
 error:
 	if (rc)
+		/* cancel changes if error occured */
 		cyn_leave(dbinit_add_file, 0);
 	else {
+		/* commit the changes */
 		rc = cyn_leave(dbinit_add_file, 1);
 		if (rc < 0)
 			fprintf(stderr, "unable to commit content of file %s\n", path);

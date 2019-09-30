@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF COMMON PROTOCOL VALUES, CONSTANTS, PROCESSES             */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 
@@ -22,28 +27,25 @@
 const char
 	_agent_[] = "agent",
 	_check_[] = "check",
+	_clear_[] = "clear",
+	_commit_[] = "commit",
+	_done_[] = "done",
 	_drop_[] = "drop",
 	_enter_[] = "enter",
+	_error_[] = "error",
 	_get_[] = "get",
+	_item_[] = "item",
 	_leave_[] = "leave",
 	_log_[] = "log",
-	_rcyn_[] = "rcyn",
-	_set_[] = "set",
-	_test_[] = "test";
-
-const char
-	_commit_[] = "commit",
-	_rollback_[] = "rollback";
-
-const char
-	_clear_[] = "clear",
-	_done_[] = "done",
-	_error_[] = "error",
-	_item_[] = "item",
 	_no_[] = "no",
-	_on_[] = "on",
 	_off_[] = "off",
+	_on_[] = "on",
+	_rcyn_[] = "rcyn",
+	_rollback_[] = "rollback",
+	_set_[] = "set",
+	_test_[] = "test",
 	_yes_[] = "yes";
+
 
 #if !defined(RCYN_DEFAULT_SOCKET_SCHEME)
 #    define  RCYN_DEFAULT_SOCKET_SCHEME  "unix"
@@ -86,6 +88,7 @@ const char
 	rcyn_default_admin_socket_spec[] = RCYN_DEFAULT_ADMIN_SOCKET_SPEC,
 	rcyn_default_agent_socket_spec[] = RCYN_DEFAULT_AGENT_SOCKET_SPEC;
 
+/* see rcyn-protocol.h */
 const char *
 rcyn_get_socket_check(
 	const char *value
@@ -95,6 +98,7 @@ rcyn_get_socket_check(
 		?: rcyn_default_check_socket_spec;
 }
 
+/* see rcyn-protocol.h */
 const char *
 rcyn_get_socket_admin(
 	const char *value
@@ -104,6 +108,7 @@ rcyn_get_socket_admin(
 		?: rcyn_default_admin_socket_spec;
 }
 
+/* see rcyn-protocol.h */
 const char *
 rcyn_get_socket_agent(
 	const char *value

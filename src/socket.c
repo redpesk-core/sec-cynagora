@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF SOCKET OPENING FOLLOWING SPECIFICATION                   */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +38,7 @@
 
 #include "socket.h"
 
-#define BACKLOG  30
+#define BACKLOG  8
 
 /******************************************************************************/
 

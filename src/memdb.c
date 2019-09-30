@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF IN MEMORY DATABASE WITHOUT FILE BACKEND                  */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -21,51 +26,76 @@
 #include <time.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "data.h"
 #include "anydb.h"
+#include "memdb.h"
 
-#define RBS 20 /**< rule block size */
-#define SBS 30 /**< string bloc size */
+#define RULE_BLOC_SIZE   20 /**< rule block size */
+#define STRING_BLOC_SIZE 30 /**< string bloc size */
 
-#define TCLE 0 /**< tag for clean */
-#define TDEL 1 /**< tag for deleted */
-#define TMOD 2 /**< tag for modified */
+#define TAG_CLEAN    0 /**< tag for clean */
+#define TAG_DELETED  1 /**< tag for deleted */
+#define TAG_CHANGED  2 /**< tag for modified */
 
+/**
+ * structure for rules of memory database
+ */
 struct rule
 {
+	/** the key */
 	anydb_key_t key;
+
+	/** the current value */
 	anydb_value_t value;
+
+	/** the next value (depends on tag) */
 	anydb_value_t saved;
+
+	/** tag for the value saved */
 	uint8_t tag;
 };
 
+/**
+ * Structure for the memory database
+ */
 struct memdb
 {
-	/* first for the fun */
+	/** first for the fun */
 	anydb_t db;
 
-	/* strings */
+	/** strings */
 	struct {
+		/** allocated count for strings */
 		uint32_t alloc;
+		/** used count for strings */
 		uint32_t count;
+		/** array of strings */
 		char **values;
 	} strings;
 
-	/* rules */
+	/** rules */
 	struct {
+		/** allocated count for rules */
 		uint32_t alloc;
+		/** used count for rules */
 		uint32_t count;
+		/** array of rules */
 		struct rule *values;
 	} rules;
 
+	/** transaction */
 	struct {
+		/** rule count at the beginning of the transaction */
 		uint32_t count;
+		/** indicator for an active transaction */
 		bool active;
 	} transaction;
 };
 typedef struct memdb memdb_t;
 
+/** implementation of anydb_itf.index */
 static
 int
 index_itf(
@@ -99,13 +129,14 @@ index_itf(
 	if (s == NULL)
 		return -ENOMEM;
 	if (memdb->strings.count == memdb->strings.alloc) {
-		strings = realloc(strings, (memdb->strings.alloc + SBS) * sizeof *strings);
+		strings = realloc(strings, (memdb->strings.alloc
+					+ STRING_BLOC_SIZE) * sizeof *strings);
 		if (!strings) {
 			free(s);
 			return -ENOMEM;
 		}
 		memdb->strings.values = strings;
-		memdb->strings.alloc += SBS;
+		memdb->strings.alloc += STRING_BLOC_SIZE;
 	}
 	i = memdb->strings.count;
 	*idx = i;
@@ -114,6 +145,7 @@ index_itf(
 	return 0;
 }
 
+/** implementation of anydb_itf.string */
 static
 const char *
 string_itf(
@@ -122,14 +154,16 @@ string_itf(
 ) {
 	memdb_t *memdb = clodb;
 
+	assert(idx < memdb->strings.count);
 	return memdb->strings.values[idx];
 }
 
+/** implementation of anydb_itf.apply */
 static
 void
 apply_itf(
 	void *clodb,
-	anydb_action_t (*oper)(void *closure, const anydb_key_t *key, anydb_value_t *value),
+	anydb_applycb_t *oper,
 	void *closure
 ) {
 	memdb_t *memdb = clodb;
@@ -139,32 +173,29 @@ apply_itf(
 
 	ir = 0;
 	while (ir < memdb->rules.count) {
-		if (memdb->transaction.active && rules[ir].tag == TDEL)
-			a = Anydb_Action_Continue;
-		else
-			a = oper(closure, &rules[ir].key, &rules[ir].value);
-		switch (a) {
-		case Anydb_Action_Stop:
-			return;
-		case Anydb_Action_Continue:
+		if (memdb->transaction.active && rules[ir].tag == TAG_DELETED)
 			ir++;
-			break;
-		case Anydb_Action_Update_And_Stop:
-			if (memdb->transaction.active)
-				rules[ir].tag = TMOD;
-			else
-				rules[ir].saved = rules[ir].value;
-			return;
-		case Anydb_Action_Remove_And_Continue:
-			if (memdb->transaction.active)
-				rules[ir++].tag = TDEL;
-			else
-				rules[ir] = rules[--memdb->rules.count];
-			break;
+		else {
+			a = oper(closure, &rules[ir].key, &rules[ir].value);
+			if (a & Anydb_Action_Remove) {
+				if (memdb->transaction.active)
+					rules[ir++].tag = TAG_DELETED;
+				else
+					rules[ir] = rules[--memdb->rules.count];
+			} else if (a & Anydb_Action_Update) {
+				if (memdb->transaction.active)
+					rules[ir].tag = TAG_CHANGED;
+				else
+					rules[ir].saved = rules[ir].value;
+			}
+			if (a & Anydb_Action_Stop)
+				return;
+			ir += !(a & Anydb_Action_Remove);
 		}
 	}
 }
 
+/** implementation of anydb_itf.transaction */
 static
 int
 transaction_itf(
@@ -191,14 +222,14 @@ transaction_itf(
 		ir = 0;
 		while(ir < count) {
 			switch (rules[ir].tag) {
-			case TCLE:
+			case TAG_CLEAN:
 				ir++;
 				break;
-			case TDEL:
+			case TAG_DELETED:
 				rules[ir] = rules[--count];
 				break;
-			case TMOD:
-				rules[ir++].tag = TCLE;
+			case TAG_CHANGED:
+				rules[ir++].tag = TAG_CLEAN;
 				break;
 			}
 		}
@@ -211,9 +242,9 @@ transaction_itf(
 		rules = memdb->rules.values;
 		count = memdb->rules.count = memdb->transaction.count;
 		for (ir = 0 ; ir < count ; ir++) {
-			if (rules[ir].tag != TCLE) {
+			if (rules[ir].tag != TAG_CLEAN) {
 				rules[ir].value = rules[ir].saved;
-				rules[ir].tag = TCLE;
+				rules[ir].tag = TAG_CLEAN;
 			}
 		}
 		memdb->transaction.active = false;
@@ -222,6 +253,7 @@ transaction_itf(
 	return 0;
 }
 
+/** implementation of anydb_itf.add */
 static
 int
 add_itf(
@@ -238,7 +270,7 @@ add_itf(
 	count = memdb->rules.count;
 	alloc = memdb->rules.alloc;
 	if (count == alloc) {
-		alloc += RBS;
+		alloc += RULE_BLOC_SIZE;
 		rules = realloc(rules, alloc * sizeof *rules);
 		if (!rules)
 			return -ENOMEM;
@@ -248,11 +280,16 @@ add_itf(
 	rules = &rules[count];
 	rules->key = *key;
 	rules->saved = rules->value = *value;
-	rules->tag = TCLE;
+	rules->tag = TAG_CLEAN;
 	memdb->rules.count = count + 1;
 	return 0;
 }
 
+/**
+ * Mark the 'item' as being used
+ * @param renum array handling marked items
+ * @param item the item to check
+ */
 static
 void
 gc_mark(
@@ -263,32 +300,38 @@ gc_mark(
 		renum[item] = 1;
 }
 
+/**
+ * return the renumring of 'item' within 'renum'
+ * @param renum the renumbering array
+ * @param item the item to renumber
+ * @return the renumbered item
+ */
 static
 anydb_idx_t
-gc_new(
+gc_renum(
 	anydb_idx_t *renum,
 	anydb_idx_t item
 ) {
 	return item > AnyIdx_Max ? item : renum[item];
 }
-#include <stdio.h>
+
+/** implementation of anydb_itf.gc */
 static
 void
 gc_itf(
 	void *clodb
 ) {
 	memdb_t *memdb = clodb;
-	uint32_t nr = memdb->rules.count;
-	uint32_t ns = memdb->strings.count;
+	uint32_t i, j;
+	uint32_t rule_count = memdb->rules.count;
+	uint32_t name_count = memdb->strings.count;
 	char **strings = memdb->strings.values;
 	struct rule *rules = memdb->rules.values;
-	anydb_idx_t *renum = alloca(ns * sizeof *renum);
-	uint32_t i, j;
+	anydb_idx_t *renum = alloca(name_count * sizeof *renum);
 
-	for (i = 0 ; i < ns ; i++)
-		renum[i] = 0;
-
-	for (i = 0 ; i < nr ; i++) {
+	/* mark used strings */
+	memset(renum, 0, name_count * sizeof *renum);
+	for (i = 0 ; i < rule_count ; i++) {
 		gc_mark(renum, rules[i].key.client);
 		gc_mark(renum, rules[i].key.session);
 		gc_mark(renum, rules[i].key.user);
@@ -296,7 +339,8 @@ gc_itf(
 		gc_mark(renum, rules[i].value.value);
 	}
 
-	for (i = j = 0 ; i < ns ; i++) {
+	/* pack the used strings */
+	for (i = j = 0 ; i < name_count ; i++) {
 		if (renum[i]) {
 			strings[j] = strings[i];
 			renum[i] = j++;
@@ -305,34 +349,38 @@ gc_itf(
 			renum[i] = AnyIdx_Invalid;
 		}
 	}
-	if (ns != j) {
-		memdb->strings.count = ns = j;
-		for (i = 0 ; i < nr ; i++) {
-			rules[i].key.client = gc_new(renum, rules[i].key.client);
-			rules[i].key.session = gc_new(renum, rules[i].key.session);
-			rules[i].key.user = gc_new(renum, rules[i].key.user);
-			rules[i].key.permission = gc_new(renum, rules[i].key.permission);
-			rules[i].value.value = gc_new(renum, rules[i].value.value);
+	if (name_count != j) {
+		/* renumber the items of the database */
+		memdb->strings.count = name_count = j;
+		for (i = 0 ; i < rule_count ; i++) {
+			rules[i].key.client = gc_renum(renum, rules[i].key.client);
+			rules[i].key.session = gc_renum(renum, rules[i].key.session);
+			rules[i].key.user = gc_renum(renum, rules[i].key.user);
+			rules[i].key.permission = gc_renum(renum, rules[i].key.permission);
+			rules[i].value.value = gc_renum(renum, rules[i].value.value);
 		}
 	}
 
+	/* decrease size of array for strings */
 	i = memdb->strings.alloc;
-	while (ns + SBS < i)
-		i -= SBS;
+	while (name_count + STRING_BLOC_SIZE < i)
+		i -= STRING_BLOC_SIZE;
 	if (i != memdb->strings.alloc) {
 		memdb->strings.alloc = i;
 		memdb->strings.values = realloc(strings, i * sizeof *strings);
 	}
 
+	/* decrease size of array for rules */
 	i = memdb->rules.alloc;
-	while (nr + RBS < i)
-		i -= RBS;
+	while (rule_count + RULE_BLOC_SIZE < i)
+		i -= RULE_BLOC_SIZE;
 	if (i != memdb->rules.alloc) {
 		memdb->rules.alloc = i;
-		memdb->rules.values = realloc(rules, i * sizeof *strings);
+		memdb->rules.values = realloc(rules, i * sizeof *rules);
 	}
 }
 
+/** implementation of anydb_itf.destroy */
 static
 void
 destroy_itf(
@@ -346,9 +394,13 @@ destroy_itf(
 	}
 }
 
+/**
+ * Initialize the structure of the memory database
+ * @param memdb the structure to initialize
+ */
 static
 void
-init(
+init_memdb(
 	memdb_t *memdb
 ) {
 	memdb->db.clodb = memdb;
@@ -374,18 +426,22 @@ init(
 	memdb->transaction.active = false;
 }
 
+/* see memdb.h */
 int
 memdb_create(
 	anydb_t **memdb
 ) {
 	memdb_t *mdb;
 
+	/* allocate */
 	mdb = malloc(sizeof *mdb);
 	if (!mdb) {
 		*memdb = NULL;
 		return -ENOMEM;
 	}
-	init(mdb);
+
+	/* init */
+	init_memdb(mdb);
 	*memdb = &mdb->db;
 	return 0;
 }

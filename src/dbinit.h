@@ -14,9 +14,53 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* READING DATABASE RULE FILES FOR INITIALISATION                             */
+/******************************************************************************/
+/******************************************************************************/
 
-extern int dbinit_add_file(const char *path);
+/**
+ * Add to the database the data from file of 'path'
+ *
+ * ---------------------------------------------------------------------------
+ * The file must be made of lines being either empty, comment or rule
+ *
+ * Empty lines or comment lines are ignored.
+ *
+ * An empty line only contains spaces and/or tabs
+ *
+ * A comment line start with the character #. It can be preceded by any count
+ * of spaces and/or tabs.
+ *
+ * Other lines are rules. They must be made of 6 fields separated by any count
+ * of space and/or tabs. Spaces and tabs at the begining of the line are
+ * ignored.
+ *
+ * The 6 fields of a rule are:
+ *
+ *       CLIENT SESSION USER PERMISSION VALUE EXPIRATION
+ *
+ * CLIENT, SESSION, USER, PERMISSION are arbitrary strings. The single star
+ * mean 'any value'.
+ *
+ * Value must be a string of some meaning. Known values are:
+ *
+ *   - yes:   grant the permission
+ *   - no:    forbid the permission
+ *   - @:...: agent at (@)
+ *
+ * Expiration can be expressed
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * @param path path of the initialization file
+ * @return 0 in case of success or a negative -errno like code
+ */
+extern
+int
+dbinit_add_file(
+	const char *path
+);
 

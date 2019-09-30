@@ -14,8 +14,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* CONVERTION OF EXPIRATIONS TO AND FROM TEXT                                 */
+/******************************************************************************/
+/******************************************************************************/
 
-extern time_t txt2exp(const char *txt);
-extern size_t exp2txt(time_t expire, char *buffer, size_t buflen);
+/**
+ * Converts the time of the string to an expiration
+ *
+ * The string code a time relative to now using the format
+ * XXXyXXXwXXXdXXXhXXXmXXXs where XXX are numbers.
+ *
+ * Examples:
+ *  - 15 means 15 seconds
+ *  - 4h15m30s means 4 hours 15 minutes 30 seconds
+ *  - forever means forever
+ *  - 2m2w means two months and 2 weeks
+ *
+ * @param txt the text to convert
+ * @return the value for the text
+ */
+extern
+time_t
+txt2exp(
+	const char *txt
+);
+
+/**
+ * Converts the expiration in to its relative string representation
+ *
+ * @param expire the epiration to convert
+ * @param buffer the buffer where to store the converted string
+ * @param buflen length of the buffer
+ * @return the length of the resulting string, can be greater than buflen but
+ * in that case, no more than buflen characters are copied to buffer
+ */
+extern
+size_t
+exp2txt(
+	time_t expire,
+	char *buffer,
+	size_t buflen
+);

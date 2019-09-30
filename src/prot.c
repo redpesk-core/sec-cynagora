@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF THE PROTOCOL                                             */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <limits.h>
@@ -26,7 +31,15 @@
 
 #include "prot.h"
 
-/** the structure buf is generic the meaning of pos/count is not fixed */
+#define MAX_FIELDS          20
+#define MAX_BUFFER_LENGTH   2000
+#define FIELD_SEPARATOR     ' '
+#define RECORD_SEPARATOR    '\n'
+#define ESCAPE              '\\'
+
+/**
+ * the structure buf is generic the meaning of pos/count is not fixed
+ */
 struct buf
 {
 	/** a position */
@@ -38,7 +51,7 @@ struct buf
 	/* TODO: add a 3rd unsigned for improving management of read and write */
 
 	/** a fixed size content */
-	char content[MAXBUFLEN];
+	char content[MAX_BUFFER_LENGTH];
 };
 typedef struct buf buf_t;
 
@@ -49,11 +62,13 @@ struct fields
 	int count;
 
 	/** the fields as strings */
-	const char *fields[MAXARGS];
+	const char *fields[MAX_FIELDS];
 };
 typedef struct fields fields_t;
 
-/** structure for handling the protocol */
+/**
+ * structure for handling the protocol
+ */
 struct prot
 {
 	/** input buf, pos is the scanning position */
@@ -65,13 +80,12 @@ struct prot
 	/** count of pending output fields */
 	unsigned outfields;
 
-	/** cancel index value value */
+	/** cancel index when putting values */
 	unsigned cancelidx;
 
 	/** the fields */
 	fields_t fields;
 };
-
 
 /**
  * Put the 'car' into the 'buf'
@@ -88,13 +102,13 @@ buf_put_car(
 	unsigned pos;
 
 	pos = buf->count;
-	if (pos >= MAXBUFLEN)
+	if (pos >= MAX_BUFFER_LENGTH)
 		return -ECANCELED;
 
 	buf->count = pos + 1;
 	pos += buf->pos;
-	if (pos >= MAXBUFLEN)
-		pos -= MAXBUFLEN;
+	if (pos >= MAX_BUFFER_LENGTH)
+		pos -= MAX_BUFFER_LENGTH;
 	buf->content[pos] = car;
 	return 0;
 }
@@ -116,30 +130,30 @@ buf_put_string(
 
 	remain = buf->count;
 	pos = buf->pos + remain;
-	if (pos >= MAXBUFLEN)
-		pos -= MAXBUFLEN;
-	remain = MAXBUFLEN - remain;
+	if (pos >= MAX_BUFFER_LENGTH)
+		pos -= MAX_BUFFER_LENGTH;
+	remain = MAX_BUFFER_LENGTH - remain;
 
 	/* put all chars of the string */
 	while((c = *string++)) {
 		/* escape special characters */
-		if (c == FS || c == RS || c == ESC) {
+		if (c == FIELD_SEPARATOR || c == RECORD_SEPARATOR || c == ESCAPE) {
 			if (!remain--)
 				goto cancel;
-			buf->content[pos++] = ESC;
-			if (pos == MAXBUFLEN)
+			buf->content[pos++] = ESCAPE;
+			if (pos == MAX_BUFFER_LENGTH)
 				pos = 0;
 		}
 		/* put the char */
 		if (!remain--)
 			goto cancel;
 		buf->content[pos++] = c;
-		if (pos == MAXBUFLEN)
+		if (pos == MAX_BUFFER_LENGTH)
 			pos = 0;
 	}
 
 	/* record the new values */
-	buf->count = MAXBUFLEN - remain;
+	buf->count = MAX_BUFFER_LENGTH - remain;
 	return 0;
 
 cancel:
@@ -169,11 +183,11 @@ buf_write(
 
 	/* prepare the iovec */
 	vec[0].iov_base = buf->content + buf->pos;
-	if (buf->pos + count <= MAXBUFLEN) {
+	if (buf->pos + count <= MAX_BUFFER_LENGTH) {
 		vec[0].iov_len = count;
 		n = 1;
 	} else {
-		vec[0].iov_len = MAXBUFLEN - buf->pos;
+		vec[0].iov_len = MAX_BUFFER_LENGTH - buf->pos;
 		vec[1].iov_base = buf->content;
 		vec[1].iov_len = count - vec[0].iov_len;
 		n = 2;
@@ -191,14 +205,16 @@ buf_write(
 		/* update the state */
 		buf->count -= (unsigned)rc;
 		buf->pos += (unsigned)rc;
-		if (buf->pos >= MAXBUFLEN)
-			buf->pos -= MAXBUFLEN;
+		if (buf->pos >= MAX_BUFFER_LENGTH)
+			buf->pos -= MAX_BUFFER_LENGTH;
 	}
 
 	return (int)rc;
 }
 
-/* get the 'fields' from 'buf' */
+/**
+ * get the 'fields' from 'buf'
+ */
 static
 void
 buf_get_fields(
@@ -209,7 +225,7 @@ buf_get_fields(
 	unsigned read, write;
 
 	/* advance the pos after the end */
-	assert(buf->content[buf->pos] == RS);
+	assert(buf->content[buf->pos] == RECORD_SEPARATOR);
 	buf->pos++;
 
 	/* init first field */
@@ -218,20 +234,20 @@ buf_get_fields(
 	for (;;) {
 		c = buf->content[read++];
 		switch(c) {
-		case FS: /* field separator */
+		case FIELD_SEPARATOR: /* field separator */
 			buf->content[write++] = 0;
-			if (fields->count >= MAXARGS)
+			if (fields->count >= MAX_FIELDS)
 				return;
 			fields->fields[++fields->count] = &buf->content[write];
 			break;
-		case RS: /* end of line (record separator) */
+		case RECORD_SEPARATOR: /* end of line (record separator) */
 			buf->content[write] = 0;
 			fields->count += (write > 0);
 			return;
-		case ESC: /* escaping */
+		case ESCAPE: /* escaping */
 			c = buf->content[read++];
-			if (c != FS && c != RS && c != ESC)
-				buf->content[write++] = ESC;
+			if (c != FIELD_SEPARATOR && c != RECORD_SEPARATOR && c != ESCAPE)
+				buf->content[write++] = ESCAPE;
 			buf->content[write++] = c;
 			break;
 		default: /* other characters */
@@ -254,10 +270,10 @@ buf_scan_end_record(
 
 	/* search the next RS */
 	while(buf->pos < buf->count) {
-		if (buf->content[buf->pos] == RS) {
+		if (buf->content[buf->pos] == RECORD_SEPARATOR) {
 			/* check whether RS is escaped */
 			nesc = 0;
-			while (buf->pos > nesc && buf->content[buf->pos - (nesc + 1)] == ESC)
+			while (buf->pos > nesc && buf->content[buf->pos - (nesc + 1)] == ESCAPE)
 				nesc++;
 			if ((nesc & 1) == 0)
 				return 1; /* not escaped */
@@ -267,7 +283,9 @@ buf_scan_end_record(
 	return 0;
 }
 
-/** remove chars of 'buf' until pos */
+/**
+ * remove chars of 'buf' until pos
+ */
 static
 void
 buf_crop(
@@ -279,7 +297,9 @@ buf_crop(
 	buf->pos = 0;
 }
 
-/** read input 'buf' from 'fd' */
+/**
+ * read input 'buf' from 'fd'
+ */
 static
 int
 inbuf_read(
@@ -289,11 +309,11 @@ inbuf_read(
 	ssize_t szr;
 	int rc;
 
-	if (buf->count == MAXBUFLEN)
+	if (buf->count == MAX_BUFFER_LENGTH)
 		return -ENOBUFS;
 
 	do {
-		szr = read(fd, buf->content + buf->count, MAXBUFLEN - buf->count);
+		szr = read(fd, buf->content + buf->count, MAX_BUFFER_LENGTH - buf->count);
 	} while(szr < 0 && errno == EINTR);
 	if (szr >= 0)
 		buf->count += (unsigned)(rc = (int)szr);
@@ -303,10 +323,7 @@ inbuf_read(
 	return rc;
 }
 
-/**
- * create the prot structure  in 'prot'
- * Return 0 in case of success or -ENOMEM in case of error
- */
+/* see prot.h */
 int
 prot_create(
 	prot_t **prot
@@ -325,9 +342,7 @@ prot_create(
 	return 0;
 }
 
-/**
- * Destroys the protocol 'prot'
- */
+/* see prot.h */
 void
 prot_destroy(
 	prot_t *prot
@@ -335,9 +350,7 @@ prot_destroy(
 	free(prot);
 }
 
-/**
- * reset the protocol 'prot'
- */
+/* see prot.h */
 void
 prot_reset(
 	prot_t *prot
@@ -349,6 +362,7 @@ prot_reset(
 	prot->fields.count = -1;
 }
 
+/* see prot.h */
 void
 prot_put_cancel(
 	prot_t *prot
@@ -357,11 +371,12 @@ prot_put_cancel(
 
 	if (prot->outfields) {
 		count = prot->cancelidx - prot->outbuf.pos;
-		prot->outbuf.count = count > MAXBUFLEN ? count - MAXBUFLEN : count;
+		prot->outbuf.count = count > MAX_BUFFER_LENGTH ? count - MAX_BUFFER_LENGTH : count;
 		prot->outfields = 0;
 	}
 }
 
+/* see prot.h */
 int
 prot_put_end(
 	prot_t *prot
@@ -371,12 +386,13 @@ prot_put_end(
 	if (!prot->outfields)
 		rc = 0;
 	else {
-		rc = buf_put_car(&prot->outbuf, RS);
+		rc = buf_put_car(&prot->outbuf, RECORD_SEPARATOR);
 		prot->outfields = 0;
 	}
 	return rc;
 }
 
+/* see prot.h */
 int
 prot_put_field(
 	prot_t *prot,
@@ -385,7 +401,7 @@ prot_put_field(
 	int rc;
 
 	if (prot->outfields++)
-		rc = buf_put_car(&prot->outbuf, FS);
+		rc = buf_put_car(&prot->outbuf, FIELD_SEPARATOR);
 	else {
 		prot->cancelidx = prot->outbuf.pos + prot->outbuf.count;
 		rc = 0;
@@ -396,6 +412,7 @@ prot_put_field(
 	return rc;
 }
 
+/* see prot.h */
 int
 prot_put_fields(
 	prot_t *prot,
@@ -413,24 +430,16 @@ prot_put_fields(
 	return rc;
 }
 
-/**
- * Put protocol encoded 'count' 'fields' to the output buffer
- * returns:
- *  - 0 on success
- *  - -EINVAL if the count of fields is too big
- *  - -ECANCELED if there is not enough space in the buffer
- */
+/* see prot.h */
 int
 prot_put(
 	prot_t *prot,
 	unsigned count,
 	const char **fields
 ) {
-	int rc = 0;
-	unsigned index = 0;
+	int rc;
 
-	while(!rc && index < count)
-		rc = prot_put_field(prot, fields[index++]);
+	rc = prot_put_fields(prot, count, fields);
 	if (rc)
 		prot_put_cancel(prot);
 	else
@@ -445,6 +454,7 @@ prot_put(
  *  - -EINVAL if the count of fields is too big
  *  - -ECANCELED if there is not enought space in the buffer
  */
+/* see prot.h */
 int
 prot_putx(
 	prot_t *prot,
@@ -467,10 +477,7 @@ prot_putx(
 	return rc;
 }
 
-/**
- * Check whether write should be done or not
- * Returns 1 if there is something to write or 0 otherwise
- */
+/* see prot.h */
 int
 prot_should_write(
 	prot_t *prot
@@ -478,13 +485,7 @@ prot_should_write(
 	return prot->outbuf.count > 0;
 }
 
-/**
- * Write the content to write and return either the count
- * of bytes written or an error code (negative). Note that
- * the returned value tries to be the same as those returned
- * by "man 2 write". The only exception is -ENODATA that is
- * returned if there is nothing to be written.
- */
+/* see prot.h */
 int
 prot_write(
 	prot_t *prot,
@@ -493,13 +494,15 @@ prot_write(
 	return buf_write(&prot->outbuf, fdout);
 }
 
+/* see prot.h */
 int
 prot_can_read(
 	prot_t *prot
 ) {
-	return prot->inbuf.count < MAXBUFLEN;
+	return prot->inbuf.count < MAX_BUFFER_LENGTH;
 }
 
+/* see prot.h */
 int
 prot_read(
 	prot_t *prot,
@@ -508,6 +511,7 @@ prot_read(
 	return inbuf_read(&prot->inbuf, fdin);
 }
 
+/* see prot.h */
 int
 prot_get(
 	prot_t *prot,
@@ -523,6 +527,7 @@ prot_get(
 	return (int)prot->fields.count;
 }
 
+/* see prot.h */
 void
 prot_next(
 	prot_t *prot

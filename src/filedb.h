@@ -14,11 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF DATABASE WITH FILE BACKEND                               */
+/******************************************************************************/
+/******************************************************************************/
 
-
-/** is the database empty */
+/**
+ * Create the object handling the file database
+ * @param filedb pointer to the handling object to return
+ * @param directory the directory of the database
+ * @param basename the basename of the database
+ * @return 0 in case of success with *filedb fulfilled or negative -errno error
+ */
 int
 filedb_create(
 	anydb_t **filedb,

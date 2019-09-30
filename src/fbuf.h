@@ -14,8 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF BUFFERED FILES                                           */
+/******************************************************************************/
+/******************************************************************************/
 
 /**
  * A fbuf records file data and access
@@ -48,7 +52,14 @@ struct fbuf
 typedef struct fbuf fbuf_t;
 
 
-/** open in 'fb' the file of 'name' and optionnal 'backup' name */
+/**
+ * open in 'fb' the file of 'name'
+ * @param fb the fbuf
+ * @param name name of the filename to read
+ * @param backup name of the backup to use (can be NULL)
+ * @return 0 on success
+ *         a negative -errno code
+ */
 extern
 int
 fbuf_open(
@@ -57,21 +68,35 @@ fbuf_open(
 	const char *backup
 );
 
-/** close the file 'fb' */
+/**
+ * close the fbuf 'fb'
+ * @param fb the fbuf to close
+ */
 extern
 void
 fbuf_close(
 	fbuf_t	*fb
 );
 
-/** write to file 'fb' the unsaved bytes and flush the content to the file */
+/**
+ * write to fbuf 'fb' the unsaved bytes and flush the content to the file
+ * @param fb the fbuf
+ * @return 0 on success
+ *         a negative -errno code
+ */
 extern
 int
 fbuf_sync(
 	fbuf_t	*fb
 );
 
-/** allocate enough memory in 'fb' to store 'count' bytes */
+/**
+ * allocate enough memory in 'fb' to store 'count' bytes
+ * @param fb the fbuf
+ * @param capacity expected capacity
+ * @return 0 on success
+ *         -ENOMEM if out of memory
+ */
 extern
 int
 fbuf_ensure_capacity(
@@ -79,7 +104,15 @@ fbuf_ensure_capacity(
 	uint32_t count
 );
 
-/** put at 'offset' in the memory of 'fb' the 'count' bytes pointed by 'buffer' */
+/**
+ * put at 'offset' in the memory of 'fb' the 'count' bytes pointed by 'buffer'
+ * @param fb the fbuf
+ * @param buffer pointer to the data
+ * @param count size of data MUST BE GREATER THAN ZERO
+ * @param offset where to put the data
+ * @return 0 on success
+ *         -ENOMEM if out of memory
+ */
 extern
 int
 fbuf_put(
@@ -89,7 +122,14 @@ fbuf_put(
 	uint32_t offset
 );
 
-/** append at end in the memory of 'fb' the 'count' bytes pointed by 'buffer' */
+/**
+ * append at end in the memory of 'fb' the 'count' bytes pointed by 'buffer'
+ * @param fb the fbuf
+ * @param buffer pointer to the data
+ * @param count size of data MUST BE GREATER THAN ZERO
+ * @return 0 on success
+ *         -ENOMEM if out of memory
+ */
 extern
 int
 fbuf_append(
@@ -98,7 +138,16 @@ fbuf_append(
 	uint32_t count
 );
 
-/** check or make identification of file 'fb' by 'id' of 'len' */
+/**
+ * Check or make identification of file 'fb' by 'id' of 'idlen'
+ * If the content is empty, it initialize the identification prefix.
+ * Otherwise, not empty, the check is performed.
+ * @param fb the fbuf to check
+ * @param id the prefix identifier to check
+ * @param idlen the length of the identifier
+ * @return 0 on success
+ *         -ENOKEY if identification failed
+ */
 extern
 int
 fbuf_identify(
@@ -107,7 +156,19 @@ fbuf_identify(
 	uint32_t idlen
 );
 
-/** check or make identification by 'uuid' of file 'fb' */
+/**
+ * Open the fbuf 'fb' of 'name', 'backup' and check that it has the
+ * prefix identifier 'id' of length 'idlen'.
+ * @param fb the fbuf to open
+ * @param name file name to open
+ * @param backup name of the backup file
+ * @param id identifier prefix value
+ * @param idlen length of the identifier prefix
+ * @return 0 in case of success
+ *         -ENOMEM if out of memory
+ *         -ENOKEY if identification failed
+ *         a negative -errno code
+ */
 extern
 int
 fbuf_open_identify(
@@ -118,12 +179,26 @@ fbuf_open_identify(
 	uint32_t idlen
 );
 
+/**
+ * Create the back-up file
+ * Backup is managed using hard links. It implies that the operating system
+ * handles hard links.
+ * @param fb the fbuf
+ * @return 0 in case of success
+ *         a negative -errno code
+ */
 extern
 int
 fbuf_backup(
 	fbuf_t	*fb
 );
 
+/**
+ * recover data from latest backup
+ * @param fb the fbuf
+ * @return 0 on success
+ *         a negative -errno code
+ */
 extern
 int
 fbuf_recover(

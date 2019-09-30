@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF LOCAL CYNARA API                                         */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <assert.h>
 #include <stdlib.h>
@@ -31,6 +36,9 @@
 #if !CYN_SEARCH_DEEP_MAX
 # define CYN_SEARCH_DEEP_MAX 10
 #endif
+#if !defined(AGENT_SEPARATOR_CHARACTER)
+# define AGENT_SEPARATOR_CHARACTER ':'
+#endif
 
 /**
  * items of the list of observers or awaiters
@@ -39,14 +47,19 @@ struct callback
 {
 	/** link to the next item of the list */
 	struct callback *next;
+
+	/** recording of callback function */
 	union {
 		/** any callback value */
 		void *any_cb;
+
 		/** awaiter callback */
 		on_enter_cb_t *on_enter_cb;
+
 		/** observer callback */
 		on_change_cb_t *on_change_cb;
 	};
+
 	/** closure of the callback */
 	void *closure;
 };
@@ -65,7 +78,7 @@ struct agent
 	/** closure of the callback */
 	void *closure;
 
-	/** length of the name */
+	/** length of the name (without terminating zero) */
 	uint8_t len;
 
 	/** name of the agent */
@@ -73,7 +86,7 @@ struct agent
 };
 
 /**
- * structure handling an asynchronous check
+ * structure handling an asynchronous requests
  */
 struct cyn_query
 {
@@ -86,15 +99,12 @@ struct cyn_query
 	/** key of the check */
 	data_key_t key;
 
-	/** value of the check */
-	data_value_t value;
-
 	/** down counter for recursivity limitation */
 	int decount;
 };
 
-/** locking critical section */
-static const void *lock;
+/** for locking critical section with magic */
+static const void *magic_locker;
 
 /** head of the list of critical section awaiters */
 static struct callback *awaiters;
@@ -102,17 +112,24 @@ static struct callback *awaiters;
 /** head of the list of change observers */
 static struct callback *observers;
 
-/** head of the list of agents */
+/** head of the list of recorded agents */
 static struct agent *agents;
 
-/** last changeid */
-static uint32_t last_changeid;
+/** holding of changeid */
+static struct {
+	/** current changeid */
+	uint32_t current;
 
-/** changeid of the current 'changeid_string' */
-static uint32_t last_changeid_string;
+	/** changeid set in string */
+	uint32_t instring;
 
-/** string buffer for changeid */
-static char changeid_string[12];
+	/** string value for a changeid */
+	char string[12];
+} changeid = {
+	.current = 1,
+	.instring = 0,
+	.string = { 0 }
+};
 
 /**
  * Delete from the list represented by 'head' the entry for
@@ -179,7 +196,7 @@ changed(
 ) {
 	struct callback *c;
 
-	++last_changeid;
+	changeid.current = changeid.current + 1 ?: 1;
 	for (c = observers; c ; c = c->next)
 		c->on_change_cb(c->closure);
 }
@@ -191,9 +208,9 @@ cyn_enter(
 ) {
 	if (!magic)
 		return -EINVAL;
-	if (lock)
+	if (magic_locker)
 		return -EBUSY;
-	lock = magic;
+	magic_locker = magic;
 	return 0;
 }
 
@@ -205,10 +222,10 @@ cyn_enter_async(
 ) {
 	if (!magic)
 		return -EINVAL;
-	if (lock)
+	if (magic_locker)
 		return addcb(enter_cb, magic, &awaiters);
 
-	lock = magic;
+	magic_locker = magic;
 	enter_cb(magic);
 	return 0;
 }
@@ -251,12 +268,12 @@ cyn_leave(
 
 	if (!magic)
 		return -EINVAL;
-	if (!lock)
+	if (!magic_locker)
 		return -EALREADY;
-	if (lock != magic)
+	if (magic_locker != magic)
 		return -EPERM;
 
-	lock = &lock;
+	magic_locker = &magic_locker;
 	if (!commit)
 		rc = 0;
 	else {
@@ -273,7 +290,7 @@ cyn_leave(
 	/* wake up awaiting client */
 	e = awaiters;
 	if (!e)
-		lock = 0;
+		magic_locker = 0;
 	else {
 		/* the one to awake is at the end of the list */
 		p = &awaiters;
@@ -282,7 +299,7 @@ cyn_leave(
 			e = *p;
 		}
 		*p = NULL;
-		lock = e->closure;
+		magic_locker = e->closure;
 		e->on_enter_cb(e->closure);
 		free(e);
 	}
@@ -296,7 +313,7 @@ cyn_set(
 	const data_key_t *key,
 	const data_value_t *value
 ) {
-	if (!lock)
+	if (!magic_locker)
 		return -EPERM;
 	return queue_set(key, value);
 }
@@ -306,7 +323,7 @@ int
 cyn_drop(
 	const data_key_t *key
 ) {
-	if (!lock)
+	if (!magic_locker)
 		return -EPERM;
 	return queue_drop(key);
 }
@@ -314,15 +331,16 @@ cyn_drop(
 /* see cyn.h */
 void
 cyn_list(
-	void *closure,
 	list_cb_t *callback,
+	void *closure,
 	const data_key_t *key
 ) {
-	db_for_all(closure, callback, key);
+	db_for_all(callback, closure, key);
 }
 
 /**
  * initialize value to its default
+ *
  * @param value to initialize
  * @return the initialized value
  */
@@ -338,8 +356,9 @@ default_value(
 
 /**
  * Search the agent of name and return its item in the list
+ *
  * @param name of the agent to find (optionally zero terminated)
- * @param len length of the name
+ * @param len length of the name (without terminating zero)
  * @param ppprev for catching the pointer referencing the return item
  * @return 0 if not found or the pointer to the item of the found agent
  */
@@ -347,56 +366,51 @@ static
 struct agent *
 search_agent(
 	const char *name,
-	uint8_t len,
+	size_t length,
 	struct agent ***ppprev
 ) {
 	struct agent *it, **pprev;
 
 	pprev = &agents;
 	while((it = *pprev)
-	  &&  (len != it->len || memcmp(it->name, name, (size_t)len)))
+	  &&  ((uint8_t)length != it->len || memcmp(it->name, name, length)))
 		pprev = &it->next;
 	*ppprev = pprev;
 	return it;
 }
 
 /**
- * Return the agent required by the value or 0 if no agent is required
+ * Return the agent required by the value or NULL if no agent is required
  * or if the agent is not found.
+ *
  * @param value string where agent is the prefix followed by one colon
- * @return the item of the required agent or 0 when no agent is required
+ * @return the item of the required agent or NULL when no agent is required
  */
 static
-struct agent *
+struct agent*
 required_agent(
 	const char *value
 ) {
 	struct agent **pprev;
-	uint8_t len;
+	size_t length;
 
-	for (len = 0 ; len < UINT8_MAX && value[len] ; len++)
-		if (value[len] == ':')
-			return search_agent(value, len, &pprev);
-	return 0;
+	for (length = 0 ; length <= UINT8_MAX && value[length] ; length++)
+		if (value[length] == AGENT_SEPARATOR_CHARACTER)
+			return search_agent(value, length, &pprev);
+	return NULL;
 }
 
-static
-void
-async_call_agent(
-	struct agent *agent,
-	cyn_query_t *query,
-	const data_value_t *value
-) {
-	int rc = agent->agent_cb(
-			agent->name,
-			agent->closure,
-			&query->key,
-			&value->value[agent->len + 1],
-			query);
-	if (rc < 0)
-		cyn_reply_query(query, value);
-}
-
+/**
+ * Allocates the query structure for handling the given parameters
+ * and return it. The query structure copies the key data to be compatible
+ * with asynchronous processing.
+ *
+ * @param on_result_cb the result callback to record
+ * @param closure the closure for the result callback
+ * @param key the key of the query
+ * @param maxdepth maximum depth of the agent subrequests
+ * @return the allocated structure or NULL in case of memory depletion
+ */
 static
 cyn_query_t *
 alloc_query(
@@ -420,6 +434,9 @@ alloc_query(
 		ptr = &query[1];
 		query->on_result_cb = on_result_cb;
 		query->closure = closure;
+		query->decount = maxdepth;
+
+		/* copy strings of the key */
 		if (!key->client)
 			query->key.client = 0;
 		else {
@@ -442,19 +459,13 @@ alloc_query(
 			query->key.permission = 0;
 		else {
 			query->key.permission = ptr;
-			ptr = mempcpy(ptr, key->permission, szper);
+			mempcpy(ptr, key->permission, szper);
 		}
-		query->decount = maxdepth;
 	}
 	return query;
 }
 
-
-
-
-
-
-
+/* see cyn.h */
 int
 cyn_query_async(
 	on_result_cb_t *on_result_cb,
@@ -463,25 +474,26 @@ cyn_query_async(
 	int maxdepth
 ) {
 	int rc;
+	unsigned score;
 	data_value_t value;
 	cyn_query_t *query;
 	struct agent *agent;
 
 	/* get the direct value */
-	rc = db_test(key, &value);
+	score = db_test(key, &value);
 
-	/* on error or missing result */
-	if (rc <= 0) {
+	/* missing value */
+	if (score == 0) {
 		default_value(&value);
 		on_result_cb(closure, &value);
-		return rc;
+		return 0;
 	}
 
 	/* if not an agent or agent not required */
 	agent = required_agent(value.value);
 	if (!agent || maxdepth <= 0) {
 		on_result_cb(closure, &value);
-		return rc;
+		return 0;
 	}
 
 	/* allocate asynchronous query */
@@ -492,8 +504,15 @@ cyn_query_async(
 	}
 
 	/* call the agent */
-	async_call_agent(agent, query, &value);
-	return 0;
+	rc = agent->agent_cb(
+			agent->name,
+			agent->closure,
+			&query->key,
+			&value.value[agent->len + 1],
+			query);
+	if (rc < 0)
+		cyn_query_reply(query, &value);
+	return rc;
 }
 
 /* see cyn.h */
@@ -516,8 +535,9 @@ cyn_check_async(
 	return cyn_query_async(on_result_cb, closure, key, CYN_SEARCH_DEEP_MAX);
 }
 
+/* see cyn.h */
 int
-cyn_subquery_async(
+cyn_query_subquery_async(
 	cyn_query_t *query,
 	on_result_cb_t *on_result_cb,
 	void *closure,
@@ -526,8 +546,9 @@ cyn_subquery_async(
 	return cyn_query_async(on_result_cb, closure, key, query->decount - 1);
 }
 
+/* see cyn.h */
 void
-cyn_reply_query(
+cyn_query_reply(
 	cyn_query_t *query,
 	const data_value_t *value
 ) {
@@ -535,9 +556,28 @@ cyn_reply_query(
 	free(query);
 }
 
-
-
-
+/**
+ * Check the name and compute its length. Returns 0 in case of invalid name
+ * @param name the name to check
+ * @return the length of the name or zero if invalid
+ */
+static
+size_t
+check_agent_name(
+	const char *name
+) {
+	size_t length = 0;
+	if (name) {
+		while (name[length]) {
+			if (length > UINT8_MAX || name[length] == AGENT_SEPARATOR_CHARACTER) {
+				length = 0;
+				break;
+			}
+			length++;
+		}
+	}
+	return length;
+}
 
 /* see cyn.h */
 int
@@ -548,26 +588,28 @@ cyn_agent_add(
 ) {
 	struct agent *agent, **pprev;
 	size_t length;
-	uint8_t len;
 
-	length = strlen(name);
-	if (length <= 0 || length > UINT8_MAX)
+	/* compute and check name length */
+	length = check_agent_name(name);
+	if (!length)
 		return -EINVAL;
-	len = (uint8_t)length++;
 
-	agent = search_agent(name, len, &pprev);
+	/* search the agent */
+	agent = search_agent(name, length, &pprev);
 	if (agent)
 		return -EEXIST;
 
-	agent = malloc(sizeof *agent + length);
+	/* allocates the memory */
+	agent = malloc(sizeof *agent + 1 + length);
 	if (!agent)
 		return -ENOMEM;
 
+	/* initialize the agent */
 	agent->next = 0;
 	agent->agent_cb = agent_cb;
 	agent->closure = closure;
-	agent->len = len;
-	memcpy(agent->name, name, length);
+	agent->len = (uint8_t)length;
+	memcpy(agent->name, name, length + 1);
 	*pprev = agent;
 
 	return 0;
@@ -580,17 +622,18 @@ cyn_agent_remove(
 ) {
 	struct agent *agent, **pprev;
 	size_t length;
-	uint8_t len;
 
-	length = strlen(name);
-	if (length <= 0 || length > UINT8_MAX)
+	/* compute and check name length */
+	length = check_agent_name(name);
+	if (!length)
 		return -EINVAL;
-	len = (uint8_t)length;
 
-	agent = search_agent(name, len, &pprev);
+	/* search the agent */
+	agent = search_agent(name, length, &pprev);
 	if (!agent)
 		return -ENOENT;
 
+	/* remove the found agent */
 	*pprev = agent->next;
 	free(agent);
 	return 0;
@@ -600,14 +643,15 @@ cyn_agent_remove(
 void
 cyn_changeid_reset(
 ) {
-	last_changeid = 1;
+	changeid.current = 1;
+	changeid.instring = 0;
 }
 
 /* see cyn.h */
 uint32_t
 cyn_changeid(
 ) {
-	return last_changeid;
+	return changeid.current;
 }
 
 /* see cyn.h */
@@ -615,9 +659,10 @@ const char *
 cyn_changeid_string(
 ) {
 	/* regenerate the string on need */
-	if (last_changeid != last_changeid_string) {
-		last_changeid_string = last_changeid;
-		snprintf(changeid_string, sizeof changeid_string, "%u", last_changeid);
+	if (changeid.current != changeid.instring) {
+		changeid.instring = changeid.current;
+		snprintf(changeid.string, sizeof changeid.string, "%u", changeid.current);
 	}
-	return changeid_string;
+	/* return the string */
+	return changeid.string;
 }

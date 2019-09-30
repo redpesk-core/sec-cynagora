@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF SERVER PART OF RCYN-PROTOCOL                             */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -38,6 +43,8 @@
 #include "rcyn-server.h"
 #include "socket.h"
 #include "pollitem.h"
+
+#define MAX_PUTX_ITEMS 15
 
 /** should log? */
 bool
@@ -177,7 +184,7 @@ putx(
 	client_t *cli,
 	...
 ) {
-	const char *p, *fields[MAXARGS];
+	const char *p, *fields[MAX_PUTX_ITEMS];
 	unsigned n;
 	va_list l;
 	int rc;
@@ -187,7 +194,7 @@ putx(
 	va_start(l, cli);
 	p = va_arg(l, const char *);
 	while (p) {
-		if (n == MAXARGS)
+		if (n == MAX_PUTX_ITEMS)
 			return -EINVAL;
 		fields[n++] = p;
 		p = va_arg(l, const char *);
@@ -421,7 +428,7 @@ onrequest(
 			key.session = args[2];
 			key.user = args[3];
 			key.permission = args[4];
-			cyn_list(cli, getcb, &key);
+			cyn_list(getcb, cli, &key);
 			send_done(cli);
 			return;
 		}

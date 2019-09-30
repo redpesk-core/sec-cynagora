@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************************/
+/******************************************************************************/
+/* IMPLEMENTATION OF AGENT AT (@)                                             */
+/******************************************************************************/
+/******************************************************************************/
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -27,19 +32,19 @@
 /**
  * Parse the spec to extract the derived key to ask.
  *
- * @param spec   The specification of the derived key
- * @param rkey   The originally requested key
- * @param key    The derived key or NULL for computing length
- * @param buffer The buffer that handles texts or NULL for computing length
- * @param szbuf  The size of the buffer or 0 for computing length
+ * @param spec           The specification of the derived key
+ * @param reference_key  The originally requested key of reference
+ * @param derived_key    The derived key or NULL for computing length
+ * @param buffer         The buffer that handles texts or NULL for computing length
+ * @param szbuf          The size of the buffer or 0 for computing length
  * @return the total length of buffer used
  */
 static
 size_t
 parse(
 	const char *spec,
-	const data_key_t *rkey,
-	data_key_t *key,
+	const data_key_t *reference_key,
+	data_key_t *derived_key,
 	char *buffer,
 	size_t szbuf
 ) {
@@ -47,8 +52,10 @@ parse(
 	const char *val;
 	int sub;
 
+	/* iterate through the fields of the key */
 	iout = 0;
 	for (ikey = 0 ; ikey < KeyIdx_Count ; ikey++) {
+		/* compute value of the derived field */
 		inf = iout;
 		while(*spec) {
 			if (*spec == ':' && ikey < 3) {
@@ -66,19 +73,19 @@ parse(
 				/* what % substitution is it? */
 				switch(spec[1]) {
 				case 'c':
-					val = rkey->client;
+					val = reference_key->client;
 					sub = 1;
 					break;
 				case 's':
-					val = rkey->session;
+					val = reference_key->session;
 					sub = 1;
 					break;
 				case 'u':
-					val = rkey->user;
+					val = reference_key->user;
 					sub = 1;
 					break;
 				case 'p':
-					val = rkey->permission;
+					val = reference_key->permission;
 					sub = 1;
 					break;
 				default:
@@ -97,7 +104,7 @@ parse(
 					if (iout < szbuf)
 						buffer[iout] = spec[1];
 					iout++;
-				} else if (val) {
+				} else if (val != NULL) {
 					/* substitution of the value */
 					while (*val) {
 						if (iout < szbuf)
@@ -109,8 +116,9 @@ parse(
 				spec += 2;
 			}
 		}
+		/* standardize the found item*/
 		if (inf == iout)
-			val = 0; /* empty key item */
+			val = NULL; /* empty key item */
 		else {
 			/* set zero ended key */
 			val = &buffer[inf];
@@ -118,8 +126,9 @@ parse(
 				buffer[iout] = 0;
 			iout++;
 		}
-		if (key)
-			key->keys[ikey] = val;
+		/* record the value */
+		if (derived_key)
+			derived_key->keys[ikey] = val;
 	}
 	return iout;
 }
@@ -131,9 +140,8 @@ parse(
  * @param agent_closure      closure of the agent (not used)
  * @param key                the original searched key
  * @param value              the value found (string after @:)
- * @param on_result_cb       callback that will asynchronously handle the result
- * @param on_result_closure  closure for 'on_result_cb'
- * @return
+ * @param query              the query identifer for replying or subquerying
+ * @return 0 in case of success or -errno like negative error code
  */
 static
 int
@@ -149,13 +157,16 @@ agent_at_cb(
 	size_t size;
 
 	/* compute the length */
-	size = parse(value, key, 0, 0, 0);
+	size = parse(value, key, NULL, NULL, 0);
+
 	/* alloc the length locally */
 	block = alloca(size);
+
 	/* initialize the derived key */
 	parse(value, key, &atkey, block, size);
+
 	/* ask for the derived key */
-	return cyn_subquery_async(query, (on_result_cb_t*)cyn_reply_query, query, &atkey);
+	return cyn_query_subquery_async(query, (on_result_cb_t*)cyn_query_reply, query, &atkey);
 }
 
 /* see agent-at.h */

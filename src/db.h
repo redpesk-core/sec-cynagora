@@ -14,63 +14,94 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
+/******************************************************************************/
+/******************************************************************************/
+/* INTERNAL DATABASE IMPLEMENTATION                                           */
+/******************************************************************************/
+/******************************************************************************/
 
-#define MAX_NAME_LENGTH 32767
-
-/** open the database for files 'names' and 'rules' (can be NULL) */
+/**
+ * Open the database in the directory
+ *
+ * @param directory the directory containing the database
+ * @return 0 in case of success or a negative error code
+ *
+ * @see db_close
+ */
 extern
 int
 db_open(
 	const char *directory
 );
 
-/** close the database */
+/**
+ * close the database
+ */
 extern
 void
 db_close(
 );
 
-/** is the database empty */
+/**
+ * Is the database empty?
+ *
+ * @return true if empty or else false
+ */
 extern
 bool
 db_is_empty(
 );
 
-/** enter atomic mode */
+/**
+ * Enter atomic mode or cancelable mode
+ *
+ * @return 0 in case of success or a negative -errno like value
+ *
+ * @see db_transaction_end, db_drop, db_set
+ */
 extern
 int
 db_transaction_begin(
 );
 
-/** leave atomic mode */
+/**
+ * Leave atomic mode commiting or not the changes
+ *
+ * @param commit if true changes are commited otherwise, if false cancel them
+ * @return 0 in case of success or a negative -errno like value
+ *
+ * @see db_transaction_begin, db_drop, db_set
+ */
 extern
 int
 db_transaction_end(
 	bool commit
 );
 
-/** enumerate */
-extern
-void
-db_for_all(
-	void *closure,
-	void (*callback)(
-		void *closure,
-		const data_key_t *key,
-		const data_value_t *value),
-	const data_key_t *key
-);
-
-/** erase rules */
+/**
+ * Erase rules matching the key
+ *
+ * @param key the search key for the rules to remove
+ * @return 0 in case of success or a negative -errno like value
+ *
+ * @see db_transaction_begin, db_transaction_end, db_set
+ */
 extern
 int
 db_drop(
 	const data_key_t *key
 );
 
-/** set rules */
+/**
+ * Add the rule of key and value
+ *
+ * @param key the key of the rule to add
+ * @param value the value of the rule
+ * @return 0 in case of success or a negative -errno like value
+ *
+ * @see db_transaction_begin, db_transaction_end, db_drop
+ */
 extern
 int
 db_set(
@@ -78,21 +109,54 @@ db_set(
 	const data_value_t *value
 );
 
-/** check rules */
+/**
+ * Iterate over rules matching the key: call the callback for each found item
+ *
+ * @param callback the callback function to be call for each rule matching key
+ * @param closure the closure of the callback
+ * @param key the searching key
+ */
 extern
-int
+void
+db_for_all(
+	void (*callback)(
+		void *closure,
+		const data_key_t *key,
+		const data_value_t *value),
+	void *closure,
+	const data_key_t *key
+);
+
+/**
+ * Get the rule value for the key
+ *
+ * @param key The key to query
+ * @param value Where to store the result if any
+ * @return 0 if no rule matched (value unchanged then) or a positive integer
+ *  when a value was found for the key
+ */
+extern
+unsigned
 db_test(
 	const data_key_t *key,
 	data_value_t *value
 );
 
-/** cleanup the base */
+/**
+ * Cleanup the database by removing expired items
+ *
+ * @return 0 in case of success or a negative -errno like value
+ */
 extern
 int
 db_cleanup(
 );
 
-/** cleanup the base */
+/**
+ * Write the database to the file system (synchrnize it)
+ *
+ * @return 0 in case of success or a negative -errno like value
+ */
 extern
 int
 db_sync(
