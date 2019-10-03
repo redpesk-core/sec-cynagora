@@ -21,6 +21,11 @@ configure_file(cynara.pc.in cynara.pc @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynara.pc
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
+configure_file(cynara-compat.pc.in cynara-compat.pc @ONLY)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynara-compat.pc
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+
 foreach(item cynara-admin.pc 
              cynara-agent.pc 
              cynara-client-async.pc 
@@ -34,7 +39,7 @@ foreach(item cynara-admin.pc
              cynara-monitor.pc
              cynara-plugin.pc
              cynara-session.pc) 
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/link.pc
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/link-to-cynara-compat.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
          RENAME ${item})
 endforeach(item)

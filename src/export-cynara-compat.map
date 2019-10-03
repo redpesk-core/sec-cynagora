@@ -1,0 +1,8 @@
+{
+global:
+	cynara_*;
+local:
+	*;
+};
+
+
