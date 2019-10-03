@@ -11,7 +11,7 @@ do
 done > $i
 
 # run daemon
-cynarad -i $i -d $d -S $d -l &
+cynagorad -i $i -d $d -S $d -l &
 pc=$!
 sleep 2
 
@@ -23,7 +23,7 @@ for((y = 0 ; y < 10 ; y++)); do
     sleep .05
   done
 done |
-valgrind cynadm -c 2000 -e -s $d/cynara.check
+valgrind cynagoradm -c 2000 -e -s $d/cynagora.check
 echo ----------- STOP ------------------
 
 # terminate

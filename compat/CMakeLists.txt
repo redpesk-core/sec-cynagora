@@ -16,6 +16,9 @@
 # limitations under the License.
 ###########################################################################
 
+set(CYNARA_VERSION ${CYNAGORA_VERSION})
+set(CYNARA_SOVERSION ${CYNAGORA_SOVERSION})
+
 add_subdirectory(src)
 add_subdirectory(include)
 add_subdirectory(pkgconfig)

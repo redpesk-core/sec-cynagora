@@ -1,15 +1,15 @@
 [Socket]
 FileDescriptorName=check
-ListenStream=@DEFAULT_SOCKET_DIR@/cynara.check
+ListenStream=@DEFAULT_SOCKET_DIR@/cynagora.check
 SocketMode=0666
 SmackLabelIPIn=*
 SmackLabelIPOut=@
 
-Service=cynara.service
+Service=cynagora.service
 
 [Unit]
-Wants=cynara.target
-Before=cynara.target
+Wants=cynagora.target
+Before=cynagora.target
 
 [Install]
 WantedBy=sockets.target

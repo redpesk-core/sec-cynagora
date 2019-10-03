@@ -31,89 +31,79 @@ set(LIBCORE_SOURCES
 
 set(SERVER_SOURCES
 	agent-at.c
-	main-cynarad.c
+	main-cynagorad.c
 	prot.c
-	rcyn-protocol.c
-	rcyn-server.c
-	socket.c
-)
-
-set(LIBCLI_SOURCES
-	cache.c
-	lib-compat.c
-	prot.c
-	rcyn-client.c
-	rcyn-protocol.c
+	cyn-protocol.c
+	cyn-server.c
 	socket.c
 )
 
 set(LIBCLI_SOURCES
 	cache.c
 	prot.c
-	rcyn-client.c
-	rcyn-protocol.c
+	cynagora.c
+	cyn-protocol.c
 	socket.c
 )
 
 add_compile_definitions(_GNU_SOURCE)
 
 ###########################################
-# build and install libcynara-core
+# build and install libcynagora-core
 ###########################################
-add_library(cynara-core SHARED ${LIBCORE_SOURCES})
-target_include_directories(cynara-core PUBLIC .)
-set_target_properties(cynara-core PROPERTIES
-	VERSION ${CYNARA_VERSION}
-	SOVERSION ${CYNARA_SOVERSION})
-target_link_libraries(cynara-core
+add_library(cynagora-core SHARED ${LIBCORE_SOURCES})
+target_include_directories(cynagora-core PUBLIC .)
+set_target_properties(cynagora-core PROPERTIES
+	VERSION ${CYNAGORA_VERSION}
+	SOVERSION ${CYNAGORA_SOVERSION})
+target_link_libraries(cynagora-core
 	PRIVATE
-	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynara-core.map
+	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynagora-core.map
 )
-install(TARGETS cynara-core LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+install(TARGETS cynagora-core LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
 ###########################################
-# build and install libcynara-client
+# build and install libcynagora-client
 ###########################################
-add_library(cynara-client SHARED ${LIBCLI_SOURCES})
-target_include_directories(cynara-client PUBLIC .)
-target_compile_definitions(cynara-client PRIVATE
-	RCYN_DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
+add_library(cynagora SHARED ${LIBCLI_SOURCES})
+target_include_directories(cynagora PUBLIC .)
+target_compile_definitions(cynagora PRIVATE
+	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 )
-set_target_properties(cynara-client PROPERTIES
-	VERSION ${CYNARA_VERSION}
-	SOVERSION ${CYNARA_SOVERSION})
-target_link_options(cynara-client
+set_target_properties(cynagora PROPERTIES
+	VERSION ${CYNAGORA_VERSION}
+	SOVERSION ${CYNAGORA_SOVERSION})
+target_link_options(cynagora
 	PRIVATE
-	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynara-client.map
+	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynagora.map
 )
-install(TARGETS cynara-client LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES rcyn-client.h DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/cynara)
+install(TARGETS cynagora LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+install(FILES cynagora.h DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR})
 
 ###########################################
-# build and install cynarad
+# build and install cynagorad
 ###########################################
-add_executable(cynarad ${SERVER_SOURCES})
-target_compile_definitions(cynarad PRIVATE
+add_executable(cynagorad ${SERVER_SOURCES})
+target_compile_definitions(cynagorad PRIVATE
 	DEFAULT_DB_DIR="${DEFAULT_DB_DIR}"
 	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
-	RCYN_DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 )
 if(WITH_SYSTEMD)
-	target_compile_definitions(cynarad PRIVATE WITH_SYSTEMD_ACTIVATION)
-	target_link_libraries(cynarad ${libsystemd_LDFLAGS} ${libsystemd_LINK_LIBRARIES})
-	target_include_directories(cynarad PRIVATE ${libsystemd_INCLUDE_DIRS})
-	target_compile_options(cynarad PRIVATE ${libsystemd_CFLAGS})
+	target_compile_definitions(cynagorad PRIVATE WITH_SYSTEMD_ACTIVATION)
+	target_link_libraries(cynagorad ${libsystemd_LDFLAGS} ${libsystemd_LINK_LIBRARIES})
+	target_include_directories(cynagorad PRIVATE ${libsystemd_INCLUDE_DIRS})
+	target_compile_options(cynagorad PRIVATE ${libsystemd_CFLAGS})
 endif()
-target_link_libraries(cynarad cynara-core cap)
-install(TARGETS cynarad
+target_link_libraries(cynagorad cynagora-core cap)
+install(TARGETS cynagorad
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
 ###########################################
-# build and install cynadm
+# build and install cynagoradm
 ###########################################
-add_executable(cynadm main-cynadm.c expire.c)
-target_link_libraries(cynadm cynara-client)
-install(TARGETS cynadm
+add_executable(cynagoradm main-cynagoradm.c expire.c)
+target_link_libraries(cynagoradm cynagora)
+install(TARGETS cynagoradm
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 

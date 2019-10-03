@@ -3,7 +3,7 @@ protocol
 
 hello:
 
-  c->s rcyn 1
+  c->s cynagora 1
   s->c yes 1 CACHEID
 
 invalidate cache:
@@ -19,6 +19,16 @@ check a permission:
 
   c->s check CLIENT SESSION USER PERMISSION
   s->c (yes|no) [EXPIRE]
+
+enter critical (admin)
+
+  c->s enter
+  s->c done
+
+leave critical (admin)
+
+  c->s leave [commit|rollback]
+  s->c done|error ...
 
 erase (admin):
 
@@ -37,17 +47,7 @@ list permissions (admin):
   s->c ...
   s->c done
 
-enter critical (admin)
-
-  c->s enter
-  s->c done
-
-leave critical (admin)
-
-  c->s leave [commit|rollback]
-  s->c done|error ...
-
-set/get logging status (admin)
+logging set/get (admin)
 
   c->s log [on|off]
   s->c done (on|off)

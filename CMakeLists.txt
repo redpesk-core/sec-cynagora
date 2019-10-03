@@ -18,13 +18,12 @@
 
 cmake_minimum_required(VERSION 3.0)
 
-project(cynara C)
-
-set(PROJECT_NAME "Cynara")
-set(PROJECT_PRETTY_NAME "Permission database")
-set(PROJECT_DESCRIPTION "Secured permission database for applications")
-set(PROJECT_VERSION "1.99.99")
-set(PROJECT_URL "https://gerrit.automotivelinux.org/gerrit/gitweb?p=src/cynara.git;a=summary")
+project(cynagora
+	DESCRIPTION "Secured permission database for applications"
+	HOMEPAGE_URL "https://gerrit.automotivelinux.org/gerrit/gitweb?p=src/cynagora.git;a=summary"
+	VERSION 2.0
+	LANGUAGES C
+)
 
 include(FindPkgConfig)
 include(CheckIncludeFiles)
@@ -39,21 +38,19 @@ endif()
 ###########################################################################
 # possible settings
 
-set(CYNARA_VERSION ${PROJECT_VERSION})
-set(CYNARA_SOVERSION 1.99)
-
-add_definitions(-DCYNARA_VERSION="${CYNARA_VERSION}")
+set(CYNAGORA_VERSION ${PROJECT_VERSION})
+set(CYNAGORA_SOVERSION ${PROJECT_VERSION_MAJOR})
 
 option(WITH_SYSTEMD       "should include systemd compatibility" ON)
 option(WITH_CYNARA_COMPAT "produce artifacts for compatibility with cynara" OFF)
 
-set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynara"
+set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynagora"
 	CACHE PATH "directory path of the database")
-set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynara"
+set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynagora"
 	CACHE PATH "directory path of the sockets")
 set(DEFAULT_CONFIG_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security"
 	CACHE PATH "directory of configuration")
-set(DEFAULT_INIT_FILE "${DEFAULT_CONFIG_DIR}/cynara.initial")
+set(DEFAULT_INIT_FILE "${DEFAULT_CONFIG_DIR}/cynagora.initial")
 
 ###########################################################################
 
@@ -82,7 +79,7 @@ if(WITH_CYNARA_COMPAT)
 endif()
 
 install(FILES
-	${CMAKE_CURRENT_SOURCE_DIR}/cynara.initial
+	${CMAKE_CURRENT_SOURCE_DIR}/cynagora.initial
 	DESTINATION
 	${DEFAULT_CONFIG_DIR}
 )

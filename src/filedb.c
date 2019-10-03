@@ -68,33 +68,33 @@ struct rule
 typedef struct rule rule_t;
 
 /*
- * The cynara-agl database is made of 2 memory mapped files:
+ * The cynagora database is made of 2 memory mapped files:
  *  - names: the zero terminated names
  *  - rules: the rules based on name indexes as 32bits indexes
- * These files are normally in /var/lib/cynara
+ * These files are normally in /var/lib/cynagora
  */
 #if !defined(DEFAULT_DB_DIR)
-#    define  DEFAULT_DB_DIR  "/var/lib/cynara"
+#    define  DEFAULT_DB_DIR  "/var/lib/cynagora"
 #endif
 #if !defined(DEFAULT_DB_NAME)
-#    define  DEFAULT_DB_NAME  "cynara"
+#    define  DEFAULT_DB_NAME  "cynagora"
 #endif
 static const char filedb_default_directory[] = DEFAULT_DB_DIR;
 static const char filedb_default_name[] = DEFAULT_DB_NAME;
 
-/** identification of names version 2
- *    $> uuidgen --sha1 -n @url -N urn:AGL:cynara:db:names:2
- *    $> uuid -v 5 ns:URL urn:AGL:cynara:db:names:2
+/** identification of names version 1
+ *    $> uuidgen --sha1 -n @url -N urn:AGL:cynagora:db:names:1
+ *    $> uuid -v 5 ns:URL urn:AGL:cynagora:db:names:1
  */
-static const char uuid_names_v2[] = "6fa114d4-f3d9-58ab-a5d3-4674ee865c8d\n--\n";
+static const char uuid_names_v1[] = "b2c33494-995f-5cc2-9e5e-72ad412936a9\n--\n";
 
-/** identification of rules version 2
- *    $> uuidgen --sha1 -n @url -N urn:AGL:cynara:db:rules:2
- *    $> uuid -v 5 ns:URL urn:AGL:cynara:db:rules:2
+/** identification of rules version 1
+ *    $> uuidgen --sha1 -n @url -N urn:AGL:cynagora:db:rules:1
+ *    $> uuid -v 5 ns:URL urn:AGL:cynagora:db:rules:1
  */
-static const char uuid_rules_v2[] = "6d48515a-3f64-52b1-9d15-4d13d073d48a\n--\n";
+static const char uuid_rules_v1[] = "73630c61-89a9-5e82-8b07-5e53eee785c8\n--\n";
 
-/** length of the identification */
+/** length of the identifications */
 static const int uuidlen = 40;
 
 
@@ -301,10 +301,10 @@ opendb(
 		name = filedb_default_name;
 
 	/* open the names */
-	rc = open_identify(&filedb->fnames, directory, name, "names", uuid_names_v2, uuidlen);
+	rc = open_identify(&filedb->fnames, directory, name, "names", uuid_names_v1, uuidlen);
 	if (rc == 0) {
 		/* open the rules */
-		rc = open_identify(&filedb->frules, directory, name, "rules", uuid_rules_v2, uuidlen);
+		rc = open_identify(&filedb->frules, directory, name, "rules", uuid_rules_v1, uuidlen);
 		if (rc == 0) {
 			/* connect internals */
 			rc = init_names(filedb);

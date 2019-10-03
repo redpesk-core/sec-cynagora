@@ -27,6 +27,7 @@ extern const char
 	_check_[],
 	_clear_[],
 	_commit_[],
+	_cynagora_[],
 	_done_[],
 	_drop_[],
 	_enter_[],
@@ -38,7 +39,6 @@ extern const char
 	_no_[],
 	_off_[],
 	_on_[],
-	_rcyn_[],
 	_rollback_[],
 	_set_[],
 	_test_[],
@@ -46,14 +46,14 @@ extern const char
 
 /* predefined names */
 extern const char
-	rcyn_default_socket_scheme[],
-	rcyn_default_socket_dir[],
-	rcyn_default_check_socket_base[],
-	rcyn_default_admin_socket_base[],
-	rcyn_default_agent_socket_base[],
-	rcyn_default_check_socket_spec[],
-	rcyn_default_admin_socket_spec[],
-	rcyn_default_agent_socket_spec[];
+	cyn_default_socket_scheme[],
+	cyn_default_socket_dir[],
+	cyn_default_check_socket_base[],
+	cyn_default_admin_socket_base[],
+	cyn_default_agent_socket_base[],
+	cyn_default_check_socket_spec[],
+	cyn_default_admin_socket_spec[],
+	cyn_default_agent_socket_spec[];
 
 /**
  * Get the socket specification for check usage
@@ -63,7 +63,7 @@ extern const char
  */
 extern
 const char *
-rcyn_get_socket_check(
+cyn_get_socket_check(
 	const char *value
 );
 
@@ -75,7 +75,7 @@ rcyn_get_socket_check(
  */
 extern
 const char *
-rcyn_get_socket_admin(
+cyn_get_socket_admin(
 	const char *value
 );
 
@@ -87,6 +87,6 @@ rcyn_get_socket_admin(
  */
 extern
 const char *
-rcyn_get_socket_agent(
+cyn_get_socket_agent(
 	const char *value
 );

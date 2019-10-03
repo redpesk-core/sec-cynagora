@@ -34,7 +34,7 @@ extern
 int
 cache_search(
 	cache_t *cache,
-	const rcyn_key_t *key
+	const cynagora_key_t *key
 );
 
 /**
@@ -51,7 +51,7 @@ extern
 int
 cache_put(
 	cache_t *cache,
-	const rcyn_key_t *key,
+	const cynagora_key_t *key,
 	int value,
 	time_t expire
 );

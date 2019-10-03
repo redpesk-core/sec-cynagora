@@ -1,5 +1,5 @@
 #--------------------------------------------------------------------
-# initial database for cynara
+# initial database for cynagora
 # format: space/tab separated fields
 # fields: CLIENT SESSION USER PERMISSION ACTION EXPIRATION
 #--------------------------------------------------------------------

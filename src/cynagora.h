@@ -17,132 +17,138 @@
 #pragma once
 /******************************************************************************/
 /******************************************************************************/
-/* IMPLEMENTATION OF CLIENT PART OF RCYN-PROTOCOL                             */
+/* IMPLEMENTATION OF CLIENT PART OF CYNAGORA-PROTOCOL                         */
 /******************************************************************************/
 /******************************************************************************/
 
+typedef struct cynagora cynagora_t;
+typedef enum cynagora_type cynagora_type_t;
+typedef struct cynagora_key cynagora_key_t;
+typedef struct cynagora_value cynagora_value_t;
 
-typedef struct rcyn rcyn_t;
-typedef enum rcyn_type rcyn_type_t;
-typedef struct rcyn_key rcyn_key_t;
-typedef struct rcyn_value rcyn_value_t;
-
-enum rcyn_type {
-	rcyn_Check,
-	rcyn_Admin,
-	rcyn_Agent
+enum cynagora_type {
+	cynagora_Check,
+	cynagora_Admin,
+	cynagora_Agent
 };
 
-struct rcyn_key {
+struct cynagora_key {
 	const char *client;
 	const char *session;
 	const char *user;
 	const char *permission;
 };
 
-struct rcyn_value {
+struct cynagora_value {
 	const char *value;
 	time_t expire;
 };
 
 extern
 int
-rcyn_open(
-	rcyn_t **rcyn,
-	rcyn_type_t type,
+cynagora_open(
+	cynagora_t **cynagora,
+	cynagora_type_t type,
 	uint32_t cache_size,
 	const char *socketspec
 );
 
 extern
 void
-rcyn_disconnect(
-	rcyn_t *rcyn
+cynagora_disconnect(
+	cynagora_t *cynagora
 );
 
 extern
 void
-rcyn_close(
-	rcyn_t *rcyn
+cynagora_close(
+	cynagora_t *cynagora
 );
 
 extern
 int
-rcyn_enter(
-	rcyn_t *rcyn
+cynagora_enter(
+	cynagora_t *cynagora
 );
 
 extern
 int
-rcyn_leave(
-	rcyn_t *rcyn,
+cynagora_leave(
+	cynagora_t *cynagora,
 	bool commit
 );
 
 extern
 int
-rcyn_check(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key
+cynagora_check(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key
 );
 
 extern
 int
-rcyn_test(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key
+cynagora_test(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key
 );
 
 extern
 int
-rcyn_set(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key,
-	const rcyn_value_t *value
+cynagora_set(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key,
+	const cynagora_value_t *value
 );
 
 extern
 int
-rcyn_get(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key,
+cynagora_get(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key,
 	void (*callback)(
 		void *closure,
-		const rcyn_key_t *key,
-		const rcyn_value_t *value
+		const cynagora_key_t *key,
+		const cynagora_value_t *value
 	),
 	void *closure
 );
 
 extern
 int
-rcyn_log(
-	rcyn_t *rcyn,
+cynagora_log(
+	cynagora_t *cynagora,
 	int on,
 	int off
 );
 
 extern
 int
-rcyn_drop(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key
+cynagora_drop(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key
 );
 
 extern
 void
-rcyn_cache_clear(
-	rcyn_t *rcyn
+cynagora_cache_clear(
+	cynagora_t *cynagora
 );
 
 extern
 int
-rcyn_cache_check(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key
+cynagora_cache_check(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key
 );
 
-typedef int (*rcyn_async_ctl_t)(
+extern
+int
+cynagora_cache_resize(
+	cynagora_t *cynagora,
+	uint32_t size
+);
+
+typedef int (*cynagora_async_ctl_t)(
 			void *closure,
 			int op,
 			int fd,
@@ -150,24 +156,24 @@ typedef int (*rcyn_async_ctl_t)(
 
 extern
 int
-rcyn_async_setup(
-	rcyn_t *rcyn,
-	rcyn_async_ctl_t controlcb,
+cynagora_async_setup(
+	cynagora_t *cynagora,
+	cynagora_async_ctl_t controlcb,
 	void *closure
 );
 
 extern
 int
-rcyn_async_process(
-	rcyn_t *rcyn
+cynagora_async_process(
+	cynagora_t *cynagora
 );
 
 extern
 int
-rcyn_async_check(
-	rcyn_t *rcyn,
-	const rcyn_key_t *key,
-	bool simple,
+cynagora_async_check(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key,
+	int simple,
 	void (*callback)(
 		void *closure,
 		int status),

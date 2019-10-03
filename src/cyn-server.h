@@ -17,27 +17,26 @@
 #pragma once
 /******************************************************************************/
 /******************************************************************************/
-/* IMPLEMENTATION OF SERVER PART OF RCYN-PROTOCOL                             */
+/* IMPLEMENTATION OF SERVER PART OF CYNAGORA-PROTOCOL                         */
 /******************************************************************************/
 /******************************************************************************/
 
-struct rcyn_server;
-typedef struct rcyn_server rcyn_server_t;
+typedef struct cyn_server cyn_server_t;
 
 extern
 bool
-rcyn_server_log;
+cyn_server_log;
 
 extern
 void
-rcyn_server_destroy(
-	rcyn_server_t *server
+cyn_server_destroy(
+	cyn_server_t *server
 );
 
 extern
 int
-rcyn_server_create(
-	rcyn_server_t **server,
+cyn_server_create(
+	cyn_server_t **server,
 	const char *admin_socket_spec,
 	const char *check_socket_spec,
 	const char *agent_socket_spec
@@ -45,14 +44,14 @@ rcyn_server_create(
 
 extern
 int
-rcyn_server_serve(
-	rcyn_server_t *server
+cyn_server_serve(
+	cyn_server_t *server
 );
 
 extern
 void
-rcyn_server_stop(
-	rcyn_server_t *server,
+cyn_server_stop(
+	cyn_server_t *server,
 	int status
 );
 

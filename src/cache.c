@@ -29,7 +29,7 @@
 #include <time.h>
 #include <ctype.h>
 
-#include "rcyn-client.h"
+#include "cynagora.h"
 #include "cache.h"
 
 /**
@@ -223,7 +223,7 @@ static
 bool
 match(
 	const char *head,
-	const rcyn_key_t *key
+	const cynagora_key_t *key
 ) {
 	head = cmp(head, key->client);
 	if (head) {
@@ -250,7 +250,7 @@ static
 item_t*
 search(
 	cache_t *cache,
-	const rcyn_key_t *key
+	const cynagora_key_t *key
 ) {
 	time_t now;
 	item_t *item, *found;
@@ -276,7 +276,7 @@ search(
 int
 cache_put(
 	cache_t *cache,
-	const rcyn_key_t *key,
+	const cynagora_key_t *key,
 	int value,
 	time_t expire
 ) {
@@ -318,7 +318,7 @@ cache_put(
 int
 cache_search(
 	cache_t *cache,
-	const rcyn_key_t *key
+	const cynagora_key_t *key
 ) {
 	item_t *item;
 

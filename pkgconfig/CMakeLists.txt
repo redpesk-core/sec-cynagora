@@ -16,7 +16,7 @@
 # limitations under the License.
 ###########################################################################
 
-configure_file(cynara.pc.in cynara.pc @ONLY)
+configure_file(cynagora.pc.in cynagora.pc @ONLY)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynara.pc
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynagora.pc
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)

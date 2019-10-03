@@ -1,0 +1,5 @@
+Name: cynagora
+Description: cynagora package
+Version: @CYNAGORA_VERSION@
+Libs: -L@CMAKE_INSTALL_FULL_LIBDIR@ -lcynagora
+Cflags: -I@CMAKE_INSTALL_FULL_INCLUDEDIR@ -I@CMAKE_INSTALL_FULL_INCLUDEDIR@

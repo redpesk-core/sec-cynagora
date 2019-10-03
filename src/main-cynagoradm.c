@@ -16,7 +16,7 @@
  */
 /******************************************************************************/
 /******************************************************************************/
-/* IMPLEMENTATION OF CYNARA ADMINISTRATION TOOL                               */
+/* IMPLEMENTATION OF CYNAGORA ADMINISTRATION TOOL                             */
 /******************************************************************************/
 /******************************************************************************/
 
@@ -34,8 +34,8 @@
 #include <poll.h>
 #include <sys/epoll.h>
 
-#include "rcyn-client.h"
-#include "rcyn-protocol.h"
+#include "cynagora.h"
+#include "cyn-protocol.h"
 #include "expire.h"
 
 #define DEFAULT_CACHE_SIZE 5000
@@ -69,7 +69,6 @@ helptxt[] =
 	"\n"
 	"otpions:\n"
 	"	-s, --socket xxx      set the base xxx for sockets\n"
-	"	                        (default: %s)\n"
 	"	-e, --echo            print the evaluated command\n"
 	"	-c, --cache xxx       set the cache size to xxx bytes\n"
 	"	                        (default: %d)\n"
@@ -302,7 +301,7 @@ help_expiration_text[] =
 	"\n"
 ;
 
-static rcyn_t *rcyn;
+static cynagora_t *cynagora;
 static char buffer[4000];
 static int bufill;
 static char *str[40];
@@ -310,8 +309,8 @@ static int nstr;
 static int pending;
 static int echo;
 
-rcyn_key_t key;
-rcyn_value_t value;
+cynagora_key_t key;
+cynagora_value_t value;
 
 int plink(int ac, char **av, int *used, int maxi)
 {
@@ -405,7 +404,7 @@ struct listitem *listresult_sort(int count, struct listitem *head)
 	return head;
 }
 
-void listcb(void *closure, const rcyn_key_t *k, const rcyn_value_t *v)
+void listcb(void *closure, const cynagora_key_t *k, const cynagora_value_t *v)
 {
 	struct listresult *lr = closure;
 	char buffer[100], *p;
@@ -455,7 +454,7 @@ int do_list(int ac, char **av)
 	rc = get_csup(ac, av, &uc, "#");
 	if (rc == 0) {
 		memset(&lr, 0, sizeof lr);
-		rc = rcyn_get(rcyn, &key, listcb, &lr);
+		rc = cynagora_get(cynagora, &key, listcb, &lr);
 		if (rc < 0)
 			fprintf(stderr, "error %s\n", strerror(-rc));
 		else {
@@ -490,10 +489,10 @@ int do_set(int ac, char **av)
 
 	rc = get_csupve(ac, av, &uc, "*");
 	if (rc == 0)
-		rc = rcyn_enter(rcyn);
+		rc = cynagora_enter(cynagora);
 	if (rc == 0) {
-		rc = rcyn_set(rcyn, &key, &value);
-		rcyn_leave(rcyn, !rc);
+		rc = cynagora_set(cynagora, &key, &value);
+		cynagora_leave(cynagora, !rc);
 	}
 	if (rc < 0)
 		fprintf(stderr, "error %s\n", strerror(-rc));
@@ -506,28 +505,28 @@ int do_drop(int ac, char **av)
 
 	rc = get_csup(ac, av, &uc, "#");
 	if (rc == 0)
-		rc = rcyn_enter(rcyn);
+		rc = cynagora_enter(cynagora);
 	if (rc == 0) {
-		rc = rcyn_drop(rcyn, &key);
-		rcyn_leave(rcyn, !rc);
+		rc = cynagora_drop(cynagora, &key);
+		cynagora_leave(cynagora, !rc);
 	}
 	if (rc < 0)
 		fprintf(stderr, "error %s\n", strerror(-rc));
 	return uc;
 }
 
-int do_check(int ac, char **av, int (*f)(rcyn_t*,const rcyn_key_t*))
+int do_check(int ac, char **av, int (*f)(cynagora_t*,const cynagora_key_t*))
 {
 	int uc, rc;
 
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
-		rc = f(rcyn, &key);
+		rc = f(cynagora, &key);
 		if (rc > 0)
 			fprintf(stdout, "allowed\n");
 		else if (rc == 0)
 			fprintf(stdout, "denied\n");
-		else if (rc == -ENOENT && f == rcyn_cache_check)
+		else if (rc == -ENOENT && f == cynagora_cache_check)
 			fprintf(stdout, "not in cache!\n");
 		else if (rc == -EEXIST)
 			fprintf(stderr, "denied but an entry exist\n");
@@ -555,7 +554,7 @@ int do_acheck(int ac, char **av, bool simple)
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
 		pending++;
-		rc = rcyn_async_check(rcyn, &key, simple, acheck_cb, NULL);
+		rc = cynagora_async_check(cynagora, &key, simple, acheck_cb, NULL);
 		if (rc < 0) {
 			fprintf(stderr, "error %s\n", strerror(-rc));
 			pending--;
@@ -578,7 +577,7 @@ int do_log(int ac, char **av)
 			return uc;
 		}
 	}
-	rc = rcyn_log(rcyn, on, off);
+	rc = cynagora_log(cynagora, on, off);
 	if (rc < 0)
 		fprintf(stderr, "error %s\n", strerror(-rc));
 	else
@@ -636,25 +635,25 @@ int do_any(int ac, char **av)
 		return do_drop(ac, av);
 
 	if (!strcmp(av[0], "check"))
-		return do_check(ac, av, rcyn_check);
+		return do_check(ac, av, cynagora_check);
 
 	if (!strcmp(av[0], "acheck"))
 		return do_acheck(ac, av, 0);
 
 	if (!strcmp(av[0], "test"))
-		return do_check(ac, av, rcyn_test);
+		return do_check(ac, av, cynagora_test);
 
 	if (!strcmp(av[0], "atest"))
 		return do_acheck(ac, av, 1);
 
 	if (!strcmp(av[0], "cache"))
-		return do_check(ac, av, rcyn_cache_check);
+		return do_check(ac, av, cynagora_cache_check);
 
 	if (!strcmp(av[0], "log"))
 		return do_log(ac, av);
 
 	if (!strcmp(av[0], "clear")) {
-		rcyn_cache_clear(rcyn);
+		cynagora_cache_clear(cynagora);
 		return 1;
 	}
 
@@ -716,6 +715,8 @@ int main(int ac, char **av)
 	struct pollfd fds[2];
 	char *p;
 
+	setlinebuf(stdout);
+
 	/* scan arguments */
 	for (;;) {
 		opt = getopt_long(ac, av, shortopts, longopts, NULL);
@@ -751,7 +752,7 @@ int main(int ac, char **av)
 
 	/* handles help, version, error */
 	if (help) {
-		fprintf(stdout, helptxt, rcyn_default_admin_socket_spec, DEFAULT_CACHE_SIZE);
+		fprintf(stdout, helptxt, DEFAULT_CACHE_SIZE);
 		return 0;
 	}
 	if (version) {
@@ -763,14 +764,14 @@ int main(int ac, char **av)
 
 	/* initialize server */
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = rcyn_open(&rcyn, rcyn_Admin, cachesize, socket);
+	rc = cynagora_open(&cynagora, cynagora_Admin, cachesize, socket);
 	if (rc < 0) {
 		fprintf(stderr, "initialization failed: %s\n", strerror(-rc));
 		return 1;
 	}
 
 	fds[1].fd = -1;
-	rc = rcyn_async_setup(rcyn, async_ctl, &fds[1].fd);
+	rc = cynagora_async_setup(cynagora, async_ctl, &fds[1].fd);
 	if (rc < 0) {
 		fprintf(stderr, "asynchronous setup failed: %s\n", strerror(-rc));
 		return 1;
@@ -814,7 +815,7 @@ int main(int ac, char **av)
 			fds[0].fd = -1;
 		}
 		if (fds[1].revents & POLLIN) {
-			rc = rcyn_async_process(rcyn);
+			rc = cynagora_async_process(cynagora);
 			if (rc < 0)
 				fprintf(stderr, "asynchronous processing failed: %s\n", strerror(-rc));
 			if (fds[0].fd < 0 && !pending)

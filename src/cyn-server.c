@@ -16,7 +16,7 @@
  */
 /******************************************************************************/
 /******************************************************************************/
-/* IMPLEMENTATION OF SERVER PART OF RCYN-PROTOCOL                             */
+/* IMPLEMENTATION OF SERVER PART OF CYNAGORA-PROTOCOL                         */
 /******************************************************************************/
 /******************************************************************************/
 
@@ -39,8 +39,8 @@
 #include "data.h"
 #include "prot.h"
 #include "cyn.h"
-#include "rcyn-protocol.h"
-#include "rcyn-server.h"
+#include "cyn-protocol.h"
+#include "cyn-server.h"
 #include "socket.h"
 #include "pollitem.h"
 
@@ -48,16 +48,16 @@
 
 /** should log? */
 bool
-rcyn_server_log = 0;
+cyn_server_log = 0;
 
 /** local enumeration of socket/client kind */
-typedef enum rcyn_type {
-	rcyn_Check,
-	rcyn_Agent,
-	rcyn_Admin
-} rcyn_type_t;
+typedef enum server_type {
+	server_Check,
+	server_Agent,
+	server_Admin
+} server_type_t;
 
-/** structure that represents a rcyn client */
+/** structure that represents a client */
 struct client
 {
 	/** a protocol structure */
@@ -90,7 +90,7 @@ struct client
 typedef struct client client_t;
 
 /** structure for servers */
-struct rcyn_server
+struct cyn_server
 {
 	/** the pollfd to use */
 	int pollfd;
@@ -202,7 +202,7 @@ putx(
 	va_end(l);
 
 	/* emit the log */
-	if (rcyn_server_log)
+	if (cyn_server_log)
 		dolog(cli, 0, n, fields);
 
 	/* send now */
@@ -360,12 +360,12 @@ onrequest(
 		return;
 
 	/* emit the log */
-	if (rcyn_server_log)
+	if (cyn_server_log)
 		dolog(cli, 1, count, args);
 
 	/* version hand-shake */
 	if (!cli->version) {
-		if (!ckarg(args[0], _rcyn_, 0) || count != 2 || !ckarg(args[1], "1", 0))
+		if (!ckarg(args[0], _cynagora_, 0) || count != 2 || !ckarg(args[1], "1", 0))
 			goto invalid;
 		putx(cli, _yes_, "1", cyn_changeid_string(), NULL);
 		flushw(cli);
@@ -376,7 +376,7 @@ onrequest(
 	switch(args[0][0]) {
 	case 'a': /* agent */
 		if (ckarg(args[0], _agent_, 1) && count == 5) {
-			if (cli->type != rcyn_Agent)
+			if (cli->type != server_Agent)
 				break;
 			/* TODO */ break;
 			return;
@@ -395,7 +395,7 @@ onrequest(
 		break;
 	case 'd': /* drop */
 		if (ckarg(args[0], _drop_, 1) && count == 5) {
-			if (cli->type != rcyn_Admin)
+			if (cli->type != server_Admin)
 				break;
 			if (!cli->entered)
 				break;
@@ -410,7 +410,7 @@ onrequest(
 		break;
 	case 'e': /* enter */
 		if (ckarg(args[0], _enter_, 1) && count == 1) {
-			if (cli->type != rcyn_Admin)
+			if (cli->type != server_Admin)
 				break;
 			if (cli->entered || cli->entering)
 				break;
@@ -422,7 +422,7 @@ onrequest(
 		break;
 	case 'g': /* get */
 		if (ckarg(args[0], _get_, 1) && count == 5) {
-			if (cli->type != rcyn_Admin)
+			if (cli->type != server_Admin)
 				break;
 			key.client = args[1];
 			key.session = args[2];
@@ -435,7 +435,7 @@ onrequest(
 		break;
 	case 'l': /* leave */
 		if (ckarg(args[0], _leave_, 1) && count <= 2) {
-			if (cli->type != rcyn_Admin)
+			if (cli->type != server_Admin)
 				break;
 			if (count == 2 && !ckarg(args[1], _commit_, 0) && !ckarg(args[1], _rollback_, 0))
 				break;
@@ -447,8 +447,8 @@ onrequest(
 			return;
 		}
 		if (ckarg(args[0], _log_, 1) && count <= 2) {
-			nextlog = rcyn_server_log;
-			if (cli->type != rcyn_Admin)
+			nextlog = cyn_server_log;
+			if (cli->type != server_Admin)
 				break;
 			if (count == 2) {
 				if (!ckarg(args[1], _on_, 0) && !ckarg(args[1], _off_, 0))
@@ -457,13 +457,13 @@ onrequest(
 			}
 			putx(cli, _done_, nextlog ? _on_ : _off_, NULL);
 			flushw(cli);
-			rcyn_server_log = nextlog;
+			cyn_server_log = nextlog;
 			return;
 		}
 		break;
 	case 's': /* set */
 		if (ckarg(args[0], _set_, 1) && (count == 6 || count == 7)) {
-			if (cli->type != rcyn_Admin)
+			if (cli->type != server_Admin)
 				break;
 			if (!cli->entered)
 				break;
@@ -575,7 +575,7 @@ int
 create_client(
 	client_t **pcli,
 	int fd,
-	rcyn_type_t type
+	server_type_t type
 ) {
 	client_t *cli;
 	int rc;
@@ -625,7 +625,7 @@ on_server_event(
 	pollitem_t *pollitem,
 	uint32_t events,
 	int pollfd,
-	rcyn_type_t type
+	server_type_t type
 ) {
 	int servfd = pollitem->fd;
 	int fd, rc;
@@ -678,7 +678,7 @@ on_check_server_event(
 	uint32_t events,
 	int pollfd
 ) {
-	on_server_event(pollitem, events, pollfd, rcyn_Check);
+	on_server_event(pollitem, events, pollfd, server_Check);
 }
 
 /** handle admin server events */
@@ -689,7 +689,7 @@ on_admin_server_event(
 	uint32_t events,
 	int pollfd
 ) {
-	on_server_event(pollitem, events, pollfd, rcyn_Admin);
+	on_server_event(pollitem, events, pollfd, server_Admin);
 }
 
 /** handle admin server events */
@@ -700,13 +700,13 @@ on_agent_server_event(
 	uint32_t events,
 	int pollfd
 ) {
-	on_server_event(pollitem, events, pollfd, rcyn_Agent);
+	on_server_event(pollitem, events, pollfd, server_Agent);
 }
 
 /** destroy a server */
 void
-rcyn_server_destroy(
-	rcyn_server_t *server
+cyn_server_destroy(
+	cyn_server_t *server
 ) {
 	if (server) {
 		if (server->pollfd >= 0)
@@ -721,13 +721,13 @@ rcyn_server_destroy(
 
 /** create a server */
 int
-rcyn_server_create(
-	rcyn_server_t **server,
+cyn_server_create(
+	cyn_server_t **server,
 	const char *admin_socket_spec,
 	const char *check_socket_spec,
 	const char *agent_socket_spec
 ) {
-	rcyn_server_t *srv;
+	cyn_server_t *srv;
 	int rc;
 
 	/* allocate the structure */
@@ -748,7 +748,7 @@ rcyn_server_create(
 	}
 
 	/* create the admin server socket */
-	admin_socket_spec = rcyn_get_socket_admin(admin_socket_spec);
+	admin_socket_spec = cyn_get_socket_admin(admin_socket_spec);
 	srv->admin.fd = socket_open(admin_socket_spec, 1);
 	if (srv->admin.fd < 0) {
 		rc = -errno;
@@ -767,7 +767,7 @@ rcyn_server_create(
 	}
 
 	/* create the check server socket */
-	check_socket_spec = rcyn_get_socket_check(check_socket_spec);
+	check_socket_spec = cyn_get_socket_check(check_socket_spec);
 	srv->check.fd = socket_open(check_socket_spec, 1);
 	if (srv->check.fd < 0) {
 		rc = -errno;
@@ -786,7 +786,7 @@ rcyn_server_create(
 	}
 
 	/* create the agent server socket */
-	agent_socket_spec = rcyn_get_socket_agent(agent_socket_spec);
+	agent_socket_spec = cyn_get_socket_agent(agent_socket_spec);
 	srv->agent.fd = socket_open(agent_socket_spec, 1);
 	if (srv->agent.fd < 0) {
 		rc = -errno;
@@ -823,8 +823,8 @@ error:
 
 /** stop the server */
 void
-rcyn_server_stop(
-	rcyn_server_t *server,
+cyn_server_stop(
+	cyn_server_t *server,
 	int status
 ) {
 	server->stopped = status ?: INT_MIN;
@@ -832,8 +832,8 @@ rcyn_server_stop(
 
 /** create a server */
 int
-rcyn_server_serve(
-	rcyn_server_t *server
+cyn_server_serve(
+	cyn_server_t *server
 ) {
 	/* process inputs */
 	server->stopped = 0;

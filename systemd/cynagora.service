@@ -1,0 +1,26 @@
+[Unit]
+Description=Cynagora service
+Requires=afm-system-setup.service
+After=afm-system-setup.service
+
+[Service]
+ExecStart=/usr/bin/cynagorad --systemd --user cynagora --group cynagora --make-db-dir --own-db-dir
+
+Type=notify
+
+KillMode=process
+TimeoutStopSec=3
+Restart=always
+
+Sockets=cynagora-admin.socket
+Sockets=cynagora-check.socket
+Sockets=cynagora-agent.socket
+SmackProcessLabel=System
+
+#UMask=0000
+#User=cynagora
+#Group=cynagora
+#NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

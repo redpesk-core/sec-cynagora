@@ -16,7 +16,7 @@
  */
 /******************************************************************************/
 /******************************************************************************/
-/* IMPLEMENTATION OF CYNARA SERVER                                            */
+/* IMPLEMENTATION OF CYNAGORA SERVER                                          */
 /******************************************************************************/
 /******************************************************************************/
 
@@ -44,22 +44,22 @@
 #include "data.h"
 #include "db.h"
 #include "cyn.h"
-#include "rcyn-server.h"
-#include "rcyn-protocol.h"
+#include "cyn-server.h"
+#include "cyn-protocol.h"
 #include "dbinit.h"
 #include "agent-at.h"
 
 #if !defined(DEFAULT_DB_DIR)
-#    define  DEFAULT_DB_DIR      "/var/lib/cynara"
+#    define  DEFAULT_DB_DIR      "/var/lib/cynagora"
 #endif
 #if !defined(DEFAULT_INIT_FILE)
-#    define  DEFAULT_INIT_FILE   "/etc/security/cynara.initial"
+#    define  DEFAULT_INIT_FILE   "/etc/security/cynagora.initial"
 #endif
-#if !defined(DEFAULT_CYNARA_USER)
-#    define  DEFAULT_CYNARA_USER   NULL
+#if !defined(DEFAULT_CYNAGORA_USER)
+#    define  DEFAULT_CYNAGORA_USER   NULL
 #endif
-#if !defined(DEFAULT_CYNARA_GROUP)
-#    define  DEFAULT_CYNARA_GROUP  NULL
+#if !defined(DEFAULT_CYNAGORA_GROUP)
+#    define  DEFAULT_CYNAGORA_GROUP  NULL
 #endif
 
 #define _DBDIR_       'd'
@@ -109,7 +109,7 @@ static
 const char
 helptxt[] =
 	"\n"
-	"usage: cynarad [options]...\n"
+	"usage: cynagorad [options]...\n"
 	"\n"
 	"otpions:\n"
 #if defined(WITH_SYSTEMD_ACTIVATION)
@@ -138,7 +138,7 @@ helptxt[] =
 static
 const char
 versiontxt[] =
-	"cynarad version 1.99.99\n"
+	"cynagorad version 1.99.99\n"
 ;
 
 static int isid(const char *text);
@@ -167,7 +167,7 @@ int main(int ac, char **av)
 	struct passwd *pw;
 	struct group *gr;
 	cap_t caps = { 0 };
-	rcyn_server_t *server;
+	cyn_server_t *server;
 	char *spec_socket_admin, *spec_socket_check, *spec_socket_agent;
 
 	/* scan arguments */
@@ -226,7 +226,7 @@ int main(int ac, char **av)
 
 	/* handles help, version, error */
 	if (help) {
-		fprintf(stdout, helptxt, rcyn_default_socket_dir);
+		fprintf(stdout, helptxt, cyn_default_socket_dir);
 		return 0;
 	}
 	if (version) {
@@ -243,9 +243,9 @@ int main(int ac, char **av)
 
 	/* set the defaults */
 	dbdir = dbdir ?: DEFAULT_DB_DIR;
-	socketdir = socketdir ?: rcyn_default_socket_dir;
-	user = user ?: DEFAULT_CYNARA_USER;
-	group = group ?: DEFAULT_CYNARA_GROUP;
+	socketdir = socketdir ?: cyn_default_socket_dir;
+	user = user ?: DEFAULT_CYNAGORA_USER;
+	group = group ?: DEFAULT_CYNAGORA_GROUP;
 	init = init ?: DEFAULT_INIT_FILE;
 
 	/* activate the agents */
@@ -258,9 +258,9 @@ int main(int ac, char **av)
 		spec_socket_check = strdup("sd:check");
 		spec_socket_agent = strdup("sd:agent");
 	} else {
-		rc = asprintf(&spec_socket_admin, "%s:%s/%s", rcyn_default_socket_scheme, socketdir, rcyn_default_admin_socket_base);
-		rc = asprintf(&spec_socket_check, "%s:%s/%s", rcyn_default_socket_scheme, socketdir, rcyn_default_check_socket_base);
-		rc = asprintf(&spec_socket_agent, "%s:%s/%s", rcyn_default_socket_scheme, socketdir, rcyn_default_agent_socket_base);
+		rc = asprintf(&spec_socket_admin, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_admin_socket_base);
+		rc = asprintf(&spec_socket_check, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_check_socket_base);
+		rc = asprintf(&spec_socket_agent, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_agent_socket_base);
 	}
 	if (!spec_socket_admin || !spec_socket_check || !spec_socket_agent) {
 		fprintf(stderr, "can't make socket paths\n");
@@ -337,9 +337,9 @@ int main(int ac, char **av)
 
 	/* initialize server */
 	setvbuf(stderr, NULL, _IOLBF, 1000);
-	rcyn_server_log = (bool)flog;
+	cyn_server_log = (bool)flog;
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = rcyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
+	rc = cyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
 	if (rc < 0) {
 		fprintf(stderr, "can't initialize server: %m\n");
 		return 1;
@@ -352,7 +352,7 @@ int main(int ac, char **av)
 #endif
 
 	/* serve */
-	rc = rcyn_server_serve(server);
+	rc = cyn_server_serve(server);
 	return rc ? 3 : 0;
 }
 

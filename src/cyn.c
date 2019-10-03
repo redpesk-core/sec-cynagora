@@ -16,7 +16,7 @@
  */
 /******************************************************************************/
 /******************************************************************************/
-/* IMPLEMENTATION OF LOCAL CYNARA API                                         */
+/* IMPLEMENTATION OF LOCAL CYNAGORA API                                       */
 /******************************************************************************/
 /******************************************************************************/
 
@@ -88,7 +88,7 @@ struct agent
 /**
  * structure handling an asynchronous requests
  */
-struct cyn_query
+struct cynagora_query
 {
 	/** callback for handling result of the check */
 	on_result_cb_t *on_result_cb;
@@ -412,7 +412,7 @@ required_agent(
  * @return the allocated structure or NULL in case of memory depletion
  */
 static
-cyn_query_t *
+cynagora_query_t *
 alloc_query(
 	on_result_cb_t *on_result_cb,
 	void *closure,
@@ -420,7 +420,7 @@ alloc_query(
 	int maxdepth
 ) {
 	size_t szcli, szses, szuse, szper;
-	cyn_query_t *query;
+	cynagora_query_t *query;
 	void *ptr;
 
 	/* allocate asynchronous query */
@@ -476,7 +476,7 @@ cyn_query_async(
 	int rc;
 	unsigned score;
 	data_value_t value;
-	cyn_query_t *query;
+	cynagora_query_t *query;
 	struct agent *agent;
 
 	/* get the direct value */
@@ -538,7 +538,7 @@ cyn_check_async(
 /* see cyn.h */
 int
 cyn_query_subquery_async(
-	cyn_query_t *query,
+	cynagora_query_t *query,
 	on_result_cb_t *on_result_cb,
 	void *closure,
 	const data_key_t *key
@@ -549,7 +549,7 @@ cyn_query_subquery_async(
 /* see cyn.h */
 void
 cyn_query_reply(
-	cyn_query_t *query,
+	cynagora_query_t *query,
 	const data_value_t *value
 ) {
 	query->on_result_cb(query->closure, value);

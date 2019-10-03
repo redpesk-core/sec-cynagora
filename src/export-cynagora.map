@@ -1,6 +1,6 @@
 {
 global:
-	rcyn_*;
+	cynagora_*;
 local:
 	*;
 };

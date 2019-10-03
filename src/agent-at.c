@@ -150,7 +150,7 @@ agent_at_cb(
 	void *agent_closure,
 	const data_key_t *key,
 	const char *value,
-	cyn_query_t *query
+	cynagora_query_t *query
 ) {
 	data_key_t atkey;
 	char *block;

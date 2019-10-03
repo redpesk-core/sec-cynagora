@@ -29,7 +29,7 @@ set_target_properties(cynara-compat
 		SOVERSION ${CYNARA_SOVERSION}
 )
 target_link_libraries(cynara-compat
-	PRIVATE cynara-client
+	PRIVATE cynagora
 )
 target_link_options(cynara-compat
 	PRIVATE
@@ -44,4 +44,3 @@ add_executable(test-old-cynara main-test-old-cynara.c)
 target_link_libraries(test-old-cynara cynara-compat)
 install(TARGETS test-old-cynara
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
-
