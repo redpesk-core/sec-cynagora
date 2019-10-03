@@ -16,7 +16,26 @@
 # limitations under the License.
 ###########################################################################
 
-configure_file(cynara.pc.in cynara.pc @ONLY)
+configure_file(cynara-compat.pc.in cynara-compat.pc @ONLY)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynara.pc
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynara-compat.pc
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+
+foreach(item cynara-admin.pc 
+             cynara-agent.pc 
+             cynara-client-async.pc 
+             cynara-client.pc 
+             cynara-commons.pc 
+             cynara-creds-commons.pc 
+             cynara-creds-dbus.pc 
+             cynara-creds-gdbus.pc 
+             cynara-creds-self.pc 
+             cynara-creds-socket.pc 
+             cynara-monitor.pc
+             cynara-plugin.pc
+             cynara-session.pc) 
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/link-to-cynara-compat.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+         RENAME ${item})
+endforeach(item)
+

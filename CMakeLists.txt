@@ -44,7 +44,9 @@ set(CYNARA_SOVERSION 1.99)
 
 add_definitions(-DCYNARA_VERSION="${CYNARA_VERSION}")
 
-set(SYSTEMD ON CACHE BOOL "should use systemd")
+option(WITH_SYSTEMD       "should include systemd compatibility" ON)
+option(WITH_CYNARA_COMPAT "produce artifacts for compatibility with cynara" OFF)
+
 set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynara"
 	CACHE PATH "directory path of the database")
 set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynara"
@@ -55,7 +57,6 @@ set(DEFAULT_INIT_FILE "${DEFAULT_CONFIG_DIR}/cynara.initial")
 
 ###########################################################################
 
-include_directories(include)
 link_libraries(-Wl,--as-needed -Wl,--gc-sections -Wl,--no-undefined)
 
 add_compile_options(-Wall -Wextra -Wconversion)
@@ -64,26 +65,21 @@ add_compile_options(-Wno-sign-compare -Wno-sign-conversion)
 add_compile_options(-Werror=maybe-uninitialized)
 add_compile_options(-Werror=implicit-function-declaration)
 add_compile_options(-ffunction-sections -fdata-sections)
-add_compile_options(-fPIC)
-add_compile_options(-g)
-add_compile_options(-fstack-protector -D_FORTIFY_SOURCE=2 -O2)
-add_compile_options(-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.)
-
-set(CMAKE_C_FLAGS_PROFILING    "-g -O2 -pg")
-set(CMAKE_C_FLAGS_DEBUG        "-g -ggdb --fstack-protector -D_FORTIFY_SOURCE=2")
-set(CMAKE_C_FLAGS_RELEASE      "-g -O2")
-set(CMAKE_C_FLAGS_CCOV         "-g -O2 --coverage")
+add_compile_options(-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.)
 
 ###########################################################################
 
-if(SYSTEMD)
+if(WITH_SYSTEMD)
 	PKG_CHECK_MODULES(libsystemd REQUIRED libsystemd>=222)
 	add_subdirectory(systemd)
 endif()
 
-add_subdirectory(include)
 add_subdirectory(src)
 add_subdirectory(pkgconfig)
+
+if(WITH_CYNARA_COMPAT)
+	add_subdirectory(compat)
+endif()
 
 install(FILES
 	${CMAKE_CURRENT_SOURCE_DIR}/cynara.initial
