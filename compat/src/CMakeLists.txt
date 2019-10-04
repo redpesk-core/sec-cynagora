@@ -27,13 +27,10 @@ set_target_properties(cynara-compat
 	PROPERTIES
 		VERSION ${CYNARA_VERSION}
 		SOVERSION ${CYNARA_SOVERSION}
+		LINK_FLAGS -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynara-compat.map
 )
 target_link_libraries(cynara-compat
 	PRIVATE cynagora
-)
-target_link_options(cynara-compat
-	PRIVATE
-	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynara-compat.map
 )
 install(TARGETS cynara-compat LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 

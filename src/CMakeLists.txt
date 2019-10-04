@@ -55,10 +55,8 @@ add_library(cynagora-core SHARED ${LIBCORE_SOURCES})
 target_include_directories(cynagora-core PUBLIC .)
 set_target_properties(cynagora-core PROPERTIES
 	VERSION ${CYNAGORA_VERSION}
-	SOVERSION ${CYNAGORA_SOVERSION})
-target_link_libraries(cynagora-core
-	PRIVATE
-	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynagora-core.map
+	SOVERSION ${CYNAGORA_SOVERSION}
+	LINK_FLAGS -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynagora-core.map
 )
 install(TARGETS cynagora-core LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
@@ -72,10 +70,8 @@ target_compile_definitions(cynagora PRIVATE
 )
 set_target_properties(cynagora PROPERTIES
 	VERSION ${CYNAGORA_VERSION}
-	SOVERSION ${CYNAGORA_SOVERSION})
-target_link_options(cynagora
-	PRIVATE
-	-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynagora.map
+	SOVERSION ${CYNAGORA_SOVERSION}
+	LINK_FLAGS -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynagora.map
 )
 install(TARGETS cynagora LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 install(FILES cynagora.h DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR})
