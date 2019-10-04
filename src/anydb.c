@@ -586,6 +586,13 @@ anydb_test(
 /******************************************************************************/
 /******************************************************************************/
 
+/* structure for testing emptyness */
+struct empty_s
+{
+	bool empty;
+	time_t now;
+};
+
 /* callback for computing if empty */
 static
 anydb_action_t
@@ -594,10 +601,12 @@ is_empty_cb(
 	const anydb_key_t *key,
 	anydb_value_t *value
 ) {
-	time_t *t = closure;
-	if (value->expire && value->expire <= *t)
+	struct empty_s *s = closure;
+
+	if (value->expire && value->expire <= s->now)
 		return Anydb_Action_Remove_And_Continue;
-	*t = 0;
+
+	s->empty = false;
 	return Anydb_Action_Stop;
 }
 
@@ -606,11 +615,12 @@ bool
 anydb_is_empty(
 	anydb_t *db
 ) {
-	time_t t;
+	struct empty_s s;
 
-	t = time(NULL);
-	db->itf.apply(db->clodb, is_empty_cb, &t);
-	return !t;
+	s.empty = true;
+	s.now = time(NULL);
+	db->itf.apply(db->clodb, is_empty_cb, &s);
+	return s.empty;
 }
 
 /******************************************************************************/
