@@ -10,6 +10,7 @@ cmake \
 	-DCMAKE_INSTALL_PREFIX=~/.local \
 	-DWITH_SYSTEMD=ON \
 	-DWITH_CYNARA_COMPAT=ON \
+	-DDIRECT_CYNARA_COMPAT=ON \
 	..
 make -j
 

@@ -61,13 +61,18 @@ set_target_properties(cynagora-core PROPERTIES
 install(TARGETS cynagora-core LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
 ###########################################
-# build and install libcynagora-client
+# build client-objects
 ###########################################
-add_library(cynagora SHARED ${LIBCLI_SOURCES})
-target_include_directories(cynagora PUBLIC .)
-target_compile_definitions(cynagora PRIVATE
+add_library(client-objects OBJECT ${LIBCLI_SOURCES})
+target_compile_definitions(client-objects PRIVATE
 	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 )
+target_compile_options(client-objects PRIVATE -fPIC)
+
+###########################################
+# build and install libcynagora-client
+###########################################
+add_library(cynagora SHARED $<TARGET_OBJECTS:client-objects>)
 set_target_properties(cynagora PROPERTIES
 	VERSION ${CYNAGORA_VERSION}
 	SOVERSION ${CYNAGORA_SOVERSION}

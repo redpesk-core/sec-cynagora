@@ -16,21 +16,26 @@
 # limitations under the License.
 ###########################################################################
 
+option(DIRECT_CYNARA_COMPAT "cynara compat access server directly without using libcynagora" OFF)
+
 add_compile_definitions(_GNU_SOURCE)
 
 ###########################################
 # build and install libcynara-compat
 ###########################################
-add_library(cynara-compat SHARED lib-compat.c)
+if(DIRECT_CYNARA_COMPAT)
+	add_library(cynara-compat SHARED lib-compat.c $<TARGET_OBJECTS:client-objects>)
+	target_include_directories(cynara-compat PRIVATE ../../src)
+else()
+	add_library(cynara-compat SHARED lib-compat.c)
+	target_link_libraries(cynara-compat PRIVATE cynagora)
+endif()
 target_include_directories(cynara-compat PUBLIC ../include)
 set_target_properties(cynara-compat
 	PROPERTIES
 		VERSION ${CYNARA_VERSION}
 		SOVERSION ${CYNARA_SOVERSION}
 		LINK_FLAGS -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-cynara-compat.map
-)
-target_link_libraries(cynara-compat
-	PRIVATE cynagora
 )
 install(TARGETS cynara-compat LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
