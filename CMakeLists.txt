@@ -48,9 +48,7 @@ set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynagora"
 	CACHE PATH "directory path of the database")
 set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynagora"
 	CACHE PATH "directory path of the sockets")
-set(DEFAULT_CONFIG_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security"
-	CACHE PATH "directory of configuration")
-set(DEFAULT_INIT_FILE "${DEFAULT_CONFIG_DIR}/cynagora.initial")
+set(DEFAULT_INIT_FILE "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.initial")
 
 ###########################################################################
 
@@ -77,8 +75,13 @@ if(WITH_CYNARA_COMPAT)
 	add_subdirectory(compat)
 endif()
 
+get_filename_component(
+	DEFAULT_INIT_FILE_DIRECTORY
+	${DEFAULT_INIT_FILE}
+	DIRECTORY
+)
 install(FILES
 	${CMAKE_CURRENT_SOURCE_DIR}/cynagora.initial
 	DESTINATION
-	${DEFAULT_CONFIG_DIR}
+	${DEFAULT_INIT_FILE_DIRECTORY}
 )

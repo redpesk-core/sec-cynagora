@@ -338,7 +338,7 @@ cache_clear(
 	cache_t *cache,
 	uint32_t cacheid
 ) {
-	if (cache && (!cacheid || cache->cacheid != cacheid)) {
+	if (cache && (cache->cacheid != cacheid || !cacheid)) {
 		cache->cacheid = cacheid;
 		cache->used = 0;
 	}

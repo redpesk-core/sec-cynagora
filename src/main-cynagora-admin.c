@@ -91,7 +91,7 @@ static
 const char
 help__text[] =
 	"\n"
-	"Commands are: list, set, drop, check, test, cache, clear, quit, log, help\n"
+	"Commands are: list, set, drop, acheck, check, atest, test, cache, clear, quit, log, help\n"
 	"Type 'help command' to get help on the command\n"
 	"Type 'help expiration' to get help on expirations\n"
 	"\n"
@@ -518,21 +518,38 @@ int do_drop(int ac, char **av)
 	return uc;
 }
 
-int do_check(int ac, char **av, int (*f)(cynagora_t*,const cynagora_key_t*))
+int do_check(int ac, char **av, int (*f)(cynagora_t*,const cynagora_key_t*,int))
 {
 	int uc, rc;
 
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
-		rc = f(cynagora, &key);
+		rc = f(cynagora, &key, 0);
 		if (rc > 0)
 			fprintf(stdout, "allowed\n");
 		else if (rc == 0)
 			fprintf(stdout, "denied\n");
-		else if (rc == -ENOENT && f == cynagora_cache_check)
-			fprintf(stdout, "not in cache!\n");
 		else if (rc == -EEXIST)
 			fprintf(stderr, "denied but an entry exist\n");
+		else
+			fprintf(stderr, "error %s\n", strerror(-rc));
+	}
+	return uc;
+}
+
+int do_cache_check(int ac, char **av)
+{
+	int uc, rc;
+
+	rc = get_csup(ac, av, &uc, NULL);
+	if (rc == 0) {
+		rc = cynagora_cache_check(cynagora, &key);
+		if (rc > 0)
+			fprintf(stdout, "allowed\n");
+		else if (rc == 0)
+			fprintf(stdout, "denied\n");
+		else if (rc == -ENOENT)
+			fprintf(stdout, "not in cache!\n");
 		else
 			fprintf(stderr, "error %s\n", strerror(-rc));
 	}
@@ -557,7 +574,7 @@ int do_acheck(int ac, char **av, bool simple)
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
 		pending++;
-		rc = cynagora_async_check(cynagora, &key, simple, acheck_cb, NULL);
+		rc = cynagora_async_check(cynagora, &key, 0, simple, acheck_cb, NULL);
 		if (rc < 0) {
 			fprintf(stderr, "error %s\n", strerror(-rc));
 			pending--;
@@ -650,7 +667,7 @@ int do_any(int ac, char **av)
 		return do_acheck(ac, av, 1);
 
 	if (!strcmp(av[0], "cache"))
-		return do_check(ac, av, cynagora_cache_check);
+		return do_cache_check(ac, av);
 
 	if (!strcmp(av[0], "log"))
 		return do_log(ac, av);

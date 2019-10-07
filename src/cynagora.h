@@ -20,7 +20,9 @@
 /* IMPLEMENTATION OF CLIENT PART OF CYNAGORA-PROTOCOL                         */
 /******************************************************************************/
 /******************************************************************************/
-
+/**
+ * @file cynagora.h
+ */
 /******************************************************************************/
 /* COMMON PART - types and functions common to check/admin/agent clients      */
 /******************************************************************************/
@@ -216,6 +218,7 @@ cynagora_cache_check(
  *
  * @param cynagora the client handler
  * @param key      the key to check
+ * @param force    if not set forbids cache use
  *
  * @return 0 if permission forbidden, 1 if permission granted
  *         or if error a negative -errno value
@@ -226,7 +229,8 @@ extern
 int
 cynagora_check(
 	cynagora_t *cynagora,
-	const cynagora_key_t *key
+	const cynagora_key_t *key,
+	int force
 );
 
 /**
@@ -235,7 +239,10 @@ cynagora_check(
  *
  * @param cynagora the client handler
  * @param key
- * @return
+ * @param force    if not set forbids cache use
+ *
+ * @return 0 if permission forbidden, 1 if permission granted
+ *         or if error a negative -errno value
  *
  * @see cynagora_check
  */
@@ -243,7 +250,8 @@ extern
 int
 cynagora_test(
 	cynagora_t *cynagora,
-	const cynagora_key_t *key
+	const cynagora_key_t *key,
+	int force
 );
 
 /**
@@ -251,6 +259,7 @@ cynagora_test(
  *
  * @param cynagora  the handler of the client
  * @param key       the key to query
+ * @param force     if not set forbids cache use
  * @param simple    if zero allows agent process else if not 0 forbids it
  * @param callback  the callback to call on reply
  * @param closure   a closure for the callback
@@ -262,6 +271,7 @@ int
 cynagora_async_check(
 	cynagora_t *cynagora,
 	const cynagora_key_t *key,
+	int force,
 	int simple,
 	cynagora_async_check_cb_t *callback,
 	void *closure

@@ -613,9 +613,10 @@ ensure_opened(
 /**
  * Check or test synchronously
  *
- * @param cynagora
- * @param key
- * @param action
+ * @param cynagora  the handler of the client
+ * @param key       the key to test/check
+ * @param force     if not set forbids cache use
+ * @param action    test or check
  *
  * @return  0 in case of success or a negative -errno value
  */
@@ -624,6 +625,7 @@ int
 check_or_test(
 	cynagora_t *cynagora,
 	const cynagora_key_t *key,
+	int force,
 	const char *action
 ) {
 	int rc;
@@ -642,9 +644,11 @@ check_or_test(
 	flushr(cynagora);
 
 	/* check cache item */
-	rc = cache_search(cynagora->cache, key);
-	if (rc >= 0)
-		return rc;
+	if (!force) {
+		rc = cache_search(cynagora->cache, key);
+		if (rc >= 0)
+			return rc;
+	}
 
 	/* send the request */
 	rc = putxkv(cynagora, action, 0, key, 0);
@@ -851,18 +855,20 @@ cynagora_cache_check(
 int
 cynagora_check(
 	cynagora_t *cynagora,
-	const cynagora_key_t *key
+	const cynagora_key_t *key,
+	int force
 ) {
-	return check_or_test(cynagora, key, _check_);
+	return check_or_test(cynagora, key, force, _check_);
 }
 
 /* see cynagora.h */
 int
 cynagora_test(
 	cynagora_t *cynagora,
-	const cynagora_key_t *key
+	const cynagora_key_t *key,
+	int force
 ) {
-	return check_or_test(cynagora, key, _test_);
+	return check_or_test(cynagora, key, force, _test_);
 }
 
 /* see cynagora.h */
@@ -870,6 +876,7 @@ int
 cynagora_async_check(
 	cynagora_t *cynagora,
 	const cynagora_key_t *key,
+	int force,
 	int simple,
 	cynagora_async_check_cb_t *callback,
 	void *closure
@@ -881,6 +888,18 @@ cynagora_async_check(
 	rc = ensure_opened(cynagora);
 	if (rc < 0)
 		return rc;
+
+	/* ensure there is no clear cache pending */
+	flushr(cynagora);
+
+	/* check cache item */
+	if (!force) {
+		rc = cache_search(cynagora->cache, key);
+		if (rc >= 0) {
+			callback(closure, rc);
+			return 0;
+		}
+	}
 
 	/* allocate */
 	ar = malloc(sizeof *ar + strlen(key->client) + strlen(key->session) + strlen(key->user) + strlen(key->permission) + 4);

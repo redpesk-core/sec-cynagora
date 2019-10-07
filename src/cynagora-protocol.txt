@@ -1,15 +1,47 @@
-protocol
-========
+The cynagora protocol
+=====================
 
-hello:
+Introduction
+------------
 
-  c->s cynagora 1
-  s->c yes 1 CACHEID
+### Notations:
 
-invalidate cache:
+ - c->s:    from client to cynagora server
+ - s->c:    from cynagora server to client
+ - EXPIRE:  if missing, means forever
+            if positive, a number of second since EPOCH, invalid after it
+ - CACHEID: a 32 bits positive integer
+ - ASKID:   a 32 bits positive integer
 
-  s->c clear CACHEID
+Messages
+--------
+
+### hello
+
+synopsis:
+
+	c->s cynagora 1
+	s->c yes 1 CACHEID
+
+The client present itself with the version of the protocol it expects to
+speak (today version 1 only). The server answer yes with the acknoledged
+version it will use and the CACHEID that identify the cache (see note on
+CACHEID)
+
+If hello is used, it must be the first message. If it is not used, the
+protocol implicitely switch to the default version.
+
+
+### invalidate cache
+
+synopsis:
+
+	s->c clear CACHEID
+
+The server ask the client to clear its cache and to start the cache whose
+identifier is CACHEID
   
+
 ### test a permission
 
 synopsis:
@@ -25,6 +57,7 @@ synopsis:
 
 	c->s check CLIENT SESSION USER PERMISSION
 	s->c (yes|no) [EXPIRE]
+
 
 
 ### enter critical (admin)
@@ -45,52 +78,59 @@ synopsis:
 
 synopsis:
 
-  c->s drop CLIENT SESSION USER PERMISSION
-  s->c done|error ...
+	c->s drop CLIENT SESSION USER PERMISSION
+	s->c done|error ...
 
-set (admin):
+### set (admin)
 
-  c->s set CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
-  s->c done|error ...
+synopsis:
 
-list permissions (admin):
+	c->s set CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
+	s->c done|error ...
 
-  c->s get CLIENT SESSION USER PERMISSION
-  s->c item CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
-  s->c ...
-  s->c done
+### list permissions (admin):
 
-logging set/get (admin)
+synopsis:
 
-  c->s log [on|off]
-  s->c done (on|off)
+	c->s get CLIENT SESSION USER PERMISSION
+	s->c item CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
+	s->c ...
+	s->c done
 
-register agent (agent):
+### logging set/get (admin)
 
-  s->c ask ASKID NAME VALUE CLIENT SESSION USER PERMISSION
-  c->s reply ASKID (yes|no|error) [EXPIRE]
+synopsis:
 
-ask agent (agent):
+	c->s log [on|off]
+	s->c done (on|off)
 
-  s->c ask NAME VALUE CLIENT SESSION USER PERMISSION
-  c->s done | ([yes|no] [always|session|one-time|EXPIRE])
+### register agent (agent)
 
+synopsis:
 
-----------------------------------------------------------
-  c->s c(heck) CLIENT SESSION USER PERMISSION
-  c->s d(rop) CLIENT SESSION USER PERMISSION
-  c->s e(nter)
-  c->s g(et) CLIENT SESSION USER PERMISSION
-  c->s l(eave) [commit|rollback]
-  c->s r(cyn)
-  c->s s(et) CLIENT SESSION USER PERMISSION VALUE EXPIRE
-  c->s t(est) CLIENT SESSION USER PERMISSION
+	c->s agent NAME
+	s->c done|error ...
 
-  s->c clear
-  s->c done
-  s->c done [CLIENT SESSION USER PERMISSION VALUE]
-  s->c done|error ...
-  s->c item CLIENT SESSION USER PERMISSION VALUE EXPIRE
-  s->c done VALUE EXPIRE
+### ask agent (agent):
 
+synopsis:
+
+	s->c ask ASKID NAME VALUE CLIENT SESSION USER PERMISSION
+	c->s reply ASKID ([yes|no] [always|session|one-time|EXPIRE])
+
+### sub queries (agent):
+
+synopsis:
+
+	c->s sub ASKID (test|check) CLIENT SESSION USER PERMISSION
+	s->c reply ASKID (done|yes|no) [EXPIRE]
+
+Notes
+-----
+
+### CACHEID
+
+The cacheid identify the current cache. It changes each time the database
+changes. After a disconnection, clients can use HELLO to check whether their
+version of cache is still valid. This is implemented by the default C library.
 

@@ -84,9 +84,9 @@ static int from_value(const char *value)
 {
 	if (!strcmp(value, "yes"))
 		return CYNARA_ADMIN_ALLOW;
-	if (!strcmp(value, "ask"))
-		return CYNARA_ADMIN_ASK;
-	return CYNARA_ADMIN_DENY;
+	if (!strcmp(value, "no"))
+		return CYNARA_ADMIN_DENY;
+	return CYNARA_ADMIN_ASK;
 }
 
 static const char *to_value(int value)
@@ -350,7 +350,7 @@ int cynara_async_configuration_create(cynara_async_configuration **pp_conf)
 	*pp_conf = malloc(sizeof(cynara_async_configuration));
 	if (*pp_conf == NULL)
 		return CYNARA_API_OUT_OF_MEMORY;
-	(*pp_conf)->szcache = 0;
+	(*pp_conf)->szcache = 1;
 	return CYNARA_API_SUCCESS;
 }
 
@@ -493,7 +493,7 @@ static int create_reqasync(cynara_async *p_cynara, const char *client,
 	req->id = ++p_cynara->ids;
 	req->canceled = false;
 
-	rc = cynagora_async_check(p_cynara->rcyn, &key, simple, reqcb, req);
+	rc = cynagora_async_check(p_cynara->rcyn, &key, 1, simple, reqcb, req);
 	if (rc == 0)
 		p_cynara->reqs = req;
 	else
@@ -582,14 +582,14 @@ int cynara_check(cynara *p_cynara, const char *client, const char *client_sessio
                  const char *privilege)
 {
 	cynagora_key_t key = { client, client_session, user, privilege };
-	return from_check_status(cynagora_check((cynagora_t*)p_cynara, &key));
+	return from_check_status(cynagora_check((cynagora_t*)p_cynara, &key, 0));
 }
 
 int cynara_simple_check(cynara *p_cynara, const char *client, const char *client_session,
                         const char *user, const char *privilege)
 {
 	cynagora_key_t key = { client, client_session, user, privilege };
-	return from_check_status(cynagora_test((cynagora_t*)p_cynara, &key));
+	return from_check_status(cynagora_test((cynagora_t*)p_cynara, &key, 0));
 }
 
 /************************************* CREDS... & SESSION *********************************/
