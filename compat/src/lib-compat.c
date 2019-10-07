@@ -151,12 +151,12 @@ struct cynara_admin;
 
 int cynara_admin_initialize(struct cynara_admin **pp_cynara_admin)
 {
-	return from_status(cynagora_open((cynagora_t**)pp_cynara_admin, cynagora_Admin, 1, 0));
+	return from_status(cynagora_create((cynagora_t**)pp_cynara_admin, cynagora_Admin, 1, 0));
 }
 
 int cynara_admin_finish(struct cynara_admin *p_cynara_admin)
 {
-	cynagora_close((cynagora_t*)p_cynara_admin);
+	cynagora_destroy((cynagora_t*)p_cynara_admin);
 	return CYNARA_API_SUCCESS;
 }
 
@@ -413,7 +413,7 @@ int cynara_async_initialize(cynara_async **pp_cynara, const cynara_async_configu
 	if (p_cynara == NULL)
 		ret = CYNARA_API_OUT_OF_MEMORY;
 	else {
-		ret = from_status(cynagora_open(&p_cynara->rcyn, cynagora_Check, p_conf ? p_conf->szcache : 1, 0));
+		ret = from_status(cynagora_create(&p_cynara->rcyn, cynagora_Check, p_conf ? p_conf->szcache : 1, 0));
 		if (ret != CYNARA_API_SUCCESS)
 			free(p_cynara);
 		else {
@@ -439,7 +439,7 @@ void cynara_async_finish(cynara_async *p_cynara)
 		}
 	}
 
-	cynagora_close(p_cynara->rcyn);
+	cynagora_destroy(p_cynara->rcyn);
 
 	while((req = p_cynara->reqs)) {
 		p_cynara->reqs = req->next;
@@ -569,12 +569,12 @@ int cynara_configuration_set_cache_size(cynara_configuration *p_conf,
 
 int cynara_initialize(cynara **pp_cynara, const cynara_configuration *p_conf)
 {
-	return from_status(cynagora_open((cynagora_t**)pp_cynara, cynagora_Check, p_conf ? p_conf->szcache : 1, 0));
+	return from_status(cynagora_create((cynagora_t**)pp_cynara, cynagora_Check, p_conf ? p_conf->szcache : 1, 0));
 }
 
 int cynara_finish(cynara *p_cynara)
 {
-	cynagora_close((cynagora_t*)p_cynara);
+	cynagora_destroy((cynagora_t*)p_cynara);
 	return CYNARA_API_SUCCESS;
 }
 

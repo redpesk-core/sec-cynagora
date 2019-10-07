@@ -26,58 +26,188 @@ typedef enum cynagora_type cynagora_type_t;
 typedef struct cynagora_key cynagora_key_t;
 typedef struct cynagora_value cynagora_value_t;
 
+/**
+ * type of the client interface
+ */
 enum cynagora_type {
+	/** type for checking permissions */
 	cynagora_Check,
+	/** type for adminstration */
 	cynagora_Admin,
+	/** type for handling agents */
 	cynagora_Agent
 };
 
+/**
+ * Describes a query key
+ */
 struct cynagora_key {
+	/** client item of the key */
 	const char *client;
+	/** session item of the key */
 	const char *session;
+	/** user item of the key */
 	const char *user;
+	/** permission item of the key */
 	const char *permission;
 };
 
+/**
+ * Describes the value associated to a key
+ */
 struct cynagora_value {
+	/** the associated value */
 	const char *value;
+	/** the expiration */
 	time_t expire;
 };
 
+/**
+ * Callback for enumeration of items (admin)
+ * The function is called for each entry matching the selection key 
+ * with the key and the associated value for that entry
+ * 
+ * @see cynagora_get
+ */
+typedef void cynagora_get_cb_t(
+			void *closure,
+			const cynagora_key_t *key,
+			const cynagora_value_t *value);
+
+/**
+ * Callback for receiving asynchronousely the replies to the queries
+ * Receives:
+ *  closure: the closure given to cynagora_async_check
+ *  status: 0 if forbidden
+ *          1 if granted
+ *          -ECANCELED if cancelled
+ */
+typedef void cynagora_async_check_cb_t(
+		void *closure,
+		int status);
+
+/**
+ * Callback for managing the connection in an external loop
+ * 
+ * That callback receives epoll_ctl operations, a file descriptor number and
+ * a mask of expected events.
+ * 
+ * @see epoll_ctl
+ */
+typedef int cynagora_async_ctl_cb_t(
+			void *closure,
+			int op,
+			int fd,
+			uint32_t events);
+
+/**
+ * Create a client to the permission server cynagora
+ * The client is created but not connected. The connection is made on need.
+ * 
+ * @param cynagora   pointer to the handle of the opened client
+ * @param type       type of the client to open
+ * @param cache_size requested cache size
+ * @param socketspec specification of the socket to connect to or NULL for
+ *                   using the default
+ * 
+ * @return 0 in case of success and in that case *cynagora is filled
+ *         a negative -errno value and *cynara is set to NULL
+ * 
+ * @see cynagora_destroy, cynagora_cache_resize
+ */
 extern
 int
-cynagora_open(
+cynagora_create(
 	cynagora_t **cynagora,
 	cynagora_type_t type,
 	uint32_t cache_size,
 	const char *socketspec
 );
 
+/**
+ * Destroy the client handler and release its memory
+ * 
+ * @param cynagora the client handler to close
+ * 
+ * @see cynagora_create
+ */
+extern
+void
+cynagora_destroy(
+	cynagora_t *cynagora
+);
+
+/**
+ * Ask the client to disconnect from the server.
+ * The client will reconnect if needed.
+ * 
+ * @param cynagora the client handler
+ */
 extern
 void
 cynagora_disconnect(
 	cynagora_t *cynagora
 );
 
+/**
+ * Clear the cache
+ * 
+ * @param cynagora the client handler
+ * 
+ * @see cynagora_cache_resize
+ */
 extern
 void
-cynagora_close(
+cynagora_cache_clear(
 	cynagora_t *cynagora
 );
 
+/**
+ * Resize the cache
+ * 
+ * @param cynagora the client handler
+ * @param size     new expected cache
+ * 
+ * @return 0 on success or -ENOMEM if out of memory
+ * 
+ * @see cynagora_cache_clear, cynagora_create
+ */
 extern
 int
-cynagora_enter(
-	cynagora_t *cynagora
-);
-
-extern
-int
-cynagora_leave(
+cynagora_cache_resize(
 	cynagora_t *cynagora,
-	bool commit
+	uint32_t size
 );
 
+/**
+ * Check a key against the cache
+ * 
+ * @param cynagora the client handler
+ * @param key the key to check
+ * 
+ * @return 0 if forbidden, 1 if authorize, -ENOENT if cache miss
+ * 
+ * @see cynagora_check
+ */
+extern
+int
+cynagora_cache_check(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key
+);
+
+/**
+ * Query the permission database for the key (synchronous)
+ * Allows agent resolution.
+ * 
+ * @param cynagora the client handler
+ * @param key      the key to check
+ * 
+ * @return 0 if permission forbidden, 1 if permission granted
+ *         or if error a negative -errno value
+ * 
+ * @see cynagora_test, cynagora_cache_check
+ */
 extern
 int
 cynagora_check(
@@ -85,6 +215,16 @@ cynagora_check(
 	const cynagora_key_t *key
 );
 
+/**
+ * Query the permission database for the key (synchronous)
+ * Avoids agent resolution.
+ * 
+ * @param cynagora the client handler
+ * @param key
+ * @return 
+ * 
+ * @see cynagora_check
+ */
 extern
 int
 cynagora_test(
@@ -92,27 +232,34 @@ cynagora_test(
 	const cynagora_key_t *key
 );
 
-extern
-int
-cynagora_set(
-	cynagora_t *cynagora,
-	const cynagora_key_t *key,
-	const cynagora_value_t *value
-);
-
+/**
+ * List any value of the permission database that matches the key (admin, synchronous)
+ * 
+ * @param cynagora the client handler
+ * @param key      the selection key
+ * @param callback the callback for receiving items
+ * @param closure  closure of the callback
+ * 
+ * @return 0 in case of success or a negative -errno value
+ */
 extern
 int
 cynagora_get(
 	cynagora_t *cynagora,
 	const cynagora_key_t *key,
-	void (*callback)(
-		void *closure,
-		const cynagora_key_t *key,
-		const cynagora_value_t *value
-	),
+	cynagora_get_cb_t *callback,
 	void *closure
 );
 
+/**
+ * Query or set the logging of requests (admin, synchronous)
+ * 
+ * @param cynagora the client handler
+ * @param on       should set on
+ * @param off      should set off
+ * 
+ * @return 0 if not logging, 1 if logging or a negative -errno value
+ */
 extern
 int
 cynagora_log(
@@ -121,6 +268,78 @@ cynagora_log(
 	int off
 );
 
+/**
+ * Enter cancelable section for modifying database (admin, synchronous)
+ * 
+ * @param cynagora the handler of the client
+ * 
+ * @return 0 in case of success or a negative -errno value
+ *         -EPERM if not a admin client
+ *         -EINPROGRESS if already entered
+ * 
+ * @see cynagora_leave, cynagora_set, cynagora_drop
+ */
+extern
+int
+cynagora_enter(
+	cynagora_t *cynagora
+);
+
+/**
+ * Leave cancelable section for modifying database (admin, synchronous)
+ * 
+ * @param cynagora  the handler of the client
+ * @param commit    if zero, cancel the modifications in progress otherwise if
+ *                  not zero, commit the changes
+ * 
+ * @return 0 in case of success or a negative -errno value
+ *         -EPERM if not a admin client
+ *         -ECANCELED if not entered
+ * 
+ * @see cynagora_enter, cynagora_set, cynagora_drop
+ */
+extern
+int
+cynagora_leave(
+	cynagora_t *cynagora,
+	int commit
+);
+
+/**
+ * Set a rule (either create or change it) (admin, synchronous)
+ * This call requires to have entered the cancelable section.
+ * 
+ * @param cynagora  the handler of the client
+ * @param key       the key to set
+ * @param value     the value to set to the key
+ * 
+ * @return 0 in case of success or a negative -errno value
+ *         -EPERM if not a admin client
+ *         -ECANCELED if not entered
+ * 
+ * @see cynagora_enter, cynagora_leave, cynagora_drop
+ */
+extern
+int
+cynagora_set(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key,
+	const cynagora_value_t *value
+);
+
+/**
+ * Drop items matching the key selector (admin, synchronous)
+ * This call requires to have entered the cancelable section.
+ * 
+ * @param cynagora  the handler of the client
+ * @param key       Filter of the keys to drop
+ * 
+ * @return  0 in case of success or a negative -errno value
+ *         -EPERM if not a admin client
+ *         -ECANCELED if not entered
+ * 
+ * @see cynagora_enter, cynagora_leave, cynagora_set
+ */
 extern
 int
 cynagora_drop(
@@ -128,54 +347,53 @@ cynagora_drop(
 	const cynagora_key_t *key
 );
 
-extern
-void
-cynagora_cache_clear(
-	cynagora_t *cynagora
-);
-
-extern
-int
-cynagora_cache_check(
-	cynagora_t *cynagora,
-	const cynagora_key_t *key
-);
-
-extern
-int
-cynagora_cache_resize(
-	cynagora_t *cynagora,
-	uint32_t size
-);
-
-typedef int (*cynagora_async_ctl_t)(
-			void *closure,
-			int op,
-			int fd,
-			uint32_t events);
-
+/**
+ * Set the asynchronous control function
+ * 
+ * @param cynagora  the handler of the client
+ * @param controlcb
+ * @param closure
+ * 
+ * @return  0 in case of success or a negative -errno value
+ */
 extern
 int
 cynagora_async_setup(
 	cynagora_t *cynagora,
-	cynagora_async_ctl_t controlcb,
+	cynagora_async_ctl_cb_t *controlcb,
 	void *closure
 );
 
+/**
+ * Process the inputs of the client
+ * 
+ * @param cynagora  the handler of the client
+ * 
+ * @return  0 in case of success or a negative -errno value
+ */
 extern
 int
 cynagora_async_process(
 	cynagora_t *cynagora
 );
 
+/**
+ * Check the key asynchronousely (async)
+ * 
+ * @param cynagora  the handler of the client
+ * @param key       the key to query
+ * @param simple    if zero allows agent process else if not 0 forbids it
+ * @param callback  the callback to call on reply
+ * @param closure   a closure for the callback
+ * 
+ * @return  0 in case of success or a negative -errno value
+ */
 extern
 int
 cynagora_async_check(
 	cynagora_t *cynagora,
 	const cynagora_key_t *key,
 	int simple,
-	void (*callback)(
-		void *closure,
-		int status),
+	cynagora_async_check_cb_t *callback,
 	void *closure
 );

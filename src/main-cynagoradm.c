@@ -764,7 +764,7 @@ int main(int ac, char **av)
 
 	/* initialize server */
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
-	rc = cynagora_open(&cynagora, cynagora_Admin, cachesize, socket);
+	rc = cynagora_create(&cynagora, cynagora_Admin, cachesize, socket);
 	if (rc < 0) {
 		fprintf(stderr, "initialization failed: %s\n", strerror(-rc));
 		return 1;

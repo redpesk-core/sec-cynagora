@@ -23,16 +23,25 @@
 
 typedef struct cyn_server cyn_server_t;
 
+/**
+ * Boolean flag telling whether the server logs or not its received commands
+ */
 extern
 bool
 cyn_server_log;
 
-extern
-void
-cyn_server_destroy(
-	cyn_server_t *server
-);
-
+/**
+ * Create a cynagora server
+ * 
+ * @param server where to store the handler of the created server
+ * @param admin_socket_spec specification of the admin socket
+ * @param check_socket_spec specification of the check socket
+ * @param agent_socket_spec specification of the agent socket
+ * 
+ * @return 0 on success or a negative -errno value
+ * 
+ * @see cyn_server_destroy
+ */
 extern
 int
 cyn_server_create(
@@ -42,12 +51,42 @@ cyn_server_create(
 	const char *agent_socket_spec
 );
 
+/**
+ * Destroy a created server and release its resources
+ * 
+ * @param server the handler of the server
+ * 
+ * @see cyn_server_create
+ */
+extern
+void
+cyn_server_destroy(
+	cyn_server_t *server
+);
+
+/**
+ * Start the cynagora server and returns only when stopped
+ * 
+ * @param server the handler of the server
+ * 
+ * @return 0 on success or a negative -errno value
+ * 
+ * @see cyn_server_stop
+ */
 extern
 int
 cyn_server_serve(
 	cyn_server_t *server
 );
 
+/**
+ * Stop the cynagora server
+ * 
+ * @param server the handler of the server
+ * @param status the status that the function cyn_server_serve should return
+ * 
+ * @see cyn_server_serve
+ */
 extern
 void
 cyn_server_stop(

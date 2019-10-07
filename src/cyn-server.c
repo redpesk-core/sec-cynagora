@@ -108,6 +108,13 @@ struct cyn_server
 	pollitem_t check;
 };
 
+/**
+ * Log the protocol
+ * @param cli the client handle
+ * @param c2s direction: if not 0: client to server, if 0: server to client
+ * @param count count of fields
+ * @param fields the fields
+ */
 static
 void
 dolog(
@@ -365,12 +372,16 @@ onrequest(
 
 	/* version hand-shake */
 	if (!cli->version) {
-		if (!ckarg(args[0], _cynagora_, 0) || count != 2 || !ckarg(args[1], "1", 0))
-			goto invalid;
-		putx(cli, _yes_, "1", cyn_changeid_string(), NULL);
-		flushw(cli);
+		if (ckarg(args[0], _cynagora_, 0)) {
+			if (count < 2 || !ckarg(args[1], "1", 0))
+				goto invalid;
+			putx(cli, _yes_, "1", cyn_changeid_string(), NULL);
+			flushw(cli);
+			cli->version = 1;
+			return;
+		}
+		/* switch automatically to version 1 */
 		cli->version = 1;
-		return;
 	}
 
 	switch(args[0][0]) {
@@ -703,7 +714,7 @@ on_agent_server_event(
 	on_server_event(pollitem, events, pollfd, server_Agent);
 }
 
-/** destroy a server */
+/* see cyn-server.h */
 void
 cyn_server_destroy(
 	cyn_server_t *server
@@ -719,7 +730,7 @@ cyn_server_destroy(
 	}
 }
 
-/** create a server */
+/* see cyn-server.h */
 int
 cyn_server_create(
 	cyn_server_t **server,
@@ -821,7 +832,7 @@ error:
 	return rc;
 }
 
-/** stop the server */
+/* see cyn-server.h */
 void
 cyn_server_stop(
 	cyn_server_t *server,
@@ -830,7 +841,7 @@ cyn_server_stop(
 	server->stopped = status ?: INT_MIN;
 }
 
-/** create a server */
+/* see cyn-server.h */
 int
 cyn_server_serve(
 	cyn_server_t *server
@@ -842,4 +853,3 @@ cyn_server_serve(
 	}
 	return server->stopped == INT_MIN ? 0 : server->stopped;
 }
-
