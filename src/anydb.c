@@ -199,6 +199,21 @@ idx_or_none_but_any(
 
 /******************************************************************************/
 /******************************************************************************/
+/*** EXPIRATION                                                             ***/
+/******************************************************************************/
+/******************************************************************************/
+
+static
+bool
+expired(
+	time_t expire,
+	time_t now
+) {
+	return expire && expire <= now;
+}
+
+/******************************************************************************/
+/******************************************************************************/
 /*** SEARCH KEYS                                                            ***/
 /******************************************************************************/
 /******************************************************************************/
@@ -357,7 +372,7 @@ for_all_cb(
 	data_value_t v;
 
 	/* drop expired items */
-	if (value->expire && value->expire <= s->now)
+	if (expired(value->expire, s->now))
 		return Anydb_Action_Remove_And_Continue;
 
 	if (searchkey_match(s->db, key, &s->skey)) {
@@ -420,7 +435,7 @@ drop_cb(
 	struct drop_s *s = closure;
 
 	/* drop expired items */
-	if (value->expire && value->expire <= s->now)
+	if (expired(value->expire, s->now))
 		return Anydb_Action_Remove_And_Continue;
 
 	/* remove if matches the key */
@@ -473,7 +488,7 @@ set_cb(
 	struct set_s *s = closure;
 
 	/* drop expired items */
-	if (value->expire && value->expire <= s->now)
+	if (expired(value->expire, s->now))
 		return Anydb_Action_Remove_And_Continue;
 
 	if (searchkey_is(s->db, key, &s->skey)) {
@@ -546,7 +561,7 @@ test_cb(
 	unsigned sc;
 
 	/* drop expired items */
-	if (value->expire && value->expire <= s->now)
+	if (expired(value->expire, s->now))
 		return Anydb_Action_Remove_And_Continue;
 
 	sc = searchkey_test(s->db, key, &s->skey);
@@ -603,7 +618,8 @@ is_empty_cb(
 ) {
 	struct empty_s *s = closure;
 
-	if (value->expire && value->expire <= s->now)
+	/* drop expired items */
+	if (expired(value->expire, s->now))
 		return Anydb_Action_Remove_And_Continue;
 
 	s->empty = false;
@@ -637,7 +653,7 @@ cleanup_cb(
 	const anydb_key_t *key,
 	anydb_value_t *value
 ) {
-	return value->expire && value->expire <= *(time_t*)closure
+	return expired(value->expire, *(time_t*)closure)
 		? Anydb_Action_Remove_And_Continue : Anydb_Action_Continue;
 }
 
