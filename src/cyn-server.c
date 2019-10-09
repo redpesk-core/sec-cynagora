@@ -120,13 +120,13 @@ void
 dolog(
 	client_t *cli,
 	int c2s,
-	int count,
+	unsigned count,
 	const char *fields[]
 ) {
 	static const char types[3][6] = { "check", "agent", "admin" };
 	static const char dir[2] = { '>', '<' };
 
-	int i;
+	unsigned i;
 
 	fprintf(stderr, "%p%c%c%s", cli, dir[!c2s], dir[!c2s], types[cli->type]);
 	for (i = 0 ; i < count ; i++)
@@ -354,7 +354,7 @@ static
 void
 onrequest(
 	client_t *cli,
-	int count,
+	unsigned count,
 	const char *args[]
 ) {
 	bool nextlog;
@@ -565,7 +565,7 @@ on_client_event(
 			goto terminate;
 		nargs = prot_get(cli->prot, &args);
 		while (nargs >= 0) {
-			onrequest(cli, nargs, args);
+			onrequest(cli, (unsigned)nargs, args);
 			if (cli->invalid && !cli->relax)
 				goto terminate;
 			prot_next(cli->prot);

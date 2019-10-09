@@ -43,7 +43,7 @@ struct cynara_async *aclient;
 struct cynara_configuration *conf;
 struct cynara *client;
 char buffer[4000];
-int bufill;
+size_t bufill;
 char *str[40];
 int nstr;
 int pollfd;
@@ -124,10 +124,10 @@ void adm_check(char *cli, char *usr, char *perm)
 void adm_set()
 {
 	struct cynara_admin_policy **policies, *p;
-	int n, i;
+	unsigned n, i;
 
-	n = (nstr - 2) / 4;
-	policies = malloc((1 + n) * sizeof *policies + n * sizeof **policies);
+	n = (unsigned)((nstr - 2) / 4);
+	policies = malloc((1 + n) * (sizeof *policies) + n * sizeof **policies);
 	policies[n] = NULL;
 	p = (struct cynara_admin_policy*)(&policies[n + 1]);
 	for (i = 0 ; i < n ; i++, p++) {
@@ -275,12 +275,11 @@ int main(int ac, char **av)
 
 		if (ev.data.fd == 0) {
 			if (ev.events & EPOLLIN) {
-				rc = (int)sizeof buffer - bufill;
-				rc = (int)read(0, buffer, rc);
+				rc = (int)read(0, buffer, sizeof buffer - bufill);
 				if (rc == 0)
 					break;
 				if (rc > 0) {
-					bufill += rc;
+					bufill += (size_t)rc;
 					while((p = memchr(buffer, '\n', bufill))) {
 						/* process one line */
 						*p++ = 0;
@@ -290,7 +289,7 @@ int main(int ac, char **av)
 						if (action())
 							goto terminate;
 						/* next line if any */
-						bufill -= (int)(p - buffer);
+						bufill -= (size_t)(p - buffer);
 						if (!bufill)
 							break;
 						memmove(buffer, p, bufill);

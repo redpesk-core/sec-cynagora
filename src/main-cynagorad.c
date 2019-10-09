@@ -276,8 +276,8 @@ int main(int ac, char **av)
 				fprintf(stderr, "can not find user '%s'\n", user);
 				return -1;
 			}
-			uid = pw->pw_uid;
-			gid = pw->pw_gid;
+			uid = (int)pw->pw_uid;
+			gid = (int)pw->pw_gid;
 		}
 	}
 	if (group) {
@@ -288,7 +288,7 @@ int main(int ac, char **av)
 				fprintf(stderr, "can not find group '%s'\n", group);
 				return -1;
 			}
-			gid = gr->gr_gid;
+			gid = (int)gr->gr_gid;
 		}
 	}
 
@@ -300,14 +300,14 @@ int main(int ac, char **av)
 
 	/* drop privileges */
 	if (gid >= 0) {
-		rc = setgid(gid);
+		rc = setgid((gid_t)gid);
 		if (rc < 0) {
 			fprintf(stderr, "can not change group: %m\n");
 			return -1;
 		}
 	}
 	if (uid >= 0) {
-		rc = setuid(uid);
+		rc = setuid((uid_t)uid);
 		if (rc < 0) {
 			fprintf(stderr, "can not change user: %m\n");
 			return -1;
@@ -414,8 +414,8 @@ static void ensuredir(char *path, int length, int uid, int gid)
 					exit(1);
 				}
 				/* set ownership */
-				if ((uid != st.st_uid && uid >= 0) || (gid != st.st_gid && gid >= 0)) {
-					rc = chown(path, uid, gid);
+				if (((uid_t)uid != st.st_uid && uid >= 0) || ((gid_t)gid != st.st_gid && gid >= 0)) {
+					rc = chown(path, (uid_t)uid, (gid_t)gid);
 					if (rc < 0) {
 						fprintf(stderr, "can not own directory %s for uid=%d & gid=%d: %m\n", path, uid, gid);
 						exit(1);

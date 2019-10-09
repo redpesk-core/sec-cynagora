@@ -58,7 +58,6 @@ link_libraries(-Wl,--as-needed -Wl,--gc-sections -Wl,--no-undefined)
 
 add_compile_options(-Wall -Wextra -Wconversion)
 add_compile_options(-Wno-unused-parameter) # frankly not using a parameter does it care?
-add_compile_options(-Wno-sign-compare -Wno-sign-conversion)
 add_compile_options(-Werror=maybe-uninitialized)
 add_compile_options(-Werror=implicit-function-declaration)
 add_compile_options(-ffunction-sections -fdata-sections)

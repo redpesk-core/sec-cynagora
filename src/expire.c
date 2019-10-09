@@ -76,7 +76,7 @@ size_t exp2txt(time_t expire, char *buffer, size_t buflen)
 		n = 0;
 #define ADD(C,U) \
   if (expire >= U) { \
-    n += snprintf(&b[n], sizeof b - n, "%lld" #C, (long long)(expire / U)); \
+    n += snprintf(&b[n], sizeof b - (size_t)n, "%lld" #C, (long long)(expire / U)); \
     expire %= U; \
   }
 		ADD(y,YEAR)

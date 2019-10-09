@@ -168,8 +168,8 @@ static int open_tcp(const char *spec, int server)
 		errno = EINVAL;
 		return -1;
 	}
-	host = strndupa(spec, service++ - spec);
-	service = strndupa(service, tail - service);
+	host = strndupa(spec, (size_t)(service++ - spec));
+	service = strndupa(service, (size_t)(tail - service));
 
 	/* get addr */
 	memset(&hint, 0, sizeof hint);
@@ -256,7 +256,7 @@ static struct entry *get_entry(const char *uri, int *offset)
 		}
 		i--;
 		l = (int)strlen(entries[i].prefix);
-		if (!strncmp(uri, entries[i].prefix, l))
+		if (!strncmp(uri, entries[i].prefix, (size_t)l))
 			break;
 	}
 

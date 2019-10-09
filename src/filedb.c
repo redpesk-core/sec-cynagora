@@ -95,7 +95,7 @@ static const char uuid_names_v1[] = "b2c33494-995f-5cc2-9e5e-72ad412936a9\n--\n"
 static const char uuid_rules_v1[] = "73630c61-89a9-5e82-8b07-5e53eee785c8\n--\n";
 
 /** length of the identifications */
-static const int uuidlen = 40;
+static const uint32_t uuidlen = 40;
 
 
 struct filedb

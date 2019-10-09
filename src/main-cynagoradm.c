@@ -303,7 +303,7 @@ help_expiration_text[] =
 
 static cynagora_t *cynagora;
 static char buffer[4000];
-static int bufill;
+static size_t bufill;
 static char *str[40];
 static int nstr;
 static int pending;
@@ -789,12 +789,11 @@ int main(int ac, char **av)
 	for(;;) {
 		rc = poll(fds, 2, -1);
 		if (fds[0].revents & POLLIN) {
-			rc = (int)sizeof buffer - bufill;
-			rc = (int)read(0, buffer, rc);
+			rc = (int)read(0, buffer, sizeof buffer - bufill);
 			if (rc == 0)
 				break;
 			if (rc > 0) {
-				bufill += rc;
+				bufill += (size_t)rc;
 				while((p = memchr(buffer, '\n', bufill))) {
 					/* process one line */
 					*p++ = 0;
@@ -802,7 +801,7 @@ int main(int ac, char **av)
 					while(str[nstr])
 						str[++nstr] = strtok(NULL, " \t");
 					do_all(nstr, str);
-					bufill -= (int)(p - buffer);
+					bufill -= (size_t)(p - buffer);
 					if (!bufill)
 						break;
 					memmove(buffer, p, bufill);
