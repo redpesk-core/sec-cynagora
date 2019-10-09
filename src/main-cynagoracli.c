@@ -334,9 +334,12 @@ int get_csupve(int ac, char **av, int *used, const char *def)
 	key.user = n > 3 ? av[3] : def;
 	key.permission = n > 4 ? av[4] : def;
 	value.value = n > 5 ? av[5] : "no";
-	value.expire = n > 6 ? txt2exp(av[6]) : 0;
+	if (n <= 6)
+		value.expire = 0;
+	else if (!txt2exp(av[6], &value.expire))
+		return -EINVAL;
 
-	return key.client && key.session && key.user && key.permission && value.value && value.expire >= 0 ? 0 : -EINVAL;
+	return key.client && key.session && key.user && key.permission && value.value ? 0 : -EINVAL;
 }
 
 int get_csup(int ac, char **av, int *used, const char *def)

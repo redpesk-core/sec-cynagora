@@ -58,7 +58,7 @@ struct cynagora_key {
 struct cynagora_value {
 	/** the associated value */
 	const char *value;
-	/** the expiration */
+	/** the expiration in seconds since epoch, negative to avoid cache */
 	time_t expire;
 };
 

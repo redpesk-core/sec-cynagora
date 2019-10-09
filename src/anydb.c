@@ -209,6 +209,8 @@ expired(
 	time_t expire,
 	time_t now
 ) {
+	if (expire < 0)
+		expire = -(expire + 1);
 	return expire && expire <= now;
 }
 

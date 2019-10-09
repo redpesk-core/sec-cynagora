@@ -272,7 +272,7 @@ entercb(
 /** translate optional expire value */
 static
 const char *
-exp2txt(
+exp2check(
 	time_t expire,
 	char *buffer,
 	size_t bufsz
@@ -280,7 +280,33 @@ exp2txt(
 	if (!expire)
 		return NULL;
 
+	if (expire < 0)
+		return "-"; /* no cache */
+
 	/* TODO: check size */
+	snprintf(buffer, bufsz, "%lld", (long long)expire);
+	return buffer;
+}
+
+/** translate optional expire value */
+static
+const char *
+exp2get(
+	time_t expire,
+	char *buffer,
+	size_t bufsz
+) {
+	if (!expire)
+		return NULL;
+
+	if (expire < 0) {
+		expire = -(expire + 1);
+		if (!expire)
+			return "-";
+		*buffer++ = '-';
+		bufsz--;
+	}
+
 	snprintf(buffer, bufsz, "%lld", (long long)expire);
 	return buffer;
 }
@@ -299,7 +325,7 @@ testcheckcb(
 
 	if (!value) {
 		vtxt = _no_;
-		etxt = 0;
+		etxt = NULL;
 	} else {
 		if (!strcmp(value->value, ALLOW))
 			vtxt = _yes_;
@@ -307,7 +333,7 @@ testcheckcb(
 			vtxt = _no_;
 		else
 			vtxt = _done_;
-		etxt = exp2txt(value->expire, text, sizeof text);
+		etxt = exp2check(value->expire, text, sizeof text);
 	}
 	putx(cli, vtxt, etxt, NULL);
 	flushw(cli);
@@ -346,7 +372,7 @@ getcb(
 	char text[30];
 
 	putx(cli, _item_, key->client, key->session, key->user, key->permission,
-		value->value, exp2txt(value->expire, text, sizeof text), NULL);
+		value->value, exp2get(value->expire, text, sizeof text), NULL);
 }
 
 /** handle a request */

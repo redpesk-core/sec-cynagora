@@ -363,10 +363,12 @@ status_check(
 	else
 		rc = -EPROTO;
 
-	if (cynagora->reply.count >= 2)
-		*expire = strtoll(cynagora->reply.fields[1], NULL, 10);
-	else
+	if (cynagora->reply.count < 2)
 		*expire = 0;
+	else if (cynagora->reply.fields[1][0] == '-')
+		*expire = -1;
+	else
+		*expire = strtoll(cynagora->reply.fields[1], NULL, 10);
 
 	return rc;
 }
@@ -553,7 +555,7 @@ check_or_test(
 		rc = wait_pending_reply(cynagora);
 		if (rc >= 0) {
 			rc = status_check(cynagora, &expire);
-			if (rc >= 0 && action == _check_ && cynagora->cache)
+			if (rc >= 0 && action == _check_)
 				cache_put(cynagora->cache, key, rc, expire);
 		}
 	}

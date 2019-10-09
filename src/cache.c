@@ -284,7 +284,7 @@ cache_put(
 	item_t *item;
 	size_t size;
 
-	if (cache == NULL || value < -128 || value > 127)
+	if (cache == NULL || value < -128 || value > 127 || expire < 0)
 		return -EINVAL;
 
 	item = search(cache, key);

@@ -34,12 +34,14 @@
  *  - 2m2w means two months and 2 weeks
  *
  * @param txt the text to convert
- * @return the value for the text
+ * @param time_out where to store the result
+ * @return true if valid false otherwise
  */
 extern
-time_t
+bool
 txt2exp(
-	const char *txt
+	const char *txt,
+	time_t *time_out
 );
 
 /**
