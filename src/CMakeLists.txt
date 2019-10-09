@@ -101,10 +101,10 @@ install(TARGETS cynagorad
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
 ###########################################
-# build and install cynagoradm
+# build and install cynagoracli
 ###########################################
-add_executable(cynagoradm main-cynagoradm.c expire.c)
-target_link_libraries(cynagoradm cynagora)
-install(TARGETS cynagoradm
+add_executable(cynagoracli main-cynagoracli.c expire.c)
+target_link_libraries(cynagoracli cynagora)
+install(TARGETS cynagoracli
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 

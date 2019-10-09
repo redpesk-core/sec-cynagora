@@ -65,7 +65,7 @@ static
 const char
 helptxt[] =
 	"\n"
-	"usage: cynadm [options]... [action [arguments]]\n"
+	"usage: cynagoracli [options]... [action [arguments]]\n"
 	"\n"
 	"otpions:\n"
 	"	-s, --socket xxx      set the base xxx for sockets\n"
@@ -75,16 +75,16 @@ helptxt[] =
 	"	-h, --help            print this help and exit\n"
 	"	-v, --version         print the version and exit\n"
 	"\n"
-	"When action is given, cynadm performs the action and exits.\n"
-	"Otherwise cynadm continuously read its input to get the actions.\n"
-	"For a list of actions tpe 'cynadm help'.\n"
+	"When action is given, cynagoracli performs the action and exits.\n"
+	"Otherwise cynagoracli continuously read its input to get the actions.\n"
+	"For a list of actions type 'cynagoracli help'.\n"
 	"\n"
 ;
 
 static
 const char
 versiontxt[] =
-	"cynadm version 1.99.99\n"
+	"cynagoracli version 1.99.99\n"
 ;
 
 static
@@ -789,7 +789,7 @@ int main(int ac, char **av)
 	for(;;) {
 		rc = poll(fds, 2, -1);
 		if (fds[0].revents & POLLIN) {
-			rc = (int)read(0, buffer, sizeof buffer - bufill);
+			rc = (int)read(0, &buffer[bufill], sizeof buffer - bufill);
 			if (rc == 0)
 				break;
 			if (rc > 0) {
