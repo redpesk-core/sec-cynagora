@@ -36,15 +36,6 @@
 #include "fbuf.h"
 #include "filedb.h"
 
-/*
- * for the first version,  save enougth time up to 4149
- * 4149 = 1970 + (4294967296 * 16) / (365 * 24 * 60 * 60)
- *
- * in the next version, time will be relative to a stored base
- */
-#define exp2time(x)  (((time_t)(x)) << 4)
-#define time2exp(x)  ((x) ? ((uint32_t)(((x) + 15) >> 4)) : 0)
-
 /**
  * A rule is a set of 32 bits integers
  */
@@ -62,8 +53,8 @@ struct rule
 	/** value string id */
 	uint32_t value;
 
-	/**  expiration */
-	uint32_t expire;
+	/**  expiration as a couple of uint32 to ensure compacity */
+	uint32_t expire[2];
 };
 typedef struct rule rule_t;
 
@@ -131,6 +122,35 @@ struct filedb
 	anydb_t anydb;
 };
 typedef struct filedb filedb_t;
+
+/**
+ * Set the expiration of rule to the value
+ *
+ * @param rule the rule to set
+ * @param value the value to set
+ */
+static
+void
+set_expire(
+	rule_t *rule,
+	time_t value
+) {
+	*(int64_t*)rule->expire = (int64_t)value;
+}
+
+/**
+ * Get the expiration of rule
+ *
+ * @param rule the rule to set
+ * @return the expiration
+ */
+static
+time_t
+get_expire(
+	rule_t *rule
+) {
+	return (time_t)*(int64_t*)rule->expire;
+}
 
 /**
  * Return the name of the given index
@@ -544,7 +564,7 @@ apply_itf(
 		key.user = rule->user;
 		key.permission = rule->permission;
 		value.value = rule->value;
-		value.expire = exp2time(rule->expire);
+		value.expire = get_expire(rule);
 		a = oper(closure, &key, &value);
 		if (a & Anydb_Action_Remove) {
 			*rule = filedb->rules[--filedb->rules_count];
@@ -556,7 +576,7 @@ apply_itf(
 			filedb->frules.used -= (uint32_t)sizeof *rule;
 		} else if (a & Anydb_Action_Update) {
 			rule->value = value.value;
-			rule->expire = time2exp(value.expire);
+			set_expire(rule, value.expire);
 			filedb->need_cleanup = true;
 			filedb->is_changed = true;
 			saved = (uint32_t)((void*)rule - filedb->frules.buffer);
@@ -607,7 +627,7 @@ add_itf(
 ) {
 	filedb_t *filedb = clodb;
 	int rc;
-	struct rule *rules;
+	rule_t *rules;
 	uint32_t alloc;
 	uint32_t count;
 
@@ -623,7 +643,7 @@ add_itf(
 	rules->user = key->user;
 	rules->permission = key->permission;
 	rules->value = value->value;
-	rules->expire = time2exp(value->expire);
+	set_expire(rules, value->expire);
 	filedb->frules.used = alloc;
 	filedb->is_changed = true;
 	return 0;
@@ -768,7 +788,7 @@ gc_itf(
 	filedb_t *filedb = clodb;
 	uint32_t rule_count;
 	uint32_t name_count;
-	struct rule *rules;
+	rule_t *rules;
 	uint32_t *marked;
 	uint32_t *renum;
 	char *strings;
