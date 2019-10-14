@@ -26,6 +26,7 @@
 
 const char
 	_agent_[] = "agent",
+	_ask_[] = "ask",
 	_check_[] = "check",
 	_clear_[] = "clear",
 	_commit_[] = "commit",
@@ -41,6 +42,7 @@ const char
 	_no_[] = "no",
 	_off_[] = "off",
 	_on_[] = "on",
+	_reply_[] = "reply",
 	_rollback_[] = "rollback",
 	_set_[] = "set",
 	_test_[] = "test",

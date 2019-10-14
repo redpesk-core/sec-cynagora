@@ -109,3 +109,11 @@ target_link_libraries(cynagoracli cynagora)
 install(TARGETS cynagoracli
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
+###########################################
+# build and install cynagora-agent
+###########################################
+add_executable(cynagora-agent main-cynagora-agent.c expire.c)
+target_link_libraries(cynagora-agent cynagora)
+install(TARGETS cynagora-agent
+        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+

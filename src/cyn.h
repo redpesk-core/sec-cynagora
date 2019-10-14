@@ -336,11 +336,14 @@ cyn_query_reply(
 /**
  * Add the agent of name
  *
+ * Valid names have at least one character and at most 256 and contains
+ * only characters of a-zA-Z0-9@$_-
+ *
  * @param name name of the agent to add
  * @param agent_cb callback of the agent
  * @param closure closure of the callback of the agent
  * @return 0 in case of success
- *         -EINVAL if the name is too long
+ *         -EINVAL if the name is invalid
  *         -EEXIST if an agent of the same name is already recorded
  *         -ENOMEM if out of memory
  */
@@ -362,8 +365,24 @@ cyn_agent_add(
  */
 extern
 int
-cyn_agent_remove(
+cyn_agent_remove_by_name(
 	const char *name
+);
+
+/**
+ * Remove the agents of callback and closure
+ *
+ * @param agent_cb callback of the agent to remove
+ * @param closure closure of the callback of the agent to remove
+ * @return 0 in case of successful removal
+ *         -EINVAL if the name is too long
+ *         -ENOENT if the agent isn't recorded
+ */
+extern
+void
+cyn_agent_remove_by_cc(
+	agent_cb_t *agent_cb,
+	void *closure
 );
 
 /**

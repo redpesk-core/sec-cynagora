@@ -54,8 +54,8 @@ logging set/get (admin)
 
 register agent (agent):
 
-  c->s agent NAME [ARGS...]
-  s->c done|error ...
+  s->c ask ASKID NAME VALUE CLIENT SESSION USER PERMISSION
+  c->s reply ASKID (yes|no|error) [EXPIRE]
 
 ask agent (agent):
 

@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "data.h"
 #include "db.h"
@@ -563,13 +564,15 @@ cyn_query_reply(
  */
 static
 size_t
-check_agent_name(
+agent_check_name(
 	const char *name
 ) {
+	char c;
 	size_t length = 0;
 	if (name) {
-		while (name[length]) {
-			if (length > UINT8_MAX || name[length] == AGENT_SEPARATOR_CHARACTER) {
+		while ((c = name[length])) {
+			if (length > UINT8_MAX
+			 || (!isalnum(c) && !strchr("@_-$", c))) {
 				length = 0;
 				break;
 			}
@@ -589,8 +592,8 @@ cyn_agent_add(
 	struct agent *agent, **pprev;
 	size_t length;
 
-	/* compute and check name length */
-	length = check_agent_name(name);
+	/* compute and check name */
+	length = agent_check_name(name);
 	if (!length)
 		return -EINVAL;
 
@@ -617,14 +620,14 @@ cyn_agent_add(
 
 /* see cyn.h */
 int
-cyn_agent_remove(
+cyn_agent_remove_by_name(
 	const char *name
 ) {
 	struct agent *agent, **pprev;
 	size_t length;
 
 	/* compute and check name length */
-	length = check_agent_name(name);
+	length = agent_check_name(name);
 	if (!length)
 		return -EINVAL;
 
@@ -637,6 +640,24 @@ cyn_agent_remove(
 	*pprev = agent->next;
 	free(agent);
 	return 0;
+}
+
+/* see cyn.h */
+void
+cyn_agent_remove_by_cc(
+	agent_cb_t *agent_cb,
+	void *closure
+) {
+	struct agent *it, **pprev;
+
+	pprev = &agents;
+	while((it = *pprev))
+		if (it->agent_cb != agent_cb || it->closure != closure)
+			pprev = &it->next;
+		else {
+			*pprev = it->next;
+			free(it);
+		}
 }
 
 /* see cyn.h */

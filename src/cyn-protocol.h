@@ -24,6 +24,7 @@
 /* predefined protocol strings */
 extern const char
 	_agent_[],
+	_ask_[],
 	_check_[],
 	_clear_[],
 	_commit_[],
@@ -39,6 +40,7 @@ extern const char
 	_no_[],
 	_off_[],
 	_on_[],
+	_reply_[],
 	_rollback_[],
 	_set_[],
 	_test_[],
