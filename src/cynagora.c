@@ -41,6 +41,7 @@
 #include "cynagora.h"
 #include "cache.h"
 #include "socket.h"
+#include "expire.h"
 
 #define MIN_CACHE_SIZE 400
 #define CACHESIZE(x)  ((x) >= MIN_CACHE_SIZE ? (x) : (x) ? MIN_CACHE_SIZE : 0)
@@ -185,7 +186,7 @@ putxkv(
 				if (!optval->expire)
 					text[0] = 0;
 				else
-					snprintf(text, sizeof text, "%lld", (long long)optval->expire);
+					exp2txt(optval->expire, true, text, sizeof text);
 				rc = prot_put_field(prot, text);
 			}
 		}
@@ -368,7 +369,7 @@ status_check(
 	else if (cynagora->reply.fields[1][0] == '-')
 		*expire = -1;
 	else
-		*expire = strtoll(cynagora->reply.fields[1], NULL, 10);
+		txt2exp(cynagora->reply.fields[1], expire, true);
 
 	return rc;
 }
@@ -556,7 +557,7 @@ check_or_test(
 		if (rc >= 0) {
 			rc = status_check(cynagora, &expire);
 			if (rc >= 0 && action == _check_)
-				cache_put(cynagora->cache, key, rc, expire);
+				cache_put(cynagora->cache, key, rc, expire, true);
 		}
 	}
 	return rc;
@@ -721,7 +722,10 @@ cynagora_get(
 			k.user = cynagora->reply.fields[3];
 			k.permission = cynagora->reply.fields[4];
 			v.value = cynagora->reply.fields[5];
-			v.expire = rc == 6 ? 0 : (time_t)strtoll(cynagora->reply.fields[6], NULL, 10);
+			if (rc == 6)
+				v.expire = 0;
+			else if (!txt2exp(cynagora->reply.fields[6], &v.expire, true))
+				v.expire = -1;
 			callback(closure, &k, &v);
 			rc = wait_reply(cynagora, true);
 		}
@@ -910,7 +914,7 @@ cynagora_async_process(
 			key.session = &key.client[1 + strlen(key.client)];
 			key.user = &key.session[1 + strlen(key.session)];
 			key.permission = &key.user[1 + strlen(key.user)];
-			cache_put(cynagora->cache, &key, rc, expire);
+			cache_put(cynagora->cache, &key, rc, expire, true);
 		}
 		ar->callback(ar->closure, rc);
 		free(ar);

@@ -39,6 +39,7 @@ set(SERVER_SOURCES
 )
 
 set(LIBCLI_SOURCES
+	expire.c
 	cache.c
 	prot.c
 	cynagora.c

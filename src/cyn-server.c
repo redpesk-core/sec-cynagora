@@ -43,6 +43,7 @@
 #include "cyn-server.h"
 #include "socket.h"
 #include "pollitem.h"
+#include "expire.h"
 
 #define MAX_PUTX_ITEMS 15
 
@@ -283,8 +284,9 @@ exp2check(
 	if (expire < 0)
 		return "-"; /* no cache */
 
-	/* TODO: check size */
-	snprintf(buffer, bufsz, "%lld", (long long)expire);
+	if (exp2txt(expire, true, buffer, bufsz) >= bufsz)
+		return "-"; /* no cache */
+
 	return buffer;
 }
 
@@ -299,15 +301,9 @@ exp2get(
 	if (!expire)
 		return NULL;
 
-	if (expire < 0) {
-		expire = -(expire + 1);
-		if (!expire)
-			return "-";
-		*buffer++ = '-';
-		bufsz--;
-	}
+	if (exp2txt(expire, true, buffer, bufsz) >= bufsz)
+		return "-"; /* no cache */
 
-	snprintf(buffer, bufsz, "%lld", (long long)expire);
 	return buffer;
 }
 
@@ -507,7 +503,8 @@ onrequest(
 			if (count == 6)
 				value.expire = 0;
 			else
-				value.expire = strtoll(args[6], NULL, 10);
+				txt2exp(args[6], &value.expire, true);
+
 			key.client = args[1];
 			key.session = args[2];
 			key.user = args[3];

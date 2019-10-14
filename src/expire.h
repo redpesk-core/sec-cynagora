@@ -35,19 +35,22 @@
  *
  * @param txt the text to convert
  * @param time_out where to store the result
+ * @param absolute return the expiration in epoch
  * @return true if valid false otherwise
  */
 extern
 bool
 txt2exp(
 	const char *txt,
-	time_t *time_out
+	time_t *time_out,
+	bool absolute
 );
 
 /**
  * Converts the expiration in to its relative string representation
  *
  * @param expire the epiration to convert
+ * @param expire is expiration absolute?
  * @param buffer the buffer where to store the converted string
  * @param buflen length of the buffer
  * @return the length of the resulting string, can be greater than buflen but
@@ -57,6 +60,7 @@ extern
 size_t
 exp2txt(
 	time_t expire,
+	bool absolute,
 	char *buffer,
 	size_t buflen
 );

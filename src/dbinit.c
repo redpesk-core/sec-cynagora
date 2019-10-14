@@ -96,7 +96,7 @@ int dbinit_add_file(const char *path)
 		key.user = item[2];
 		key.permission = item[3];
 		value.value = item[4];
-		if (!txt2exp(item[5], &value.expire)) {
+		if (!txt2exp(item[5], &value.expire, true)) {
 			fprintf(stderr, "bad expiration %s (%s:%d)\n", item[5], path, lino);
 			rc = -EINVAL;
 			goto error2;

@@ -99,7 +99,7 @@ static bool parse_time_spec(const char *txt, time_t *time_out)
 
 
 /* see expire.h */
-bool txt2exp(const char *txt, time_t *time_out)
+bool txt2exp(const char *txt, time_t *time_out, bool absolute)
 {
 	bool nocache;
 	time_t r;
@@ -115,8 +115,10 @@ bool txt2exp(const char *txt, time_t *time_out)
 		/* parse */
 		if (!parse_time_spec(txt, &r))
 			return false;
-		/* relative time */
-		r = pt_add(r, time(NULL));
+		if (absolute) {
+			/* absolute time */
+			r = pt_add(r, time(NULL));
+		}
 	}
 
 	*time_out = nocache ? -(r + 1) : r;
@@ -124,7 +126,7 @@ bool txt2exp(const char *txt, time_t *time_out)
 }
 
 /* see expire.h */
-size_t exp2txt(time_t expire, char *buffer, size_t buflen)
+size_t exp2txt(time_t expire, bool absolute, char *buffer, size_t buflen)
 {
 	char b[100];
 	size_t l, n;
@@ -139,7 +141,8 @@ size_t exp2txt(time_t expire, char *buffer, size_t buflen)
 		if (!n)
 			strncpy(b, "forever", sizeof b);
 	} else {
-		expire -= time(NULL);
+		if (absolute)
+			expire -= time(NULL);
 #define ADD(C,U) \
   if (expire >= U) { \
     n += (size_t)snprintf(&b[n], sizeof b - (size_t)n, "%lld" #C, (long long)(expire / U)); \

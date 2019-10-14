@@ -274,11 +274,11 @@ search(
 
 /* see cache.h */
 int
-cache_put(
-	cache_t *cache,
+cache_put(cache_t *cache,
 	const cynagora_key_t *key,
 	int value,
-	time_t expire
+	time_t expire,
+	bool absolute
 ) {
 	uint16_t length;
 	item_t *item;
@@ -308,7 +308,7 @@ cache_put(
 		stpcpy(1 + stpcpy(1 + stpcpy(1 + stpcpy(item->strings, key->client), key->session), key->user), key->permission);
 		cache->used += (uint32_t)size;
 	}
-	item->expire = expire;
+	item->expire = !expire ? 0 : absolute ? expire : expire + time(NULL);
 	item->hit = 255;
 	item->value = (int8_t)value;
 	return 0;

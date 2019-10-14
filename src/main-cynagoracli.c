@@ -336,7 +336,7 @@ int get_csupve(int ac, char **av, int *used, const char *def)
 	value.value = n > 5 ? av[5] : "no";
 	if (n <= 6)
 		value.expire = 0;
-	else if (!txt2exp(av[6], &value.expire))
+	else if (!txt2exp(av[6], &value.expire, true))
 		return -EINVAL;
 
 	return key.client && key.session && key.user && key.permission && value.value ? 0 : -EINVAL;
@@ -416,7 +416,7 @@ void listcb(void *closure, const cynagora_key_t *k, const cynagora_value_t *v)
 	size_t s, as;
 	int i;
 
-	exp2txt(v->expire, buffer, sizeof buffer);
+	exp2txt(v->expire, true, buffer, sizeof buffer);
 	items[0] = k->client;
 	items[1] = k->session;
 	items[2] = k->user;
