@@ -10,27 +10,40 @@ invalidate cache:
 
   s->c clear CACHEID
   
-test a permission:
+### test a permission
 
-  c->s test CLIENT SESSION USER PERMISSION
-  s->c (done|yes|no) [EXPIRE]
+synopsis:
 
-check a permission:
+	c->s test CLIENT SESSION USER PERMISSION
+	s->c (done|yes|no) [EXPIRE]
 
-  c->s check CLIENT SESSION USER PERMISSION
-  s->c (yes|no) [EXPIRE]
 
-enter critical (admin)
 
-  c->s enter
-  s->c done
+### check a permission
 
-leave critical (admin)
+synopsis:
 
-  c->s leave [commit|rollback]
-  s->c done|error ...
+	c->s check CLIENT SESSION USER PERMISSION
+	s->c (yes|no) [EXPIRE]
 
-erase (admin):
+
+### enter critical (admin)
+
+synopsis:
+
+	c->s enter
+	s->c done
+
+### leave critical (admin)
+
+synopsis:
+
+	c->s leave [commit|rollback]
+	s->c done|error ...
+
+### erase (admin)
+
+synopsis:
 
   c->s drop CLIENT SESSION USER PERMISSION
   s->c done|error ...

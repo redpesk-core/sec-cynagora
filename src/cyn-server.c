@@ -49,6 +49,7 @@
 typedef struct client client_t;
 typedef struct agent agent_t;
 typedef struct ask ask_t;
+typedef struct check check_t;
 
 #define MAX_PUTX_ITEMS 15
 
@@ -87,8 +88,8 @@ struct client
 	/** enter/leave status, record if enter is pending */
 	unsigned entering: 1;
 
-	/** indicate if some check were made */
-	unsigned checked: 1;
+	/** indicate if some caching were made by the client */
+	unsigned caching: 1;
 
 	/** polling callback */
 	pollitem_t pollitem;
@@ -98,6 +99,9 @@ struct client
 
 	/** last askid */
 	uint32_t askid;
+
+	/** list of pending checks */
+	check_t *checks;
 };
 
 /** structure for pending asks */
@@ -111,6 +115,19 @@ struct ask
 
 	/** id of the ask */
 	uint32_t id;
+};
+
+/** structure for pending checks */
+struct check
+{
+	/** pointer to the next check */
+	check_t *next;
+
+	/** the client if still valid */
+	client_t *client;
+
+	/** is check? otherwise it is test */
+	bool ischeck;
 };
 
 /** structure for servers */
@@ -333,18 +350,17 @@ exp2get(
 /** callback of checking */
 static
 void
-testcheckcb(
-	void *closure,
+replycheck(
+	client_t *cli,
 	const data_value_t *value,
 	bool ischeck
 ) {
-	client_t *cli = closure;
 	char text[30];
 	const char *etxt, *vtxt;
 
 	if (!value) {
 		vtxt = _no_;
-		etxt = NULL;
+		etxt = "-";
 	} else {
 		if (!strcmp(value->value, ALLOW))
 			vtxt = _yes_;
@@ -352,6 +368,8 @@ testcheckcb(
 			vtxt = _no_;
 		else
 			vtxt = _done_;
+		if (value->expire >= 0)
+			cli->caching = 1;
 		etxt = exp2check(value->expire, text, sizeof text);
 	}
 	putx(cli, vtxt, etxt, NULL);
@@ -365,19 +383,53 @@ checkcb(
 	void *closure,
 	const data_value_t *value
 ) {
-	testcheckcb(closure, value, true);
+	check_t *check = closure;
+	check_t **pc;
+	client_t *cli;
+
+	cli = check->client;
+	if (cli) {
+		pc = &cli->checks;
+		while (*pc)
+			if (*pc != check)
+				pc = &(*pc)->next;
+			else {
+				*pc = check->next;
+				break;
+			}
+		replycheck(cli, value, check->ischeck);
+	}
+	free(check);
 }
 
-/** callback of testing */
+/** initiate the check */
 static
 void
-testcb(
-	void *closure,
-	const data_value_t *value
+makecheck(
+	client_t *cli,
+	unsigned count,
+	const char *args[],
+	bool ischeck
 ) {
-	testcheckcb(closure, value, false);
-}
+	data_key_t key;
+	check_t *check;
 
+	check = malloc(sizeof *check);
+	if (!check)
+		replycheck(cli, NULL, ischeck);
+	else {
+		check->ischeck = ischeck;
+		check->client = cli;
+		check->next = cli->checks;
+		cli->checks = check;
+
+		key.client = args[1];
+		key.session = args[2];
+		key.user = args[3];
+		key.permission = args[4];
+		(ischeck ? cyn_check_async : cyn_test_async)(checkcb, check, &key);
+	}
+}
 
 /** callback of getting list of entries */
 static
@@ -531,12 +583,7 @@ onrequest(
 		break;
 	case 'c': /* check */
 		if (ckarg(args[0], _check_, 1) && count == 5) {
-			cli->checked = 1;
-			key.client = args[1];
-			key.session = args[2];
-			key.user = args[3];
-			key.permission = args[4];
-			cyn_check_async(checkcb, cli, &key);
+			makecheck(cli, count, args, true);
 			return;
 		}
 		break;
@@ -639,12 +686,7 @@ onrequest(
 		break;
 	case 't': /* test */
 		if (ckarg(args[0], _test_, 1) && count == 5) {
-			cli->checked = 1;
-			key.client = args[1];
-			key.session = args[2];
-			key.user = args[3];
-			key.permission = args[4];
-			cyn_test_async(testcb, cli, &key);
+			makecheck(cli, count, args, false);
 			return;
 		}
 		break;
@@ -662,8 +704,8 @@ onchange(
 	void *closure
 ) {
 	client_t *cli = closure;
-	if (cli->checked) {
-		cli->checked = 0;
+	if (cli->caching) {
+		cli->caching = 0;
 		putx(cli, _clear_, cyn_changeid_string(), NULL);
 		flushw(cli);
 	}
@@ -677,10 +719,19 @@ destroy_client(
 	bool closefds
 ) {
 	ask_t *ask;
+	check_t *check;
 	data_value_t value;
 
 	/* remove observers */
 	cyn_on_change_remove(onchange, cli);
+
+	/* clean of checks */
+	check = cli->checks;
+	cli->checks = NULL;
+	while (check != NULL) {
+		check->client = NULL;
+		check = check->next;
+	}
 
 	/* close protocol */
 	if (closefds)
@@ -782,12 +833,13 @@ create_client(
 	cli->invalid = 0; /* not invalid */
 	cli->entered = 0; /* not entered */
 	cli->entering = 0; /* not entering */
-	cli->checked = 0; /* no check made */
+	cli->caching = 0; /* no caching made */
 	cli->pollitem.handler = on_client_event;
 	cli->pollitem.closure = cli;
 	cli->pollitem.fd = fd;
 	cli->asks = NULL;
 	cli->askid = 0;
+	cli->checks = NULL;
 	return 0;
 error3:
 	prot_destroy(cli->prot);
