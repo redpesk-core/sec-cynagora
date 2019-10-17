@@ -65,7 +65,7 @@ static
 const char
 helptxt[] =
 	"\n"
-	"usage: cynagoracli [options]... [action [arguments]]\n"
+	"usage: cynagora-admin [options]... [action [arguments]]\n"
 	"\n"
 	"otpions:\n"
 	"	-s, --socket xxx      set the base xxx for sockets\n"
@@ -75,16 +75,16 @@ helptxt[] =
 	"	-h, --help            print this help and exit\n"
 	"	-v, --version         print the version and exit\n"
 	"\n"
-	"When action is given, cynagoracli performs the action and exits.\n"
-	"Otherwise cynagoracli continuously read its input to get the actions.\n"
-	"For a list of actions type 'cynagoracli help'.\n"
+	"When action is given, cynagora-admin performs the action and exits.\n"
+	"Otherwise cynagora-admin continuously read its input to get the actions.\n"
+	"For a list of actions type 'cynagora-admin help'.\n"
 	"\n"
 ;
 
 static
 const char
 versiontxt[] =
-	"cynagoracli version 1.99.99\n"
+	"cynagora-admin version 1.99.99\n"
 ;
 
 static
