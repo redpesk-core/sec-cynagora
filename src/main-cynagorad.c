@@ -35,6 +35,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <sys/capability.h>
 
 #if defined(WITH_SYSTEMD_ACTIVATION)
@@ -60,6 +61,9 @@
 #endif
 #if !defined(DEFAULT_CYNAGORA_GROUP)
 #    define  DEFAULT_CYNAGORA_GROUP  NULL
+#endif
+#if !defined(DEFAULT_LOCKFILE)
+#    define  DEFAULT_LOCKFILE      ".cynagora-lock"
 #endif
 
 #define _DBDIR_       'd'
@@ -143,6 +147,7 @@ versiontxt[] =
 
 static int isid(const char *text);
 static void ensure_directory(const char *path, int uid, int gid);
+static int lockdir(const char *dir);
 
 int main(int ac, char **av)
 {
@@ -316,6 +321,13 @@ int main(int ac, char **av)
 	cap_clear(caps);
 	rc = cap_set_proc(caps);
 
+	/* get lock for the database */
+	rc = lockdir(dbdir);
+	if (rc < 0) {
+		fprintf(stderr, "can not lock database of directory %s: %m\n", dbdir);
+		return 1;
+	}
+
 	/* connection to the database */
 	rc = db_open(dbdir);
 	if (rc < 0) {
@@ -455,5 +467,24 @@ static void ensure_directory(const char *path, int uid, int gid)
 	}
 	p = strndupa(path, l);
 	ensuredir(p, (int)l, uid, gid);
+}
+
+static int lockdir(const char *dir)
+{
+	char path[PATH_MAX];
+	int fd, rc;
+
+	rc = snprintf(path, sizeof path, "%s/%s", dir, DEFAULT_LOCKFILE);
+	if (rc >= (int)sizeof path) {
+		rc = -1;
+		errno = ENAMETOOLONG;
+	} else if (rc >= 0) {
+		rc = open(path, O_RDWR|O_CREAT, 0600);
+		if (rc >= 0) {
+			fd = rc;
+			rc = flock(fd, LOCK_EX|LOCK_NB);
+		}
+	}
+	return rc;
 }
 
