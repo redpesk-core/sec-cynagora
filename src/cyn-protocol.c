@@ -25,6 +25,7 @@
 #include "cyn-protocol.h"
 
 const char
+	_ack_[] = "ack",
 	_agent_[] = "agent",
 	_ask_[] = "ask",
 	_check_[] = "check",

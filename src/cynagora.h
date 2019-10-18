@@ -222,6 +222,7 @@ cynagora_cache_check(
  *
  * @return 0 if permission forbidden, 1 if permission granted
  *         or if error a negative -errno value
+ *         -EBUSY if pending synchronous request
  *
  * @see cynagora_test, cynagora_cache_check
  */
@@ -243,6 +244,7 @@ cynagora_check(
  *
  * @return 0 if permission forbidden, 1 if permission granted
  *         or if error a negative -errno value
+ *         -EBUSY if pending synchronous request
  *
  * @see cynagora_check
  */
@@ -315,6 +317,8 @@ typedef void cynagora_get_cb_t(
  * @param closure  closure of the callback
  *
  * @return 0 in case of success or a negative -errno value
+ *         -EPERM if not a admin client
+ *         -EBUSY if pending synchronous request
  */
 extern
 int
@@ -333,6 +337,8 @@ cynagora_get(
  * @param off      should set off
  *
  * @return 0 if not logging, 1 if logging or a negative -errno value
+ *         -EPERM if not a admin client
+ *         -EBUSY if pending synchronous request
  */
 extern
 int
@@ -349,7 +355,8 @@ cynagora_log(
  *
  * @return 0 in case of success or a negative -errno value
  *         -EPERM if not a admin client
- *         -EINPROGRESS if already entered
+ *         -ECANCELED if already entered
+ *         -EBUSY if pending synchronous request
  *
  * @see cynagora_leave, cynagora_set, cynagora_drop
  */
@@ -369,6 +376,7 @@ cynagora_enter(
  * @return 0 in case of success or a negative -errno value
  *         -EPERM if not a admin client
  *         -ECANCELED if not entered
+ *         -EBUSY if pending synchronous request
  *
  * @see cynagora_enter, cynagora_set, cynagora_drop
  */
@@ -390,6 +398,7 @@ cynagora_leave(
  * @return 0 in case of success or a negative -errno value
  *         -EPERM if not a admin client
  *         -ECANCELED if not entered
+ *         -EBUSY if pending synchronous request
  *
  * @see cynagora_enter, cynagora_leave, cynagora_drop
  */
@@ -411,6 +420,7 @@ cynagora_set(
  * @return  0 in case of success or a negative -errno value
  *         -EPERM if not a admin client
  *         -ECANCELED if not entered
+ *         -EBUSY if pending synchronous request
  *
  * @see cynagora_enter, cynagora_leave, cynagora_set
  */

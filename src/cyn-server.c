@@ -44,7 +44,7 @@
 #include "socket.h"
 #include "pollitem.h"
 #include "expire.h"
-#include "cynagora.h"
+#include "idgen.h"
 
 typedef struct client client_t;
 typedef struct agent agent_t;
@@ -97,11 +97,11 @@ struct client
 	/** list of pending ask */
 	ask_t *asks;
 
-	/** last askid */
-	uint32_t askid;
-
 	/** list of pending checks */
 	check_t *checks;
+
+	/** id generator */
+	idgen_t idgen;
 };
 
 /** structure for pending asks */
@@ -114,7 +114,7 @@ struct ask
 	cynagora_query_t *query;
 
 	/** id of the ask */
-	uint32_t id;
+	idgen_t id;
 };
 
 /** structure for pending checks */
@@ -128,6 +128,9 @@ struct check
 
 	/** is check? otherwise it is test */
 	bool ischeck;
+
+	/** id */
+	char id[];
 };
 
 /** structure for servers */
@@ -352,6 +355,7 @@ static
 void
 replycheck(
 	client_t *cli,
+	const char *id,
 	const data_value_t *value,
 	bool ischeck
 ) {
@@ -367,12 +371,12 @@ replycheck(
 		else if (!strcmp(value->value, DENY) || ischeck)
 			vtxt = _no_;
 		else
-			vtxt = _done_;
+			vtxt = _ack_;
 		if (value->expire >= 0)
 			cli->caching = 1;
 		etxt = exp2check(value->expire, text, sizeof text);
 	}
-	putx(cli, vtxt, etxt, NULL);
+	putx(cli, vtxt, id, etxt, NULL);
 	flushw(cli);
 }
 
@@ -397,7 +401,7 @@ checkcb(
 				*pc = check->next;
 				break;
 			}
-		replycheck(cli, value, check->ischeck);
+		replycheck(cli, check->id, value, check->ischeck);
 	}
 	free(check);
 }
@@ -414,19 +418,20 @@ makecheck(
 	data_key_t key;
 	check_t *check;
 
-	check = malloc(sizeof *check);
+	check = malloc(sizeof *check + 1 + strlen(args[1]));
 	if (!check)
-		replycheck(cli, NULL, ischeck);
+		replycheck(cli, args[1], NULL, ischeck);
 	else {
+		strcpy(check->id, args[1]);
 		check->ischeck = ischeck;
 		check->client = cli;
 		check->next = cli->checks;
 		cli->checks = check;
 
-		key.client = args[1];
-		key.session = args[2];
-		key.user = args[3];
-		key.permission = args[4];
+		key.client = args[2];
+		key.session = args[3];
+		key.user = args[4];
+		key.permission = args[5];
 		(ischeck ? cyn_check_async : cyn_test_async)(checkcb, check, &key);
 	}
 }
@@ -451,13 +456,13 @@ static
 ask_t*
 searchask(
 	client_t *cli,
-	uint32_t askid,
+	const char *askid,
 	bool unlink
 ) {
 	ask_t *r, **prv;
 
 	prv = &cli->asks;
-	while ((r = *prv) && r->id != askid)
+	while ((r = *prv) && strcmp(r->id, askid))
 		prv = &r->next;
 	if (r && unlink)
 		*prv = r->next;
@@ -475,26 +480,18 @@ agentcb(
 	cynagora_query_t *query
 ) {
 	client_t *cli = closure;
-	uint32_t askid;
 	ask_t *ask;
-	char buffer[30];
-	int rc;
-
-	/* search a valid id */
-	do {
-		askid = ++cli->askid;
-	} while (!askid && searchask(cli, askid, false));
-	rc = snprintf(buffer, sizeof buffer, "%lu", (long unsigned)askid);
-	if (rc < 0)
-		return -errno;
-	if (rc >= (int)sizeof buffer)
-		return -ECANCELED;
 
 	/* allocate the ask structure */
 	ask = malloc(sizeof *ask);
 	if (!ask)
 		return -ENOMEM;
-	ask->id = askid;
+
+	/* search a valid id */
+	do {
+		idgen_next(cli->idgen);
+	} while (searchask(cli, cli->idgen, false));
+	memcpy(ask->id, cli->idgen, sizeof cli->idgen);
 	ask->query = query;
 
 	/* link the ask */
@@ -502,7 +499,7 @@ agentcb(
 	cli->asks = ask;
 
 	/* make the query */
-	putx(cli, _ask_, buffer, name, value,
+	putx(cli, _ask_, ask->id, name, value,
 			key->client, key->session, key->user, key->permission,
 			NULL);
 	flushw(cli);
@@ -518,21 +515,17 @@ replycb(
 	const char *expire
 ) {
 	ask_t *ask;
-	unsigned long int ul;
 	data_value_t value;
 
-	ul = strtoul(askid, NULL, 10);
-	if (ul <= UINT32_MAX) {
-		ask = searchask(cli, (uint32_t)ul, true);
-		if (ask) {
-			value.value = yesno;
-			if (!expire)
-				value.expire = 0;
-			else if (!txt2exp(expire, &value.expire, true))
-				value.expire = -1;
-			cyn_query_reply(ask->query, &value);
-			free(ask);
-		}
+	ask = searchask(cli, askid, true);
+	if (ask) {
+		value.value = yesno;
+		if (!expire)
+			value.expire = 0;
+		else if (!txt2exp(expire, &value.expire, true))
+			value.expire = -1;
+		cyn_query_reply(ask->query, &value);
+		free(ask);
 	}
 }
 
@@ -562,7 +555,7 @@ onrequest(
 		if (ckarg(args[0], _cynagora_, 0)) {
 			if (count < 2 || !ckarg(args[1], "1", 0))
 				goto invalid;
-			putx(cli, _yes_, "1", cyn_changeid_string(), NULL);
+			putx(cli, _done_, "1", cyn_changeid_string(), NULL);
 			flushw(cli);
 			cli->version = 1;
 			return;
@@ -582,7 +575,7 @@ onrequest(
 		}
 		break;
 	case 'c': /* check */
-		if (ckarg(args[0], _check_, 1) && count == 5) {
+		if (ckarg(args[0], _check_, 1) && count == 6) {
 			makecheck(cli, count, args, true);
 			return;
 		}
@@ -685,7 +678,7 @@ onrequest(
 		}
 		break;
 	case 't': /* test */
-		if (ckarg(args[0], _test_, 1) && count == 5) {
+		if (ckarg(args[0], _test_, 1) && count == 6) {
 			makecheck(cli, count, args, false);
 			return;
 		}
@@ -838,8 +831,8 @@ create_client(
 	cli->pollitem.closure = cli;
 	cli->pollitem.fd = fd;
 	cli->asks = NULL;
-	cli->askid = 0;
 	cli->checks = NULL;
+	idgen_init(cli->idgen);
 	return 0;
 error3:
 	prot_destroy(cli->prot);

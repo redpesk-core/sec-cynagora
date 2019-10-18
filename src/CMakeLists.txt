@@ -31,19 +31,21 @@ set(LIBCORE_SOURCES
 
 set(SERVER_SOURCES
 	agent-at.c
-	main-cynagorad.c
-	prot.c
 	cyn-protocol.c
 	cyn-server.c
+	idgen.c
+	main-cynagorad.c
+	prot.c
 	socket.c
 )
 
 set(LIBCLI_SOURCES
-	expire.c
 	cache.c
-	prot.c
-	cynagora.c
 	cyn-protocol.c
+	cynagora.c
+	expire.c
+	idgen.c
+	prot.c
 	socket.c
 )
 

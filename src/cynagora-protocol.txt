@@ -11,7 +11,7 @@ Introduction
  - EXPIRE:  if missing, means forever
             if positive, a number of second since EPOCH, invalid after it
  - CACHEID: a 32 bits positive integer
- - ASKID:   a 32 bits positive integer
+ - ID:      a string
 
 Messages
 --------
@@ -21,7 +21,7 @@ Messages
 synopsis:
 
 	c->s cynagora 1
-	s->c yes 1 CACHEID
+	s->c done 1 CACHEID
 
 The client present itself with the version of the protocol it expects to
 speak (today version 1 only). The server answer yes with the acknoledged
@@ -46,8 +46,8 @@ identifier is CACHEID
 
 synopsis:
 
-	c->s test CLIENT SESSION USER PERMISSION
-	s->c (done|yes|no) [EXPIRE]
+	c->s test ID CLIENT SESSION USER PERMISSION
+	s->c (ack|yes|no) ID [EXPIRE]
 
 
 
@@ -55,8 +55,8 @@ synopsis:
 
 synopsis:
 
-	c->s check CLIENT SESSION USER PERMISSION
-	s->c (yes|no) [EXPIRE]
+	c->s check ID CLIENT SESSION USER PERMISSION
+	s->c (yes|no) ID [EXPIRE]
 
 
 
@@ -122,8 +122,8 @@ synopsis:
 
 synopsis:
 
-	c->s sub ASKID (test|check) CLIENT SESSION USER PERMISSION
-	s->c reply ASKID (done|yes|no) [EXPIRE]
+	c->s sub ASKID (test|check) ID CLIENT SESSION USER PERMISSION
+	s->c (ack|yes|no) ID [EXPIRE]
 
 Notes
 -----

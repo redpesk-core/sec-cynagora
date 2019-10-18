@@ -23,6 +23,7 @@
 
 /* predefined protocol strings */
 extern const char
+	_ack_[],
 	_agent_[],
 	_ask_[],
 	_check_[],
