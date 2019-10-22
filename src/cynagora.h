@@ -257,7 +257,7 @@ cynagora_test(
 );
 
 /**
- * Check the key asynchronousely (async)
+ * Check the key asynchronously (async)
  *
  * @param cynagora  the handler of the client
  * @param key       the key to query
