@@ -175,6 +175,9 @@ int main(int ac, char **av)
 	cyn_server_t *server;
 	char *spec_socket_admin, *spec_socket_check, *spec_socket_agent;
 
+	setlinebuf(stdout);
+	setlinebuf(stderr);
+
 	/* scan arguments */
 	for (;;) {
 		opt = getopt_long(ac, av, shortopts, longopts, NULL);
