@@ -48,6 +48,8 @@
 #define MIN_CACHE_SIZE 400
 #define CACHESIZE(x)  ((x) >= MIN_CACHE_SIZE ? (x) : (x) ? MIN_CACHE_SIZE : 0)
 
+static const char syncid[] = "{sync}";
+
 typedef struct asreq asreq_t;
 typedef struct ascb  ascb_t;
 typedef struct agent agent_t;
@@ -105,9 +107,6 @@ struct cynagora
 {
 	/** file descriptor of the socket */
 	int fd;
-
-	/** count of pending requests */
-	int pending;
 
 	/** synchronous lock */
 	bool synclock;
@@ -310,7 +309,6 @@ putxkv(
 
 	/* send now */
 	rc = send_reply(cynagora, fields, nf);
-	cynagora->pending += !rc; /* one more pending if no error */
 	return rc;
 }
 
@@ -367,7 +365,6 @@ get_reply(
 			rc = 0;
 		} else {
 			if (0 != strcmp(cynagora->reply.fields[0], _item_)) {
-				cynagora->pending--;
 				if (strcmp(first, _done_) && strcmp(first, _error_)) {
 					if (async_reply_process(cynagora, rc))
 						rc = 0;
@@ -497,7 +494,7 @@ status_check(
  */
 static
 int
-wait_pending_reply(
+wait_any_reply(
 	cynagora_t *cynagora
 ) {
 	int rc;
@@ -505,7 +502,7 @@ wait_pending_reply(
 		rc = wait_reply(cynagora, true);
 		if (rc < 0)
 			return rc;
-		if (rc > 0 && cynagora->pending == 0)
+		if (rc > 0)
 			return rc;
 	}
 }
@@ -523,7 +520,7 @@ int
 wait_done(
 	cynagora_t *cynagora
 ) {
-	int rc = wait_pending_reply(cynagora);
+	int rc = wait_any_reply(cynagora);
 	if (rc > 0)
 		rc = status_done(cynagora);
 	return rc;
@@ -593,7 +590,6 @@ connection(
 	agent_t *agent;
 
 	/* init the client */
-	cynagora->pending = 0;
 	cynagora->reply.count = -1;
 	prot_reset(cynagora->prot);
 	cynagora->fd = socket_open(cynagora->socketspec, 0);
@@ -603,7 +599,7 @@ connection(
 	/* negociate the protocol */
 	rc = putxkv(cynagora, _cynagora_, "1", 0, 0);
 	if (rc >= 0) {
-		rc = wait_pending_reply(cynagora);
+		rc = wait_any_reply(cynagora);
 		if (rc >= 0) {
 			rc = -EPROTO;
 			if (cynagora->reply.count >= 2
@@ -688,10 +684,10 @@ check_or_test(
 	}
 
 	/* send the request */
-	rc = putxkv(cynagora, action, "{sync}", key, 0);
+	rc = putxkv(cynagora, action, syncid, key, 0);
 	if (rc >= 0) {
 		/* get the response */
-		rc = wait_pending_reply(cynagora);
+		rc = wait_any_reply(cynagora);
 		if (rc >= 0) {
 			rc = status_check(cynagora, rc, &expire);
 			if (rc >= 0 && action == _check_)
