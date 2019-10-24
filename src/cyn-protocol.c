@@ -46,6 +46,7 @@ const char
 	_reply_[] = "reply",
 	_rollback_[] = "rollback",
 	_set_[] = "set",
+	_sub_[] = "sub",
 	_test_[] = "test",
 	_yes_[] = "yes";
 

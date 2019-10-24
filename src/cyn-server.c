@@ -406,6 +406,27 @@ checkcb(
 	free(check);
 }
 
+/** allocate the check */
+static
+check_t *
+alloccheck(
+	client_t *cli,
+	const char *id,
+	bool ischeck
+) {
+	check_t *check;
+
+	check = malloc(sizeof *check + 1 + strlen(id));
+	if (check) {
+		strcpy(check->id, id);
+		check->ischeck = ischeck;
+		check->client = cli;
+		check->next = cli->checks;
+		cli->checks = check;
+	}
+	return check;
+}
+
 /** initiate the check */
 static
 void
@@ -417,17 +438,13 @@ makecheck(
 ) {
 	data_key_t key;
 	check_t *check;
+	const char *id;
 
-	check = malloc(sizeof *check + 1 + strlen(args[1]));
+	id = args[1];
+	check = alloccheck(cli, id, ischeck);
 	if (!check)
-		replycheck(cli, args[1], NULL, ischeck);
+		replycheck(cli, id, NULL, ischeck);
 	else {
-		strcpy(check->id, args[1]);
-		check->ischeck = ischeck;
-		check->client = cli;
-		check->next = cli->checks;
-		cli->checks = check;
-
 		key.client = args[2];
 		key.session = args[3];
 		key.user = args[4];
@@ -506,6 +523,7 @@ agentcb(
 	return 0;
 }
 
+/* treat the reply to an agent query */
 static
 void
 replycb(
@@ -527,6 +545,38 @@ replycb(
 		cyn_query_reply(ask->query, &value);
 		free(ask);
 	}
+}
+
+/** initiate the check */
+static
+void
+makesub(
+	client_t *cli,
+	const char *args[]
+) {
+	ask_t *ask;
+	data_key_t key;
+	check_t *check;
+	const char *id;
+	const char *askid;
+
+	id = args[2];
+	askid = args[1];
+	ask = searchask(cli, askid, false);
+	if (ask) {
+		check = alloccheck(cli, id, true);
+		if (check) {
+			key.client = args[3];
+			key.session = args[4];
+			key.user = args[5];
+			key.permission = args[6];
+
+			cyn_query_subquery_async(
+					ask->query, checkcb, check, &key);
+			return;
+		}
+	}
+	replycheck(cli, id, NULL, true);
 }
 
 /** handle a request */
@@ -674,6 +724,12 @@ onrequest(
 			value.value = args[5];
 			rc = cyn_set(&key, &value);
 			send_done_or_error(cli, rc);
+			return;
+		}
+		if (ckarg(args[0], _sub_, 1) && count == 7) {
+			if (cli->type != server_Agent)
+				break;
+			makesub(cli, args);
 			return;
 		}
 		break;

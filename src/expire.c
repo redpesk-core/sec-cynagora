@@ -97,7 +97,6 @@ static bool parse_time_spec(const char *txt, time_t *time_out)
 	return true;
 }
 
-
 /* see expire.h */
 bool txt2exp(const char *txt, time_t *time_out, bool absolute)
 {

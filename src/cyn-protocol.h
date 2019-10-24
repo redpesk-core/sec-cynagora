@@ -44,6 +44,7 @@ extern const char
 	_reply_[],
 	_rollback_[],
 	_set_[],
+	_sub_[],
 	_test_[],
 	_yes_[];
 

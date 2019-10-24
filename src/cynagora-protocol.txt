@@ -118,12 +118,12 @@ synopsis:
 	s->c ask ASKID NAME VALUE CLIENT SESSION USER PERMISSION
 	c->s reply ASKID ([yes|no] [always|session|one-time|EXPIRE])
 
-### sub queries (agent):
+### sub check (agent):
 
 synopsis:
 
-	c->s sub ASKID (test|check) ID CLIENT SESSION USER PERMISSION
-	s->c (ack|yes|no) ID [EXPIRE]
+	c->s sub ASKID ID CLIENT SESSION USER PERMISSION
+	s->c (yes|no) ID [EXPIRE]
 
 Notes
 -----

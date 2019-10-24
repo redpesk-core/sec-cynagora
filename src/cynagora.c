@@ -756,6 +756,121 @@ async_reply_process(
 	return 1;
 }
 
+static
+int
+async_check(
+	cynagora_t *cynagora,
+	const cynagora_key_t *key,
+	int force,
+	int simple,
+	cynagora_async_check_cb_t *callback,
+	void *closure,
+	const char *askid
+) {
+	int rc;
+	asreq_t *ar;
+	ascb_t *ac;
+	char *p;
+	int nf;
+	const char *fields[8];
+
+	/* ensure connection */
+	rc = ensure_opened(cynagora);
+	if (rc < 0)
+		return rc;
+
+	/* check cache item */
+	if (!force) {
+		/* ensure there is no clear cache pending */
+		flushr(cynagora);
+
+		rc = cache_search(cynagora->cache, key);
+		if (rc >= 0) {
+			callback(closure, rc);
+			return 0;
+		}
+	}
+
+	/* allocates the callback */
+	ac = malloc(sizeof *ac);
+	if (ac == NULL)
+		return -ENOMEM;
+	ac->callback = callback;
+	ac->closure = closure;
+
+	/* common request only if not subqueries of agents */
+	if (!askid) {
+		/* search the request */
+		ar = cynagora->async.requests;
+		while (ar && (strcmp(key->client, ar->key.client)
+			|| strcmp(key->session, ar->key.session)
+			|| strcmp(key->user, ar->key.user)
+			|| strcmp(key->permission, ar->key.permission)))
+			ar = ar->next;
+
+		/* a same request is pending, use it */
+		if (ar) {
+			ac->next = ar->callbacks;
+			ar->callbacks = ac;
+			return 0;
+		}
+	}
+
+	/* allocate for the request */
+	ar = malloc(sizeof *ar + strlen(key->client) + strlen(key->session) + strlen(key->user) + strlen(key->permission) + 4);
+	if (ar == NULL) {
+		free(ac);
+		return -ENOMEM;
+	}
+
+	/* init */
+	ac->next = NULL;
+	ar->callbacks = ac;
+	p = (char*)(ar + 1);
+	ar->key.client = p;
+	p = stpcpy(p, key->client) + 1;
+	ar->key.session = p;
+	p = stpcpy(p, key->session) + 1;
+	ar->key.user = p;
+	p = stpcpy(p, key->user) + 1;
+	ar->key.permission = p;
+	stpcpy(p, key->permission);
+	do {
+		idgen_next(cynagora->idgen);
+	} while (search_async_request(cynagora, cynagora->idgen, false));
+	strcpy(ar->id, cynagora->idgen);
+	ar->next = cynagora->async.requests;
+	cynagora->async.requests = ar;
+
+	/* send the request */
+	if (askid) {
+		fields[0] = _sub_;
+		fields[1] = askid;
+		nf = 2;
+	} else {
+		fields[0] = simple ? _test_ : _check_;
+		nf = 1;
+	}
+	fields[nf++] = ar->id;
+	fields[nf++] = key->client;
+	fields[nf++] = key->session;
+	fields[nf++] = key->user;
+	fields[nf++] = key->permission;
+	rc = send_reply(cynagora, fields, nf);
+	if (rc < 0) {
+		ar = search_async_request(cynagora, ar->id, true);
+		while((ac = ar->callbacks)) {
+			ar->callbacks = ac->next;
+			free(ac);
+		}
+		free(ar);
+		return rc;
+	}
+
+	/* record the request */
+	return 0;
+}
+
 /******************************************************************************/
 /*** PUBLIC COMMON METHODS                                                  ***/
 /******************************************************************************/
@@ -951,90 +1066,7 @@ cynagora_async_check(
 	cynagora_async_check_cb_t *callback,
 	void *closure
 ) {
-	int rc;
-	asreq_t *ar;
-	ascb_t *ac;
-	char *p;
-
-	/* ensure connection */
-	rc = ensure_opened(cynagora);
-	if (rc < 0)
-		return rc;
-
-	/* check cache item */
-	if (!force) {
-		/* ensure there is no clear cache pending */
-		flushr(cynagora);
-
-		rc = cache_search(cynagora->cache, key);
-		if (rc >= 0) {
-			callback(closure, rc);
-			return 0;
-		}
-	}
-
-	/* allocates the callback */
-	ac = malloc(sizeof *ac);
-	if (ac == NULL)
-		return -ENOMEM;
-	ac->callback = callback;
-	ac->closure = closure;
-
-	/* search the request */
-	ar = cynagora->async.requests;
-	while (ar && (strcmp(key->client, ar->key.client)
-		|| strcmp(key->session, ar->key.session)
-		|| strcmp(key->user, ar->key.user)
-		|| strcmp(key->permission, ar->key.permission)))
-		ar = ar->next;
-
-	/* a same request is pending, use it */
-	if (ar) {
-		ac->next = ar->callbacks;
-		ar->callbacks = ac;
-		return 0;
-	}
-
-	/* allocate for the request */
-	ar = malloc(sizeof *ar + strlen(key->client) + strlen(key->session) + strlen(key->user) + strlen(key->permission) + 4);
-	if (ar == NULL) {
-		free(ac);
-		return -ENOMEM;
-	}
-
-	/* init */
-	ac->next = NULL;
-	ar->callbacks = ac;
-	p = (char*)(ar + 1);
-	ar->key.client = p;
-	p = stpcpy(p, key->client) + 1;
-	ar->key.session = p;
-	p = stpcpy(p, key->session) + 1;
-	ar->key.user = p;
-	p = stpcpy(p, key->user) + 1;
-	ar->key.permission = p;
-	stpcpy(p, key->permission);
-	do {
-		idgen_next(cynagora->idgen);
-	} while (search_async_request(cynagora, cynagora->idgen, false));
-	strcpy(ar->id, cynagora->idgen);
-	ar->next = cynagora->async.requests;
-	cynagora->async.requests = ar;
-
-	/* send the request */
-	rc = putxkv(cynagora, simple ? _test_ : _check_, ar->id, key, 0);
-	if (rc < 0) {
-		ar = search_async_request(cynagora, ar->id, true);
-		while((ac = ar->callbacks)) {
-			ar->callbacks = ac->next;
-			free(ac);
-		}
-		free(ar);
-		return rc;
-	}
-
-	/* record the request */
-	return 0;
+	return async_check(cynagora, key, force, simple, callback, closure, NULL);
 }
 
 /******************************************************************************/
@@ -1463,5 +1495,27 @@ cynagora_agent_reply(
 			value ? value->expire : -1);
 	}
 	free(query);
+	return rc;
+}
+
+/* see cynagora.h */
+int
+cynagora_agent_subquery_async(
+	cynagora_query_t *_query,
+	const cynagora_key_t *key,
+	int force,
+	cynagora_async_check_cb_t *callback,
+	void *closure
+) {
+	int rc;
+	query_t *query = (query_t*)_query;
+	cynagora_t *cynagora;
+
+	cynagora = query->cynagora;
+	if (!cynagora)
+		rc = -ECANCELED;
+	else
+		rc = async_check(cynagora, key, force, false,
+					callback, closure, query->askid);
 	return rc;
 }

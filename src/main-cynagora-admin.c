@@ -91,7 +91,7 @@ static
 const char
 help__text[] =
 	"\n"
-	"Commands are: list, set, drop, acheck, check, atest, test, cache, clear, quit, log, help\n"
+	"Commands are: list, set, drop, acheck, check, test, stest, cache, clear, quit, log, help\n"
 	"Type 'help command' to get help on the command\n"
 	"Type 'help expiration' to get help on expirations\n"
 	"\n"
@@ -180,12 +180,12 @@ help_check_text[] =
 
 static
 const char
-help_acheck_text[] =
+help_scheck_text[] =
 	"\n"
-	"Command: acheck client session user permission\n"
+	"Command: scheck client session user permission\n"
 	"\n"
-	"Check asynchronously authorization for the given 'client', 'session', 'user', 'permission'.\n"
-	"Same as check but don't wait the answer.\n"
+	"Check synchronously authorization for the given 'client', 'session', 'user', 'permission'.\n"
+	"Same as check but wait the answer.\n"
 	"\n"
 ;
 
@@ -209,12 +209,12 @@ help_test_text[] =
 
 static
 const char
-help_atest_text[] =
+help_stest_text[] =
 	"\n"
-	"Command: atest client session user permission\n"
+	"Command: stest client session user permission\n"
 	"\n"
-	"Test asynchronously authorization for the given 'client', 'session', 'user', 'permission'.\n"
-	"Same as test but don't wait the answer.\n"
+	"Test synchronously authorization for the given 'client', 'session', 'user', 'permission'.\n"
+	"Same as test but wait the answer.\n"
 	"\n"
 ;
 
@@ -518,7 +518,7 @@ int do_drop(int ac, char **av)
 	return uc;
 }
 
-int do_check(int ac, char **av, int (*f)(cynagora_t*,const cynagora_key_t*,int))
+int do_scheck(int ac, char **av, int (*f)(cynagora_t*,const cynagora_key_t*,int))
 {
 	int uc, rc;
 
@@ -556,7 +556,7 @@ int do_cache_check(int ac, char **av)
 	return uc;
 }
 
-void acheck_cb(void *closure, int status)
+void check_cb(void *closure, int status)
 {
 	if (status > 0)
 		fprintf(stdout, "allowed\n");
@@ -567,14 +567,14 @@ void acheck_cb(void *closure, int status)
 	pending--;
 }
 
-int do_acheck(int ac, char **av, bool simple)
+int do_check(int ac, char **av, bool simple)
 {
 	int uc, rc;
 
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
 		pending++;
-		rc = cynagora_async_check(cynagora, &key, 0, simple, acheck_cb, NULL);
+		rc = cynagora_async_check(cynagora, &key, 0, simple, check_cb, NULL);
 		if (rc < 0) {
 			fprintf(stderr, "error %s\n", strerror(-rc));
 			pending--;
@@ -615,12 +615,12 @@ int do_help(int ac, char **av)
 		fprintf(stdout, "%s", help_drop_text);
 	else if (ac > 1 && !strcmp(av[1], "check"))
 		fprintf(stdout, "%s", help_check_text);
-	else if (ac > 1 && !strcmp(av[1], "acheck"))
-		fprintf(stdout, "%s", help_acheck_text);
+	else if (ac > 1 && !strcmp(av[1], "scheck"))
+		fprintf(stdout, "%s", help_scheck_text);
 	else if (ac > 1 && !strcmp(av[1], "test"))
 		fprintf(stdout, "%s", help_test_text);
-	else if (ac > 1 && !strcmp(av[1], "atest"))
-		fprintf(stdout, "%s", help_atest_text);
+	else if (ac > 1 && !strcmp(av[1], "stest"))
+		fprintf(stdout, "%s", help_stest_text);
 	else if (ac > 1 && !strcmp(av[1], "cache"))
 		fprintf(stdout, "%s", help_cache_text);
 	else if (ac > 1 && !strcmp(av[1], "clear"))
@@ -654,17 +654,17 @@ int do_any(int ac, char **av)
 	if (!strcmp(av[0], "drop"))
 		return do_drop(ac, av);
 
-	if (!strcmp(av[0], "check"))
-		return do_check(ac, av, cynagora_check);
+	if (!strcmp(av[0], "scheck"))
+		return do_scheck(ac, av, cynagora_check);
 
-	if (!strcmp(av[0], "acheck"))
-		return do_acheck(ac, av, 0);
+	if (!strcmp(av[0], "check"))
+		return do_check(ac, av, 0);
+
+	if (!strcmp(av[0], "stest"))
+		return do_scheck(ac, av, cynagora_test);
 
 	if (!strcmp(av[0], "test"))
-		return do_check(ac, av, cynagora_test);
-
-	if (!strcmp(av[0], "atest"))
-		return do_acheck(ac, av, 1);
+		return do_check(ac, av, 1);
 
 	if (!strcmp(av[0], "cache"))
 		return do_cache_check(ac, av);

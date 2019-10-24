@@ -499,3 +499,23 @@ cynagora_agent_reply(
 	cynagora_query_t *query,
 	cynagora_value_t *value
 );
+
+/**
+ * Check a rule as a sub query of the agent
+ *
+ * @param query the related agent query
+ * @param key the key to check
+ * @param force if true forbids cache check
+ * @param callback the callback to handle the asynchronous reply
+ * @param closure the closure to the callback
+ * @return 0 on success or a negative -errno code
+ */
+extern
+int
+cynagora_agent_subquery_async(
+	cynagora_query_t *query,
+	const cynagora_key_t *key,
+	int force,
+	cynagora_async_check_cb_t *callback,
+	void *closure
+);
