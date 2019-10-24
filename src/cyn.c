@@ -27,12 +27,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
-#include <ctype.h>
 
 #include "data.h"
 #include "db.h"
 #include "queue.h"
 #include "cyn.h"
+#include "names.h"
 
 #if !CYN_SEARCH_DEEP_MAX
 # define CYN_SEARCH_DEEP_MAX 10
@@ -555,31 +555,6 @@ cyn_query_reply(
 ) {
 	query->on_result_cb(query->closure, value);
 	free(query);
-}
-
-/**
- * Check the name and compute its length. Returns 0 in case of invalid name
- * @param name the name to check
- * @return the length of the name or zero if invalid
- */
-static
-size_t
-agent_check_name(
-	const char *name
-) {
-	char c;
-	size_t length = 0;
-	if (name) {
-		while ((c = name[length])) {
-			if (length > UINT8_MAX
-			 || (!isalnum(c) && !strchr("@_-$", c))) {
-				length = 0;
-				break;
-			}
-			length++;
-		}
-	}
-	return length;
 }
 
 /* see cyn.h */

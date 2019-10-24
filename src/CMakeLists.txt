@@ -25,6 +25,7 @@ set(LIBCORE_SOURCES
 	fbuf.c
 	filedb.c
 	memdb.c
+	names.c
 	pollitem.c
 	queue.c
 )
@@ -45,6 +46,7 @@ set(LIBCLI_SOURCES
 	cynagora.c
 	expire.c
 	idgen.c
+	names.c
 	prot.c
 	socket.c
 )

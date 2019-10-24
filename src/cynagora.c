@@ -31,7 +31,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <ctype.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -44,6 +43,7 @@
 #include "socket.h"
 #include "expire.h"
 #include "idgen.h"
+#include "names.h"
 
 #define MIN_CACHE_SIZE 400
 #define CACHESIZE(x)  ((x) >= MIN_CACHE_SIZE ? (x) : (x) ? MIN_CACHE_SIZE : 0)
@@ -1230,31 +1230,6 @@ cynagora_drop(
 /******************************************************************************/
 /*** PRIVATE AGENT METHODS                                                  ***/
 /******************************************************************************/
-
-/**
- * Check the name and compute its length. Returns 0 in case of invalid name
- * @param name the name to check
- * @return the length of the name or zero if invalid
- */
-static
-size_t
-agent_check_name(
-	const char *name
-) {
-	char c;
-	size_t length = 0;
-	if (name) {
-		while ((c = name[length])) {
-			if (length > UINT8_MAX
-			 || (!isalnum(c) && !strchr("@_-$", c))) {
-				length = 0;
-				break;
-			}
-			length++;
-		}
-	}
-	return length;
-}
 
 /**
  * Search the recorded agent of name
