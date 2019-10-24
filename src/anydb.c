@@ -30,11 +30,36 @@
 #include "data.h"
 #include "anydb.h"
 
-
-#define CLIENT_MATCH_SCORE	1
-#define SESSION_MATCH_SCORE	1
-#define USER_MATCH_SCORE	1
-#define PERMISSION_MATCH_SCORE	1
+/*
+ * Definition of the score for matching keys against database when querying.
+ * The scores defined below are used in the function 'searchkey_test'.
+ *
+ * They are used to give a score the key searched in the objective to
+ * select the rule to apply: the selected rule is the rule of higher score.
+ *
+ * When a rule matches, all its keys matched but some of them are wild matches.
+ * The key's scores of the keys that are not wild selectors are added.
+ *
+ * A key's score is made of 2 parts:
+ *   - the lower 4 bits are used as bit fields to priority individual keys
+ *   - the upper hight bits are used to count the number of keys that matched
+ *
+ * So the rule to apply is given by:
+ *
+ *  1. The rules that matches exactly more keys
+ *  2. If 1 apply to more than one rule, the select rule is the one
+ *     matches more exactly the keys in the following order of priority:
+ *      - session
+ *      - user
+ *      - client
+ *      - permission
+ */
+#define KEY_SESSION_MATCH_SCORE		0x18
+#define KEY_USER_MATCH_SCORE		0x14
+#define KEY_CLIENT_MATCH_SCORE		0x12
+#define KEY_PERMISSION_MATCH_SCORE	0x11
+#define SOME_MATCH_SCORE		0x10
+#define NO_MATCH_SCORE			0x00
 
 /**
  * helper for searching items
@@ -312,17 +337,17 @@ searchkey_test(
 	 || (key->user    != AnyIdx_Wide && skey->idxusr != key->user)
 	 || (key->permission != AnyIdx_Wide
 	        && strcasecmp(skey->strperm, string(db, key->permission)))) {
-		sc = 0;
+		sc = NO_MATCH_SCORE;
 	} else {
-		sc = 1;
+		sc = SOME_MATCH_SCORE;
 		if (key->client != AnyIdx_Wide)
-			sc += CLIENT_MATCH_SCORE;
+			sc += KEY_CLIENT_MATCH_SCORE;
 		if (key->session != AnyIdx_Wide)
-			sc += SESSION_MATCH_SCORE;
+			sc += KEY_SESSION_MATCH_SCORE;
 		if (key->user != AnyIdx_Wide)
-			sc += USER_MATCH_SCORE;
+			sc += KEY_USER_MATCH_SCORE;
 		if (key->permission != AnyIdx_Wide)
-			sc += PERMISSION_MATCH_SCORE;
+			sc += KEY_PERMISSION_MATCH_SCORE;
 	}
 	return sc;
 }
