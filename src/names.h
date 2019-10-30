@@ -27,7 +27,7 @@
  * @return the length of the name or zero if invalid
  */
 extern
-size_t
+uint8_t
 agent_check_name(
 	const char *name
 );

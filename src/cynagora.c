@@ -1430,7 +1430,7 @@ cynagora_agent_create(
 		return -EPERM;
 
 	/* check name */
-	length = agent_check_name(name);
+	length = (size_t)agent_check_name(name);
 	if (!length)
 		return -EINVAL;
 

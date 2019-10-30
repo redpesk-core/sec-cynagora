@@ -31,20 +31,21 @@
  * @param name the name to check
  * @return the length of the name or zero if invalid
  */
-size_t
+uint8_t
 agent_check_name(
 	const char *name
 ) {
 	char c;
-	size_t length = 0;
+	uint8_t length = 0;
+
 	if (name) {
 		while ((c = name[length])) {
-			if (length > UINT8_MAX
-			 || (!isalnum(c) && !strchr("@_-$", c))) {
+			if (!isalnum(c) && !strchr("@_-$", c)) {
 				length = 0;
 				break;
 			}
-			length++;
+			if (!++length)
+				break;
 		}
 	}
 	return length;

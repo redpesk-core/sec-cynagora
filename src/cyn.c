@@ -367,17 +367,27 @@ static
 struct agent *
 search_agent(
 	const char *name,
-	size_t length,
+	uint8_t length,
 	struct agent ***ppprev
 ) {
 	struct agent *it, **pprev;
 
 	pprev = &agents;
-	while((it = *pprev)
-	  &&  ((uint8_t)length != it->len || memcmp(it->name, name, length)))
+	it = agents;
+	while(it && length > it->len) {
 		pprev = &it->next;
+		it = it->next;
+	}
+	while(it && length == it->len) {
+		if (!memcmp(it->name, name, length)) {
+			*ppprev = pprev;
+			return it;
+		}
+		pprev = &it->next;
+		it = it->next;
+	}
 	*ppprev = pprev;
-	return it;
+	return NULL;
 }
 
 /**
@@ -392,12 +402,15 @@ struct agent*
 required_agent(
 	const char *value
 ) {
-	struct agent **pprev;
+	struct agent **pprev, *agent;
 	size_t length;
 
 	for (length = 0 ; length <= UINT8_MAX && value[length] ; length++)
-		if (value[length] == AGENT_SEPARATOR_CHARACTER)
-			return search_agent(value, length, &pprev);
+		if (value[length] == AGENT_SEPARATOR_CHARACTER) {
+			agent = search_agent(value, (uint8_t)length, &pprev);
+			if (agent)
+				return agent;
+		}
 	return NULL;
 }
 
@@ -565,7 +578,7 @@ cyn_agent_add(
 	void *closure
 ) {
 	struct agent *agent, **pprev;
-	size_t length;
+	uint8_t length;
 
 	/* compute and check name */
 	length = agent_check_name(name);
@@ -578,16 +591,16 @@ cyn_agent_add(
 		return -EEXIST;
 
 	/* allocates the memory */
-	agent = malloc(sizeof *agent + 1 + length);
+	agent = malloc(sizeof *agent + 1 + (size_t)length);
 	if (!agent)
 		return -ENOMEM;
 
 	/* initialize the agent */
-	agent->next = 0;
 	agent->agent_cb = agent_cb;
 	agent->closure = closure;
-	agent->len = (uint8_t)length;
-	memcpy(agent->name, name, length + 1);
+	agent->len = length;
+	memcpy(agent->name, name, 1 + (size_t)length);
+	agent->next = *pprev;
 	*pprev = agent;
 
 	return 0;
@@ -599,7 +612,7 @@ cyn_agent_remove_by_name(
 	const char *name
 ) {
 	struct agent *agent, **pprev;
-	size_t length;
+	uint8_t length;
 
 	/* compute and check name length */
 	length = agent_check_name(name);
