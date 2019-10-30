@@ -8,10 +8,15 @@ Introduction
 
  - c->s:    from client to cynagora server
  - s->c:    from cynagora server to client
- - EXPIRE:  if missing, means forever
-            if positive, a number of second since EPOCH, invalid after it
  - CACHEID: a 32 bits positive integer
  - ID:      a string
+ - EXPIRE:  if missing, means: can cache forever
+            if '-', means: don't cache
+            if TIMESPEC (see below), means: valid until given relative time
+ - SEXPIRE: Same as EXPIRE but also allows TIMESPEC prefixed with '-', meaning
+            valid until given relative time and don't cache
+
+For TIMESPEC see notes.
 
 Messages
 --------
@@ -49,6 +54,8 @@ synopsis:
 	c->s test ID CLIENT SESSION USER PERMISSION
 	s->c (ack|yes|no) ID [EXPIRE]
 
+Check whether the permission is granted (yes) or not granted (no)
+or undecidable without querying an agent (ack).
 
 
 ### check a permission
@@ -58,6 +65,8 @@ synopsis:
 	c->s check ID CLIENT SESSION USER PERMISSION
 	s->c (yes|no) ID [EXPIRE]
 
+Check whether the permission is granted (yes) or not granted (no) and invoke
+agent if needed.
 
 
 ### enter critical (admin)
@@ -67,12 +76,18 @@ synopsis:
 	c->s enter
 	s->c done
 
+Start modifications (prior to set or drop).
+
+
 ### leave critical (admin)
 
 synopsis:
 
 	c->s leave [commit|rollback]
 	s->c done|error ...
+
+Terminate modifications and commit it (commit) or cancel it (rollback).
+
 
 ### erase (admin)
 
@@ -81,21 +96,30 @@ synopsis:
 	c->s drop CLIENT SESSION USER PERMISSION
 	s->c done|error ...
 
+Drop the rule matching the given filter.
+
+
 ### set (admin)
 
 synopsis:
 
-	c->s set CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
+	c->s set CLIENT SESSION USER PERMISSION VALUE [SEXPIRE]
 	s->c done|error ...
+
+Create the rule as given.
+
 
 ### list permissions (admin):
 
 synopsis:
 
 	c->s get CLIENT SESSION USER PERMISSION
-	s->c item CLIENT SESSION USER PERMISSION VALUE [EXPIRE]
+	s->c item CLIENT SESSION USER PERMISSION VALUE [SEXPIRE]
 	s->c ...
 	s->c done
+
+List the rules matching the given filter.
+
 
 ### logging set/get (admin)
 
@@ -104,12 +128,18 @@ synopsis:
 	c->s log [on|off]
 	s->c done (on|off)
 
+Tell to log or not the queries or query the current state.
+
+
 ### register agent (agent)
 
 synopsis:
 
 	c->s agent NAME
 	s->c done|error ...
+
+Register the agent of NAME
+
 
 ### ask agent (agent):
 
@@ -118,6 +148,9 @@ synopsis:
 	s->c ask ASKID NAME VALUE CLIENT SESSION USER PERMISSION
 	c->s reply ASKID ([yes|no] [always|session|one-time|EXPIRE])
 
+Receive an agent resolution request.
+
+
 ### sub check (agent):
 
 synopsis:
@@ -125,8 +158,23 @@ synopsis:
 	c->s sub ASKID ID CLIENT SESSION USER PERMISSION
 	s->c (yes|no) ID [EXPIRE]
 
+Make a check in the context of an agent resolution.
+
+
 Notes
 -----
+
+### TIMESPEC
+
+The TIMESPEC describe a number of seconds in the futur relative to now.
+It can be a simple decimal integer. I can also use letters to designate
+year (letter `y`), week (letter `w`), day (letter `d`), hour (letter `h`),
+minute (letter `m`), second (letter `s`).
+
+Examples:
+
+	- 15d
+
 
 ### CACHEID
 

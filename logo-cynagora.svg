@@ -17,6 +17,8 @@
    sodipodi:docname="logo-cynagora.svg"
    inkscape:output_extension="org.inkscape.output.svg.inkscape"
    version="1.0">
+  <title
+     id="title36">logo cynagora</title>
   <metadata
      id="metadata28">
     <rdf:RDF>
@@ -25,7 +27,19 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title>logo cynagora</dc:title>
+        <dc:creator>
+          <cc:Agent>
+            <dc:title>manassas</dc:title>
+          </cc:Agent>
+        </dc:creator>
+        <dc:rights>
+          <cc:Agent>
+            <dc:title>CC-BY-SA-3.0</dc:title>
+          </cc:Agent>
+        </dc:rights>
+        <cc:license
+           rdf:resource="https://creativecommons.org/licenses/by/3.0/legalcode" />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -43,8 +57,8 @@
      id="base"
      showgrid="false"
      inkscape:zoom="1.1621212"
-     inkscape:cx="156.58139"
-     inkscape:cy="13.07222"
+     inkscape:cx="-21.971415"
+     inkscape:cy="10.060486"
      inkscape:window-x="0"
      inkscape:window-y="31"
      inkscape:current-layer="layer3"

@@ -34,10 +34,31 @@ In facts, the keys can be used with other values that the one primarily
 designed. For example, using the pid for the session is not safe. So it
 can be replaced with a string really identifying a session.
 
-The database of *cynagora* is made of rules that set permissions 
+The database of *cynagora* is made of rules. Each cynagora rule is
+a tuple of five strings and one integer:
+
+    (CLIENT, SESSION, USER, PERMISSION, RESULT, EXPIRE).
+
+The strings `CLIENT`, `SESSION`, `USER`, `PERMISSION` are arbitrary.
+They can also have the special value `*` (STAR) that means that the rule
+matches any value. Otherwise, the rule matches a query only if the
+value matches the string of the rule. That match is:
+
+  - case sensitive for CLIENT, SESSION, USER
+  - case insensitive for PERMISSION
+
+The string RESULT has basically one of the two values `yes` or `no`. It can
+also be an agent item that will imply a request to an existing agent.
 
 Cynagora implements handles differently the rules targeting any sessions
-and the rules targeting specific sessions. 
+and the rules targeting specific sessions. The rules that have SESSION equals
+to `*` are stored persistentely in the filesystem. That rule whose SESSION
+is not STAR are volatile and only reside in memory.
+
+Expiration is a 64 bits signed integer that express the date of expiration
+of the rule in epoch (number of seconds since 1 January 1970). The special
+value 0 means no expiration, permanent rule. The negative values are used
+to avoid caching, their expiration value is given by the formula `-(1 + x)`.
 
 ## API Overview
 
@@ -56,11 +77,23 @@ Cynagora is a refit of [cynara][2] that allows inclusion of expirations.
 It implements the same permission database by principle but the details
 changes.
 
+As a possible replacement, cynagora can supply a simple compatibility
+library that offers light legacy API of cynara. This would allow to run
+simple cynara clients (admin/check/async-check but not agents) without
+changes.
+
 # Compiling
 
-The compilation use the build system *cmake*. Cynagora has no dependencies.
-However, it can be built for using it with systemd activation. In that
+Cynagora is written in language C.
+
+Cynagora only depends of _libcap_ that is used by the cynagora server.
+
+The server can be built for using systemd socket activation. In that
 case it requires _lisystemd_.
+
+## Compiling with cmake and make
+
+The compilation use the build system *cmake*. 
 
 Example for compiling and installing cynagora:
 
@@ -73,9 +106,6 @@ Options to pass to cmake:
 
  - *WITH_SYSTEMD*: flag for generating systemd compatible units (default ON)
 
- - *WITH_CYNARA_COMPAT*: flag for producing cynara compatibility artifacts
-   (default OFF)
-
  - *DEFAULT_DB_DIR*: path of the directory for the database (default
    ${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynagora)
 
@@ -85,15 +115,37 @@ Options to pass to cmake:
  - *DEFAULT_INIT_FILE*: path to the initialization file to use (default 
    ${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.initial)
 
+ - *WITH_CYNARA_COMPAT*: flag for producing cynara compatibility artifacts
+   (default OFF)
+
+ - *DIRECT_CYNARA_COMPAT*: if true, dont use the shared client library to
+   access cynara server but use the static library instead, avoid a dependency
+   to the shared library.
+
 Example:
 
 	cmake -DCMAKE_INSTALL_PREFIX=~/.local -DWITH_SYSTEMD=OFF ..
+	make install
 
-# License
+## Compiling with meson and ninja
 
-Cynagora is licensed under a Apache License Version 2.0, January 2004.
-Available on Apache [website][3] or in LICENSE file.
+You can compile using meson. Example:
+
+	meson --prefix ~/.local -Dwith-systemd=false setup build
+	ninja -C build install
+
+Option are the same that above except that they are in lower case with dash:
+*with-systemd*, *with-cynara-compat*, *direct-cynara-compat*.
+
+# Licenses
+
+Cynagora is licensed under a Apache License Version 2.0, January 2004,
+available on [Apache website][3] or in Apache-2.0 file.
+
+Logo is licensed under Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0),
+avaliable on [creative commons website][4] or in CC-BY-SA-3.0 file.
 
 [1]: https://git.automotivelinux.org/src/cynagora/
 [2]: https://wiki.tizen.org/wiki/Security:Cynara
 [3]: https://www.apache.org/licenses/LICENSE-2.0
+[4]: https://creativecommons.org/licenses/by-sa/3.0/
