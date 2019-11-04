@@ -48,7 +48,17 @@ value matches the string of the rule. That match is:
   - case insensitive for PERMISSION
 
 The string RESULT has basically one of the two values `yes` or `no`. It can
-also be an agent item that will imply a request to an existing agent.
+also be an agent item that will imply a request to an existing agent (see
+file agent.md for details on agents).
+
+When more than one rule match the query, only one is selected to apply using
+the following rules:
+
+  1. the rules that matched with the less STAR as possible are selected (it
+     means that selected rules must matche more precisely the request)
+  2. then from the rules selected above the rule that matches more exactly
+     the keys in the following order of priority: session, user, client,
+     permission
 
 Cynagora implements handles differently the rules targeting any sessions
 and the rules targeting specific sessions. The rules that have SESSION equals
@@ -60,14 +70,17 @@ of the rule in epoch (number of seconds since 1 January 1970). The special
 value 0 means no expiration, permanent rule. The negative values are used
 to avoid caching, their expiration value is given by the formula `-(1 + x)`.
 
+Cynagora allows tiers programs to add features through the agent mechanism.
+The file `agent.md` explains it more in detail.
+
 ## API Overview
 
 CYNAGORA comes with 2 APIs:
 
  - a protocol API that can be easily implemented in most languages
-   (see src/cynagora-protocol.txt)
+   (see `protocol.md`)
 
- - a client C library (see src/cynagora.h)
+ - a client C library (see `src/cynagora.h`)
 
 It also provide optionally for compatibility a subset of the C client libraries.
 
