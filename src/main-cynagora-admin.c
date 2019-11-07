@@ -308,6 +308,7 @@ static char *str[40];
 static int nstr;
 static int pending;
 static int echo;
+static int last_status;
 
 cynagora_key_t key;
 cynagora_value_t value;
@@ -457,7 +458,7 @@ int do_list(int ac, char **av)
 	rc = get_csup(ac, av, &uc, "#");
 	if (rc == 0) {
 		memset(&lr, 0, sizeof lr);
-		rc = cynagora_get(cynagora, &key, listcb, &lr);
+		last_status = rc = cynagora_get(cynagora, &key, listcb, &lr);
 		if (rc < 0)
 			fprintf(stderr, "error %s\n", strerror(-rc));
 		else {
@@ -492,9 +493,9 @@ int do_set(int ac, char **av)
 
 	rc = get_csupve(ac, av, &uc, "*");
 	if (rc == 0)
-		rc = cynagora_enter(cynagora);
+		last_status = rc = cynagora_enter(cynagora);
 	if (rc == 0) {
-		rc = cynagora_set(cynagora, &key, &value);
+		last_status = rc = cynagora_set(cynagora, &key, &value);
 		cynagora_leave(cynagora, !rc);
 	}
 	if (rc < 0)
@@ -508,9 +509,9 @@ int do_drop(int ac, char **av)
 
 	rc = get_csup(ac, av, &uc, "#");
 	if (rc == 0)
-		rc = cynagora_enter(cynagora);
+		last_status = rc = cynagora_enter(cynagora);
 	if (rc == 0) {
-		rc = cynagora_drop(cynagora, &key);
+		last_status = rc = cynagora_drop(cynagora, &key);
 		cynagora_leave(cynagora, !rc);
 	}
 	if (rc < 0)
@@ -524,7 +525,7 @@ int do_scheck(int ac, char **av, int (*f)(cynagora_t*,const cynagora_key_t*,int)
 
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
-		rc = f(cynagora, &key, 0);
+		last_status = rc = f(cynagora, &key, 0);
 		if (rc > 0)
 			fprintf(stdout, "allowed\n");
 		else if (rc == 0)
@@ -543,7 +544,7 @@ int do_cache_check(int ac, char **av)
 
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
-		rc = cynagora_cache_check(cynagora, &key);
+		last_status = rc = cynagora_cache_check(cynagora, &key);
 		if (rc > 0)
 			fprintf(stdout, "allowed\n");
 		else if (rc == 0)
@@ -574,7 +575,7 @@ int do_check(int ac, char **av, bool simple)
 	rc = get_csup(ac, av, &uc, NULL);
 	if (rc == 0) {
 		pending++;
-		rc = cynagora_async_check(cynagora, &key, 0, simple, check_cb, NULL);
+		last_status = rc = cynagora_async_check(cynagora, &key, 0, simple, check_cb, NULL);
 		if (rc < 0) {
 			fprintf(stderr, "error %s\n", strerror(-rc));
 			pending--;
@@ -597,7 +598,7 @@ int do_log(int ac, char **av)
 			return uc;
 		}
 	}
-	rc = cynagora_log(cynagora, on, off);
+	last_status = rc = cynagora_log(cynagora, on, off);
 	if (rc < 0)
 		fprintf(stderr, "error %s\n", strerror(-rc));
 	else
@@ -687,7 +688,7 @@ int do_any(int ac, char **av)
 	return 0;
 }
 
-void do_all(int ac, char **av)
+void do_all(int ac, char **av, int quit)
 {
 	int rc;
 
@@ -697,12 +698,14 @@ void do_all(int ac, char **av)
 		fprintf(stdout, "\n");
 	}
 	while(ac) {
+		last_status = 0;
 		rc = do_any(ac, av);
-		if (rc <= 0)
+		if (quit && (rc <= 0 || last_status < 0))
 			exit(1);
 		ac -= rc;
 		av += rc;
 	}
+
 }
 
 int async_ctl(void *closure, int op, int fd, uint32_t events)
@@ -798,7 +801,7 @@ int main(int ac, char **av)
 	}
 
 	if (optind < ac) {
-		do_all(ac - optind, av + optind);
+		do_all(ac - optind, av + optind, 1);
 		return 0;
 	}
 
@@ -820,7 +823,7 @@ int main(int ac, char **av)
 					str[nstr = 0] = strtok(buffer, " \t");
 					while(str[nstr])
 						str[++nstr] = strtok(NULL, " \t");
-					do_all(nstr, str);
+					do_all(nstr, str, 0);
 					bufill -= (size_t)(p - buffer);
 					if (!bufill)
 						break;

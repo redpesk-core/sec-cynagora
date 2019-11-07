@@ -23,7 +23,7 @@ for((y = 0 ; y < 10 ; y++)); do
     sleep .05
   done
 done |
-valgrind cynagoradm -c 2000 -e -s $d/cynagora.check
+valgrind cynagora-admin -c 2000 -e -s $d/cynagora.check
 echo ----------- STOP ------------------
 
 # terminate
