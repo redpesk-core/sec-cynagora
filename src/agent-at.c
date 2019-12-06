@@ -29,6 +29,9 @@
 #include "data.h"
 #include "cyn.h"
 
+static const char separator = ';';
+static const char escape = '%';
+
 /**
  * Parse the spec to extract the derived key to ask.
  *
@@ -58,12 +61,12 @@ parse(
 		/* compute value of the derived field */
 		inf = iout;
 		while(*spec) {
-			if (*spec == ':' && ikey < 3) {
+			if (*spec == separator && ikey < 3) {
 				/* : is the separator of key's items */
 				spec++;
 				break; /* next key */
 			}
-			if (!(*spec == '%' && spec[1])) {
+			if (!(*spec == escape && spec[1])) {
 				/* not a % substitution mark */
 				if (iout < szbuf)
 					buffer[iout] = *spec;
@@ -95,10 +98,10 @@ parse(
 				}
 				if (!sub) {
 					/* no substitution */
-					if (spec[1] != ':' && spec[1] != '%') {
+					if (spec[1] != separator && spec[1] != escape) {
 						/* only escape % and : */
 						if (iout < szbuf)
-							buffer[iout] = '%';
+							buffer[iout] = escape;
 						iout++;
 					}
 					if (iout < szbuf)

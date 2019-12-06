@@ -10,6 +10,6 @@
 #--------------------------------------------------------------------
 # User "0" and clients "System" is in the group "@ADMIN"
 #--------------------------------------------------------------------
-*      * 0 * @:%c:%s:@ADMIN:%p forever
-System * * * @:%c:%s:@ADMIN:%p forever
+*      * 0 * @:%c;%s;@ADMIN;%p forever
+System * * * @:%c;%s;@ADMIN;%p forever
 
