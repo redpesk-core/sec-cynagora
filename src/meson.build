@@ -79,7 +79,7 @@ executable('cynagorad', srvsrcs,
       '-DDEFAULT_DB_DIR="' + dbdir + '"',
       '-DDEFAULT_SOCKET_DIR="' + socketdir + '"',
       '-DDEFAULT_INIT_FILE="' + init_file + '"',
-      get_option('with-cynara-compat') ? '-DWITH_SYSTEMD_ACTIVATION' : '-DWITHOUT_SYSTEMD_ACTIVATION'
+      get_option('with-systemd') ? '-DWITH_SYSTEMD' : '-DWITHOUT_SYSTEMD'
    ],
    dependencies: [ sysd, cap ],
    link_with: corelib,

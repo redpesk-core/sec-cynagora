@@ -35,6 +35,7 @@
 #include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #include "data.h"
 #include "prot.h"
@@ -1008,6 +1009,7 @@ cyn_server_create(
 	const char *check_socket_spec,
 	const char *agent_socket_spec
 ) {
+	mode_t um;
 	cyn_server_t *srv;
 	int rc;
 
@@ -1030,7 +1032,9 @@ cyn_server_create(
 
 	/* create the admin server socket */
 	admin_socket_spec = cyn_get_socket_admin(admin_socket_spec);
+	um = umask(017);
 	srv->admin.fd = socket_open(admin_socket_spec, 1);
+	umask(um);
 	if (srv->admin.fd < 0) {
 		rc = -errno;
 		fprintf(stderr, "can't create admin server socket %s: %m\n", admin_socket_spec);
@@ -1049,7 +1053,9 @@ cyn_server_create(
 
 	/* create the check server socket */
 	check_socket_spec = cyn_get_socket_check(check_socket_spec);
+	um = umask(011);
 	srv->check.fd = socket_open(check_socket_spec, 1);
+	umask(um);
 	if (srv->check.fd < 0) {
 		rc = -errno;
 		fprintf(stderr, "can't create check server socket %s: %m\n", check_socket_spec);
@@ -1068,7 +1074,9 @@ cyn_server_create(
 
 	/* create the agent server socket */
 	agent_socket_spec = cyn_get_socket_agent(agent_socket_spec);
+	um = umask(017);
 	srv->agent.fd = socket_open(agent_socket_spec, 1);
+	umask(um);
 	if (srv->agent.fd < 0) {
 		rc = -errno;
 		fprintf(stderr, "can't create agent server socket %s: %m\n", agent_socket_spec);

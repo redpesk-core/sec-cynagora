@@ -96,7 +96,7 @@ target_compile_definitions(cynagorad PRIVATE
 	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
 )
 if(WITH_SYSTEMD)
-	target_compile_definitions(cynagorad PRIVATE WITH_SYSTEMD_ACTIVATION)
+	target_compile_definitions(cynagorad PRIVATE WITH_SYSTEMD)
 	target_link_libraries(cynagorad ${libsystemd_LDFLAGS} ${libsystemd_LINK_LIBRARIES})
 	target_include_directories(cynagorad PRIVATE ${libsystemd_INCLUDE_DIRS})
 	target_compile_options(cynagorad PRIVATE ${libsystemd_CFLAGS})

@@ -19,12 +19,13 @@
 set(SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/systemd/system"
                   CACHE PATH "Path to systemd system unit files")
 
+CONFIGURE_FILE(cynagora.service.in            cynagora.service @ONLY)
 CONFIGURE_FILE(cynagora-admin.socket.in       cynagora-admin.socket @ONLY)
 CONFIGURE_FILE(cynagora-check.socket.in       cynagora-check.socket @ONLY)
 CONFIGURE_FILE(cynagora-agent.socket.in       cynagora-agent.socket @ONLY)
 
 INSTALL(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/cynagora.service
+    ${CMAKE_CURRENT_BINARY_DIR}/cynagora.service
     ${CMAKE_CURRENT_SOURCE_DIR}/cynagora.target
     ${CMAKE_CURRENT_BINARY_DIR}/cynagora-admin.socket
     ${CMAKE_CURRENT_BINARY_DIR}/cynagora-check.socket

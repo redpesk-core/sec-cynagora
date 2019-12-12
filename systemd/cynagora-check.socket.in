@@ -1,6 +1,8 @@
 [Socket]
 FileDescriptorName=check
 ListenStream=@DEFAULT_SOCKET_DIR@/cynagora.check
+SocketUser=@USER@
+SocketGroup=@GROUP@
 SocketMode=0666
 SmackLabelIPIn=*
 SmackLabelIPOut=@

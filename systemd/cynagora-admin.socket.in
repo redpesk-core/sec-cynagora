@@ -1,7 +1,9 @@
 [Socket]
 FileDescriptorName=admin
 ListenStream=@DEFAULT_SOCKET_DIR@/cynagora.admin
-SocketMode=0600
+SocketUser=@USER@
+SocketGroup=@GROUP@
+SocketMode=0660
 SmackLabelIPIn=@
 SmackLabelIPOut=@
 

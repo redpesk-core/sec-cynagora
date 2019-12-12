@@ -44,6 +44,9 @@ set(CYNAGORA_SOVERSION ${PROJECT_VERSION_MAJOR})
 option(WITH_SYSTEMD       "should include systemd compatibility" ON)
 option(WITH_CYNARA_COMPAT "produce artifacts for compatibility with cynara" OFF)
 
+set(USER  cynagora CACHE STRING "user of the daemon")
+set(GROUP cynagora CACHE STRING "group of the daemon")
+
 set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynagora"
 	CACHE PATH "directory path of the database")
 set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynagora"

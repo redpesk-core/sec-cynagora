@@ -38,7 +38,7 @@
 #include <sys/file.h>
 #include <sys/capability.h>
 
-#if defined(WITH_SYSTEMD_ACTIVATION)
+#if defined(WITH_SYSTEMD)
 #include <systemd/sd-daemon.h>
 #endif
 
@@ -82,11 +82,7 @@
 
 static
 const char
-shortopts[] = "d:g:hi:lmMOoS:u:v"
-#if defined(WITH_SYSTEMD_ACTIVATION)
-	"s"
-#endif
-;
+shortopts[] = "d:g:hi:lmMOoS:u:v";
 
 static
 const struct option
@@ -101,9 +97,6 @@ longopts[] = {
 	{ "own-db-dir", 0, NULL, _OWNDBDIR_ },
 	{ "own-socket-dir", 0, NULL, _OWNSOCKDIR_ },
 	{ "socketdir", 1, NULL, _SOCKETDIR_ },
-#if defined(WITH_SYSTEMD_ACTIVATION)
-	{ "systemd", 0, NULL, _SYSTEMD_ },
-#endif
 	{ "user", 1, NULL, _USER_ },
 	{ "version", 0, NULL, _VERSION_ },
 	{ NULL, 0, NULL, 0 }
@@ -116,9 +109,6 @@ helptxt[] =
 	"usage: cynagorad [options]...\n"
 	"\n"
 	"otpions:\n"
-#if defined(WITH_SYSTEMD_ACTIVATION)
-	"	-s, --systemd         socket activation by systemd\n"
-#endif
 	"	-u, --user xxx        set the user\n"
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
@@ -161,7 +151,6 @@ int main(int ac, char **av)
 	int help = 0;
 	int version = 0;
 	int error = 0;
-	int systemd = 0;
 	int uid = -1;
 	int gid = -1;
 	const char *init = NULL;
@@ -215,11 +204,6 @@ int main(int ac, char **av)
 		case _SOCKETDIR_:
 			socketdir = optarg;
 			break;
-#if defined(WITH_SYSTEMD_ACTIVATION)
-		case _SYSTEMD_:
-			systemd = 1;
-			break;
-#endif
 		case _USER_:
 			user = optarg;
 			break;
@@ -243,11 +227,6 @@ int main(int ac, char **av)
 	}
 	if (error)
 		return 1;
-	if (systemd && (socketdir || makesockdir)) {
-		fprintf(stderr, "can't set options --systemd and --%s together\n",
-			socketdir ? "socketdir" : "make-socket-dir");
-		return 1;
-	}
 
 	/* set the defaults */
 	dbdir = dbdir ?: DEFAULT_DB_DIR;
@@ -261,15 +240,30 @@ int main(int ac, char **av)
 
 	/* compute socket specs */
 	spec_socket_admin = spec_socket_check = spec_socket_agent = 0;
-	if (systemd) {
-		spec_socket_admin = strdup("sd:admin");
-		spec_socket_check = strdup("sd:check");
-		spec_socket_agent = strdup("sd:agent");
-	} else {
-		rc = asprintf(&spec_socket_admin, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_admin_socket_base);
-		rc = asprintf(&spec_socket_check, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_check_socket_base);
-		rc = asprintf(&spec_socket_agent, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_agent_socket_base);
+#if defined(WITH_SYSTEMD)
+	{
+		char **names = 0;
+		rc = sd_listen_fds_with_names(0, &names);
+		if (rc >= 0 && names) {
+			for (rc = 0 ; names[rc] ; rc++) {
+				if (!strcmp(names[rc], "admin"))
+					spec_socket_admin = strdup("sd:admin");
+				else if (!strcmp(names[rc], "check"))
+					spec_socket_check = strdup("sd:check");
+				else if (!strcmp(names[rc], "agent"))
+					spec_socket_agent = strdup("sd:agent");
+				free(names[rc]);
+			}
+			free(names);
+		}
 	}
+#endif
+	if (!spec_socket_admin)
+		rc = asprintf(&spec_socket_admin, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_admin_socket_base);
+	if (!spec_socket_check)
+		rc = asprintf(&spec_socket_check, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_check_socket_base);
+	if (!spec_socket_agent)
+		rc = asprintf(&spec_socket_agent, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_agent_socket_base);
 	if (!spec_socket_admin || !spec_socket_check || !spec_socket_agent) {
 		fprintf(stderr, "can't make socket paths\n");
 		return 1;
@@ -361,9 +355,8 @@ int main(int ac, char **av)
 	}
 
 	/* ready ! */
-#if defined(WITH_SYSTEMD_ACTIVATION)
-	if (systemd)
-		sd_notify(0, "READY=1");
+#if defined(WITH_SYSTEMD)
+	sd_notify(0, "READY=1");
 #endif
 
 	/* serve */

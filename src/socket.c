@@ -32,7 +32,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#if defined(WITH_SYSTEMD_ACTIVATION)
+#if defined(WITH_SYSTEMD)
 #include <systemd/sd-daemon.h>
 #endif
 
@@ -212,7 +212,7 @@ static int open_tcp(const char *spec, int server)
  */
 static int open_systemd(const char *spec)
 {
-#if defined(WITH_SYSTEMD_ACTIVATION)
+#if defined(WITH_SYSTEMD)
 	char **names;
 	int fd = -1;
 	int c = sd_listen_fds_with_names(0, &names);
