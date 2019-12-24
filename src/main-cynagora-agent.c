@@ -76,11 +76,11 @@ helptxt[] =
 	"usage: cynagora-agent [options]... name [program [args]...]\n"
 	"\n"
 	"options:\n"
-	"	-s, --socket xxx      set the base xxx for sockets\n"
-	"       -p, --piped           replace stdin/out by out/in of program"
-	"	-h, --help            print short help and exit\n"
-	"	-H, --long-help       print long help and exit\n"
-	"	-v, --version         print the version and exit\n"
+	"   -s, --socket xxx      set the base xxx for sockets\n"
+	"   -p, --piped           replace stdin/out by out/in of program\n"
+	"   -h, --help            print short help and exit\n"
+	"   -H, --long-help       print long help and exit\n"
+	"   -v, --version         print the version and exit\n"
 	"\n"
 ;
 
