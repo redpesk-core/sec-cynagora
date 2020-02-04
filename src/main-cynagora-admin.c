@@ -459,24 +459,23 @@ int do_list(int ac, char **av)
 	if (rc == 0) {
 		memset(&lr, 0, sizeof lr);
 		last_status = rc = cynagora_get(cynagora, &key, listcb, &lr);
-		if (rc < 0)
-			fprintf(stderr, "error %s\n", strerror(-rc));
-		else {
-			if (lr.count) {
-				it = lr.head = listresult_sort(lr.count, lr.head);
-				while(it) {
-					fprintf(stdout, "%-*s %-*s %-*s %-*s %-*s %-*s\n",
-						(int)lr.lengths[0], it->items[0],
-						(int)lr.lengths[1], it->items[1],
-						(int)lr.lengths[2], it->items[2],
-						(int)lr.lengths[3], it->items[3],
-						(int)lr.lengths[4], it->items[4],
-						(int)lr.lengths[5], it->items[5]);
-					it = it->next;
-				}
+		if (lr.count) {
+			it = lr.head = listresult_sort(lr.count, lr.head);
+			while(it) {
+				fprintf(stdout, "%-*s %-*s %-*s %-*s %-*s %-*s\n",
+					(int)lr.lengths[0], it->items[0],
+					(int)lr.lengths[1], it->items[1],
+					(int)lr.lengths[2], it->items[2],
+					(int)lr.lengths[3], it->items[3],
+					(int)lr.lengths[4], it->items[4],
+					(int)lr.lengths[5], it->items[5]);
+				it = it->next;
 			}
-			fprintf(stdout, "%d entries found\n", lr.count);
 		}
+		if (rc < 0)
+			fprintf(stderr, "error %d: %s\n", -rc, strerror(-rc));
+		else
+			fprintf(stdout, "%d entries found\n", lr.count);
 		/* free list */
 		while(lr.head) {
 			it = lr.head;
@@ -679,13 +678,13 @@ int do_any(int ac, char **av)
 	}
 
 	if (!strcmp(av[0], "quit"))
-		return 0;
+		exit(0);
 
 	if (!strcmp(av[0], "help") || !strcmp(av[0], "?"))
 		return do_help(ac, av);
 
-	fprintf(stderr, "unknown command %s\n", av[0]);
-	return 0;
+	fprintf(stderr, "unknown command %s (try help)\n", av[0]);
+	return 1;
 }
 
 void do_all(int ac, char **av, int quit)

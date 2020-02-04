@@ -383,7 +383,7 @@ get_reply(
  * @param block
  *
  * @return  the count of fields greater than 0 or a negative -errno value
- *          or -EAGAIN if nothing and block == 0
+ *          or -EAGAIN if nothing and block == false
  *          or -EPIPE if broken link
  */
 static
