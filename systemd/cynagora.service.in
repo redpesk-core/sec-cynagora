@@ -1,7 +1,6 @@
 [Unit]
 Description=Cynagora service
 Requires=afm-system-setup.service
-After=afm-system-setup.service
 
 [Service]
 ExecStart=/usr/bin/cynagorad --user @USER@ --group @GROUP@ --make-db-dir --own-db-dir
