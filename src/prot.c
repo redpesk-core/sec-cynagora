@@ -387,7 +387,8 @@ prot_put_end(
 		rc = 0;
 	else {
 		rc = buf_put_car(&prot->outbuf, RECORD_SEPARATOR);
-		prot->outfields = 0;
+		if (rc == 0)
+			prot->outfields = 0;
 	}
 	return rc;
 }
@@ -440,10 +441,10 @@ prot_put(
 	int rc;
 
 	rc = prot_put_fields(prot, count, fields);
+	if (!rc)
+		rc = prot_put_end(prot);
 	if (rc)
 		prot_put_cancel(prot);
-	else
-		rc = prot_put_end(prot);
 	return rc;
 }
 
