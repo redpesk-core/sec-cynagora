@@ -34,8 +34,7 @@ static const int HOUR = 60*60;
 static const int DAY = 24*60*60;
 static const int WEEK = 7*24*60*60;
 static const int YEAR = 365*24*60*60 + 24*60*60/4; /* average includes leap */
-static const time_t TMIN = (time_t)1 << ((CHAR_BIT * sizeof(time_t)) - 1);
-static const time_t TMAX = ~TMIN;
+static const time_t TMAX = ~((time_t)1 << ((CHAR_BIT * sizeof(time_t)) - 1));
 
 /** add positives x and y with saturation */
 static time_t pt_add(time_t x, time_t y)
