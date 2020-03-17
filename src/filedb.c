@@ -54,7 +54,7 @@ struct rule
 	uint32_t value;
 
 	/**  expiration as a couple of uint32 to ensure compacity */
-	uint32_t expire[2];
+	int64_t expire; /* natural alignment */
 };
 typedef struct rule rule_t;
 
@@ -135,7 +135,7 @@ set_expire(
 	rule_t *rule,
 	time_t value
 ) {
-	*(int64_t*)rule->expire = (int64_t)value;
+	rule->expire = (int64_t)value;
 }
 
 /**
@@ -149,7 +149,7 @@ time_t
 get_expire(
 	rule_t *rule
 ) {
-	return (time_t)*(int64_t*)rule->expire;
+	return (time_t)rule->expire;
 }
 
 /**
