@@ -126,7 +126,7 @@ bool txt2exp(const char *txt, time_t *time_out, bool absolute)
 /* see expire.h */
 size_t exp2txt(time_t expire, bool absolute, char *buffer, size_t buflen)
 {
-	char b[100];
+	char b[100] = { 0 };
 	size_t l, n;
 
 	n = 0;
