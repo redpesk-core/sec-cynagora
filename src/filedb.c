@@ -710,7 +710,7 @@ gc_add(
 	if (gc_dig(array, count, item, &index))
 		return count; /* already in */
 
-	/* shift the elemetns above index */
+	/* shift the elements above index */
 	i = count;
 	while (i > index) {
 		array[i] = array[i - 1];
@@ -847,6 +847,8 @@ gc_itf(
 	qsort_r(renum, new_count, sizeof *renum, cmpnames, filedb);
 
 	/* set as changed */
+	filedb->frules.saved = uuidlen;
+	filedb->fnames.saved = uuidlen;
 	filedb->is_changed = true;
 }
 
