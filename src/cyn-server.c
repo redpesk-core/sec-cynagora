@@ -246,8 +246,10 @@ putx(
 	va_start(l, cli);
 	p = va_arg(l, const char *);
 	while (p) {
-		if (n == MAX_PUTX_ITEMS)
+		if (n == MAX_PUTX_ITEMS) {
+			va_end(l);
 			return -EINVAL;
+		}
 		fields[n++] = p;
 		p = va_arg(l, const char *);
 	}

@@ -475,6 +475,7 @@ prot_putx(
 		prot_put_cancel(prot);
 	else
 		rc = prot_put_end(prot);
+	va_end(l);
 	return rc;
 }
 
