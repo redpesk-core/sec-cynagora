@@ -132,7 +132,7 @@ helptxt[] =
 static
 const char
 versiontxt[] =
-	"cynagorad version 1.99.99\n"
+	"cynagorad version "VERSION"\n"
 ;
 
 static int isid(const char *text);

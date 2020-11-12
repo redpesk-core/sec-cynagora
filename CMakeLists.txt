@@ -16,12 +16,12 @@
 # limitations under the License.
 ###########################################################################
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.12)
 
 project(cynagora
 	DESCRIPTION "Secured permission database for applications"
 	HOMEPAGE_URL "https://gerrit.automotivelinux.org/gerrit/gitweb?p=src/cynagora.git;a=summary"
-	VERSION 2.0
+	VERSION 2.1
 	LANGUAGES C
 )
 
@@ -63,6 +63,8 @@ add_compile_options(-Werror=maybe-uninitialized)
 add_compile_options(-Werror=implicit-function-declaration)
 add_compile_options(-ffunction-sections -fdata-sections)
 #add_compile_options(-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.)
+
+add_compile_definitions(VERSION="${PROJECT_VERSION}")
 
 ###########################################################################
 

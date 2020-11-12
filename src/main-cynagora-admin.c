@@ -84,7 +84,7 @@ helptxt[] =
 static
 const char
 versiontxt[] =
-	"cynagora-admin version 1.99.99\n"
+	"cynagora-admin version "VERSION"\n"
 ;
 
 static

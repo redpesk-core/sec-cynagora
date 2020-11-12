@@ -139,7 +139,7 @@ longhelptxt[] =
 static
 const char
 versiontxt[] =
-	"cynagora-agent version 1.99.99\n"
+	"cynagora-agent version "VERSION"\n"
 ;
 
 static char *name;
