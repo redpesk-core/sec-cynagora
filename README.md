@@ -140,15 +140,6 @@ Example:
 	cmake -DCMAKE_INSTALL_PREFIX=~/.local -DWITH_SYSTEMD=OFF ..
 	make install
 
-## Compiling with meson and ninja
-
-You can compile using meson. Example:
-
-	meson --prefix ~/.local -Dwith-systemd=false setup build
-	ninja -C build install
-
-Option are the same that above except that they are in lower case with dash:
-*with-systemd*, *with-cynara-compat*, *direct-cynara-compat*.
 
 # Licenses
 
