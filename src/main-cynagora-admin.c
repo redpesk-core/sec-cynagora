@@ -91,7 +91,7 @@ static
 const char
 help__text[] =
 	"\n"
-	"Commands are: list, set, drop, acheck, check, test, stest, cache, clear, quit, log, help\n"
+	"Commands are: list, set, drop, check, scheck, test, stest, cache, clear, quit, log, help\n"
 	"Type 'help command' to get help on the command\n"
 	"Type 'help expiration' to get help on expirations\n"
 	"\n"
