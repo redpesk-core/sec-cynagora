@@ -90,6 +90,7 @@ Cynagora is a refit of [cynara][2] that allows inclusion of expirations.
 It implements the same permission database by principle but the details
 changes.
 
+[WARNING compatibility with cynara will be removed soon]
 As a possible replacement, cynagora can supply a simple compatibility
 library that offers light legacy API of cynara. This would allow to run
 simple cynara clients (admin/check/async-check but not agents) without
@@ -129,7 +130,7 @@ Options to pass to cmake:
    ${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.initial)
 
  - *WITH_CYNARA_COMPAT*: flag for producing cynara compatibility artifacts
-   (default OFF)
+   (default OFF) [WARNING will be removed soon]
 
  - *DIRECT_CYNARA_COMPAT*: if true, dont use the shared client library to
    access cynara server but use the static library instead, avoid a dependency
@@ -149,7 +150,7 @@ available on [Apache website][3] or in Apache-2.0 file.
 Logo is licensed under Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0),
 avaliable on [creative commons website][4] or in CC-BY-SA-3.0 file.
 
-[1]: https://git.automotivelinux.org/src/cynagora/
+[1]: https://github.com/redpesk-core/sec-cynagora
 [2]: https://wiki.tizen.org/wiki/Security:Cynara
 [3]: https://www.apache.org/licenses/LICENSE-2.0
 [4]: https://creativecommons.org/licenses/by-sa/3.0/

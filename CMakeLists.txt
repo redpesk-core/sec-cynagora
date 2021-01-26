@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.12)
 project(cynagora
 	DESCRIPTION "Secured permission database for applications"
 	HOMEPAGE_URL "https://gerrit.automotivelinux.org/gerrit/gitweb?p=src/cynagora.git;a=summary"
-	VERSION 2.1
+	VERSION 2.1.1
 	LANGUAGES C
 )
 
