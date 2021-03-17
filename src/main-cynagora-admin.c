@@ -640,7 +640,7 @@ int do_help(int ac, char **av)
 	return 2;
 }
 
-int do_any(int ac, char **av)
+int do_any(int ac, char **av, int forcesync)
 {
 	if (!ac)
 		return 0;
@@ -658,13 +658,13 @@ int do_any(int ac, char **av)
 		return do_scheck(ac, av, cynagora_check);
 
 	if (!strcmp(av[0], "check"))
-		return do_check(ac, av, 0);
+		return forcesync ? do_scheck(ac, av, cynagora_check) : do_check(ac, av, 0);
 
 	if (!strcmp(av[0], "stest"))
 		return do_scheck(ac, av, cynagora_test);
 
 	if (!strcmp(av[0], "test"))
-		return do_check(ac, av, 1);
+		return forcesync ? do_scheck(ac, av, cynagora_test) : do_check(ac, av, 1);
 
 	if (!strcmp(av[0], "cache"))
 		return do_cache_check(ac, av);
@@ -687,7 +687,7 @@ int do_any(int ac, char **av)
 	return 1;
 }
 
-void do_all(int ac, char **av, int quit)
+void do_all(int ac, char **av, int interactive)
 {
 	int rc;
 
@@ -697,9 +697,9 @@ void do_all(int ac, char **av, int quit)
 		fprintf(stdout, "\n");
 	}
 	while(ac) {
-		last_status = 0;
-		rc = do_any(ac, av);
-		if (quit && (rc <= 0 || last_status < 0))
+		last_status = 1;
+		rc = do_any(ac, av, !interactive);
+		if (!interactive && (rc <= 0 || last_status < 0))
 			exit(1);
 		ac -= rc;
 		av += rc;
@@ -800,8 +800,8 @@ int main(int ac, char **av)
 	}
 
 	if (optind < ac) {
-		do_all(ac - optind, av + optind, 1);
-		return 0;
+		do_all(ac - optind, av + optind, 0);
+		return last_status <= 0;
 	}
 
 	fcntl(0, F_SETFL, O_NONBLOCK);
@@ -822,7 +822,7 @@ int main(int ac, char **av)
 					str[nstr = 0] = strtok(buffer, " \t");
 					while(str[nstr])
 						str[++nstr] = strtok(NULL, " \t");
-					do_all(nstr, str, 0);
+					do_all(nstr, str, 1);
 					bufill -= (size_t)(p - buffer);
 					if (!bufill)
 						break;
