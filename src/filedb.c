@@ -53,7 +53,7 @@ struct rule
 	/** value string id */
 	uint32_t value;
 
-	/**  expiration as a couple of uint32 to ensure compacity */
+	/**  expiration */
 	int64_t expire; /* natural alignment */
 };
 typedef struct rule rule_t;
@@ -153,6 +153,24 @@ get_expire(
 }
 
 /**
+ * Checks the validity of a name index
+ * @param filedb the database handler
+ * @param index index of the string
+ * @return 1 if valid or 0 if not valid
+ */
+static
+int
+valid_name_at(
+	filedb_t *filedb,
+	uint32_t index
+) {
+	return index < filedb->fnames.used
+		&& (index == uuidlen
+			|| (index > uuidlen
+				&& !((const char*)filedb->fnames.buffer)[index - 1]));
+}
+
+/**
  * Return the name of the given index
  * @param filedb the database handler
  * @param index index of the string MUST be valid
@@ -185,14 +203,15 @@ cmpnames(
  * Initialize the fields 'names_sorted' and 'names_count' for the
  * current database.
  * @param filedb the database handler
- * @return 0 in case of success or -ENOMEM or -ENOEXEC
+ * @return 0 in case of success or -ENOMEM or -EBADSLT
  */
 static
 int
 init_names(
 	filedb_t *filedb
 ) {
-	uint32_t pos, length, *sorted, *p, allocated, name_count;
+	uint32_t pos, length, *sorted, *p, allocated, name_count, used;
+	const char *name;
 
 	allocated = 0;
 	name_count = 0;
@@ -200,14 +219,17 @@ init_names(
 
 	/* iterate over names */
 	pos = uuidlen;
-	while (pos < filedb->fnames.used) {
+	used = filedb->fnames.used;
+	while (pos < used) {
+		/* get name */
+		name = name_at(filedb, pos);
 		/* get name length */
-		length = (uint32_t)strlen(name_at(filedb, pos));
-		if (pos + length <= pos || pos + length > filedb->fnames.used) {
+		length = (uint32_t)strnlen(name, (size_t)(used - pos));
+		if (pos + length <= pos || pos + length >= used) {
 			/* overflow */
 			free(sorted);
 			fprintf(stderr, "bad file %s\n", filedb->fnames.name);
-			return -ENOEXEC;
+			return -EBADSLT;
 		}
 		/* store the position */
 		if (allocated <= name_count) {
@@ -233,17 +255,49 @@ init_names(
 }
 
 /**
+ * Checks the validity of the rule's index
+ * @param filedb the database handler
+ * @param index index within the rule
+ * @return 1 if valid or 0 if not valid
+ */
+static
+int
+valid_rule_index(
+	filedb_t *filedb,
+	uint32_t index
+) {
+	return index > AnyIdx_Max || valid_name_at(filedb, index);
+}
+
+/**
  * Initialize the fields 'rules' and 'rules_count' for the
  * current database.
  * @param filedb the database handler
+ * @return 0 in case of success or -EBADSLT
  */
 static
-void
+int
 init_rules(
 	filedb_t *filedb
 ) {
-	filedb->rules = (rule_t*)(filedb->frules.buffer + uuidlen);
-	filedb->rules_count = (filedb->frules.used - uuidlen) / sizeof *filedb->rules;
+	rule_t *iter;
+	uint32_t count;
+
+	iter = filedb->rules = (rule_t*)(filedb->frules.buffer + uuidlen);
+	count = filedb->rules_count = (filedb->frules.used - uuidlen) / sizeof *filedb->rules;
+
+	while (count) {
+		if (!valid_rule_index(filedb, iter->client)
+		 || !valid_rule_index(filedb, iter->user)
+		 || !valid_rule_index(filedb, iter->permission)
+		 || !valid_rule_index(filedb, iter->value)) {
+			fprintf(stderr, "bad file %s, record %u\n", filedb->frules.name, (unsigned)(filedb->rules_count - count));
+			return -EBADSLT;
+		}
+		iter++;
+		count--;
+	}
+	return 0;
 }
 
 /**
@@ -329,8 +383,9 @@ opendb(
 			/* connect internals */
 			rc = init_names(filedb);
 			if (rc == 0) {
-				init_rules(filedb);
-				return 0;
+				rc = init_rules(filedb);
+				if (rc == 0)
+					return 0;
 			}
 			fbuf_close(&filedb->frules);
 		}
@@ -445,7 +500,11 @@ recoverdb(
 		if (rc < 0)
 			goto error;
 
-		init_rules(filedb);
+		/* init rules */
+		rc = init_rules(filedb);
+		if (rc < 0)
+			goto error;
+
 		filedb->is_changed = false;
 		filedb->need_cleanup = false;
 	}
@@ -537,7 +596,7 @@ string_itf(
 ) {
 	filedb_t *filedb = clodb;
 
-	assert(idx < filedb->fnames.used);
+	assert(valid_name_at(filedb, idx));
 	return name_at(filedb, idx);
 }
 
