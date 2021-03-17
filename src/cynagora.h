@@ -261,7 +261,7 @@ cynagora_test(
  *
  * @param cynagora  the handler of the client
  * @param key       the key to query
- * @param force     if not set forbids cache use
+ * @param force     if zero use cache if not zero forbids cache use
  * @param simple    if zero allows agent process else if not 0 forbids it
  * @param callback  the callback to call on reply
  * @param closure   a closure for the callback
