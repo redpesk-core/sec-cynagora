@@ -296,7 +296,7 @@ gc_mark(
 	anydb_idx_t *renum,
 	anydb_idx_t item
 ) {
-	if (item <= AnyIdx_Max)
+	if (anydb_idx_is_string(item))
 		renum[item] = 1;
 }
 
@@ -312,7 +312,7 @@ gc_renum(
 	anydb_idx_t *renum,
 	anydb_idx_t item
 ) {
-	return item > AnyIdx_Max ? item : renum[item];
+	return anydb_idx_is_special(item)? item : renum[item];
 }
 
 /** implementation of anydb_itf.gc */

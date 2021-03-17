@@ -45,6 +45,12 @@ typedef uint32_t anydb_idx_t;
 /** The maximum value for indexes */
 #define AnyIdx_Max	((anydb_idx_t)0xfffffff7u)
 
+/** Test if the index is special */
+#define anydb_idx_is_special(idx)  ((idx) > AnyIdx_Max)
+
+/** Test if the index is string */
+#define anydb_idx_is_string(idx)   ((idx) <= AnyIdx_Max)
+
 /**
  * A key is a set of index
  */

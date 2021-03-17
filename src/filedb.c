@@ -266,7 +266,7 @@ valid_rule_index(
 	filedb_t *filedb,
 	uint32_t index
 ) {
-	return index > AnyIdx_Max || valid_name_at(filedb, index);
+	return anydb_idx_is_special(index) || valid_name_at(filedb, index);
 }
 
 /**
@@ -795,7 +795,7 @@ gc_mark(
 	uint32_t count,
 	uint32_t item
 ) {
-	return item > AnyIdx_Max ? count : gc_add(array, count, item);
+	return anydb_idx_is_special(item) ? count : gc_add(array, count, item);
 }
 
 /**
@@ -814,7 +814,7 @@ gc_is_marked(
 	uint32_t item,
 	uint32_t *index
 ) {
-	return item <= AnyIdx_Max && gc_dig(array, count, item, index);
+	return anydb_idx_is_string(item) && gc_dig(array, count, item, index);
 }
 
 /**
