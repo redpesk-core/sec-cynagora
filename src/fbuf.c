@@ -70,17 +70,21 @@ read_file(
 
 	/* open the file */
 	fd = open(name, O_RDWR|O_CREAT, 0600);
-	if (fd < 0)
+	if (fd < 0) {
+		rc = -errno;
 		goto error;
+	}
 
 	/* get file stat */
 	rc = fstat(fd, &st);
-	if (rc < 0)
+	if (rc < 0) {
+		rc = -errno;
 		goto error2;
+	}
 
 	/* check file size */
 	if ((off_t)INT32_MAX < st.st_size) {
-		errno = EFBIG;
+		rc = -EFBIG;
 		goto error2;
 	}
 	sz = (uint32_t)st.st_size;
@@ -91,8 +95,10 @@ read_file(
 		goto error2;
 
 	/* read the file */
-	if (read(fd, fb->buffer, (size_t)sz) != (ssize_t)sz)
+	if (read(fd, fb->buffer, (size_t)sz) != (ssize_t)sz) {
+		rc = -errno;
 		goto error2;
+	}
 
 	/* done */
 	fb->used = fb->size = sz;
@@ -102,8 +108,7 @@ read_file(
 error2:
 	close(fd);
 error:
-	rc = -errno;
-	fprintf(stderr, "can't read file %s: %m\n", name);
+	fprintf(stderr, "can't read file %s: %s\n", name, strerror(-rc));
 	fb->saved = fb->used = fb->size = 0;
 	return rc;
 }
@@ -124,8 +129,10 @@ fbuf_open(
 	/* save name */
 	sz = strlen(name);
 	fb->name = malloc(sz + 1);
-	if (fb->name == NULL)
+	if (fb->name == NULL) {
+		rc = -ENOMEM;
 		goto error;
+	}
 	mempcpy(fb->name, name, sz + 1);
 
 	/* open the backup */
@@ -139,8 +146,10 @@ fbuf_open(
 			fb->backup[sz + 1] = 0;
 		}
 	}
-	if (fb->backup == NULL)
+	if (fb->backup == NULL) {
+		rc = -ENOMEM;
 		goto error;
+	}
 
 	/* read the file */
 	rc = read_file(fb, fb->name);
@@ -152,8 +161,7 @@ fbuf_open(
 	return 0;
 
 error:
-	rc = -errno;
-	fprintf(stderr, "can't open file %s: %m\n", name);
+	fprintf(stderr, "can't open file %s: %s\n", name, strerror(-rc));
 	fbuf_close(fb);
 	return rc;
 }
@@ -184,23 +192,28 @@ fbuf_sync(
 	/* open the file */
 	unlink(fb->name);
 	fd = creat(fb->name, 0600);
-	if (fd < 0)
+	if (fd < 0) {
+		rc = -errno;
 		goto error;
+	}
 
 	/* write unsaved bytes */
 	rcs = write(fd, fb->buffer, fb->used);
 	close(fd);
-	if (rcs < 0)
+	if (rcs < 0) {
+		rc = -errno;
 		goto error;
-	if ((uint32_t)rcs != fb->used)
-		goto error; /* TODO: set some errno? */
+	}
+	if ((uint32_t)rcs != fb->used) {
+		rc = -EINTR;
+		goto error;
+	}
 
 	fb->size = fb->saved = fb->used;
 	return 0;
 
 error:
-	rc = -errno;
-	fprintf(stderr, "sync of file %s failed: %m\n", fb->name);
+	fprintf(stderr, "sync of file %s failed: %s\n", fb->name, strerror(-rc));
 	return rc;
 }
 
@@ -217,7 +230,7 @@ fbuf_ensure_capacity(
 		asz = get_asz(capacity);
 		buffer = realloc(fb->buffer, asz);
 		if (buffer == NULL) {
-			fprintf(stderr, "alloc %u for file %s failed: %m\n", asz, fb->name);
+			fprintf(stderr, "alloc %u for file %s failed: %s\n", asz, fb->name, strerror(ENOMEM));
 			return -ENOMEM;
 		}
 		fb->buffer = buffer;
@@ -287,7 +300,7 @@ fbuf_identify(
 		return 0;
 
 	/* bad identification */
-	fprintf(stderr, "identification of file %s failed: %m\n", fb->name);
+	fprintf(stderr, "identification of file %s failed\n", fb->name);
 	return -ENOKEY;
 }
 

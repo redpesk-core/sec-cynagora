@@ -931,7 +931,7 @@ on_server_event(
 	slen = (socklen_t)sizeof saddr;
 	fd = accept(servfd, &saddr, &slen);
 	if (fd < 0) {
-		fprintf(stderr, "can't accept connection: %m\n");
+		fprintf(stderr, "can't accept connection: %s\n", strerror(errno));
 		return;
 	}
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
@@ -1019,7 +1019,7 @@ cyn_server_create(
 	*server = srv = malloc(sizeof *srv);
 	if (srv == NULL) {
 		rc = -ENOMEM;
-		fprintf(stderr, "can't alloc memory: %m\n");
+		fprintf(stderr, "can't alloc memory: %s\n", strerror(-rc));
 		goto error;
 	}
 
@@ -1028,7 +1028,7 @@ cyn_server_create(
 	srv->pollfd = epoll_create1(EPOLL_CLOEXEC);
 	if (srv->pollfd < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't create polling: %m\n");
+		fprintf(stderr, "can't create polling: %s\n", strerror(-rc));
 		goto error2;
 	}
 
@@ -1039,7 +1039,7 @@ cyn_server_create(
 	umask(um);
 	if (srv->admin.fd < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't create admin server socket %s: %m\n", admin_socket_spec);
+		fprintf(stderr, "can't create admin server socket %s: %s\n", admin_socket_spec, strerror(-rc));
 		goto error2;
 	}
 
@@ -1049,7 +1049,7 @@ cyn_server_create(
 	rc = pollitem_add(&srv->admin, EPOLLIN, srv->pollfd);
 	if (rc < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't poll admin server: %m\n");
+		fprintf(stderr, "can't poll admin server: %s\n", strerror(-rc));
 		goto error2;
 	}
 
@@ -1060,7 +1060,7 @@ cyn_server_create(
 	umask(um);
 	if (srv->check.fd < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't create check server socket %s: %m\n", check_socket_spec);
+		fprintf(stderr, "can't create check server socket %s: %s\n", check_socket_spec, strerror(-rc));
 		goto error2;
 	}
 
@@ -1070,7 +1070,7 @@ cyn_server_create(
 	rc = pollitem_add(&srv->check, EPOLLIN, srv->pollfd);
 	if (rc < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't poll check server: %m\n");
+		fprintf(stderr, "can't poll check server: %s\n", strerror(-rc));
 		goto error2;
 	}
 
@@ -1081,7 +1081,7 @@ cyn_server_create(
 	umask(um);
 	if (srv->agent.fd < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't create agent server socket %s: %m\n", agent_socket_spec);
+		fprintf(stderr, "can't create agent server socket %s: %s\n", agent_socket_spec, strerror(-rc));
 		goto error2;
 	}
 
@@ -1091,7 +1091,7 @@ cyn_server_create(
 	rc = pollitem_add(&srv->agent, EPOLLIN, srv->pollfd);
 	if (rc < 0) {
 		rc = -errno;
-		fprintf(stderr, "can't poll agent server: %m\n");
+		fprintf(stderr, "can't poll agent server: %s\n", strerror(-rc));
 		goto error2;
 	}
 

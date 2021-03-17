@@ -451,7 +451,7 @@ recoverdb(
 	}
 	return rc;
 error:
-	fprintf(stderr, "db recovery impossible: %m\n");
+	fprintf(stderr, "db recovery impossible: %s\n", strerror(-rc));
 	exit(5);
 	return rc;
 }

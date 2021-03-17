@@ -304,14 +304,14 @@ int main(int ac, char **av)
 	if (gid >= 0) {
 		rc = setgid((gid_t)gid);
 		if (rc < 0) {
-			fprintf(stderr, "can not change group: %m\n");
+			fprintf(stderr, "can not change group: %s\n", strerror(errno));
 			return -1;
 		}
 	}
 	if (uid >= 0) {
 		rc = setuid((uid_t)uid);
 		if (rc < 0) {
-			fprintf(stderr, "can not change user: %m\n");
+			fprintf(stderr, "can not change user: %s\n", strerror(errno));
 			return -1;
 		}
 	}
@@ -321,14 +321,14 @@ int main(int ac, char **av)
 	/* get lock for the database */
 	rc = lockdir(dbdir);
 	if (rc < 0) {
-		fprintf(stderr, "can not lock database of directory %s: %m\n", dbdir);
+		fprintf(stderr, "can not lock database of directory %s: %s\n", dbdir, strerror(-rc));
 		return 1;
 	}
 
 	/* connection to the database */
 	rc = db_open(dbdir);
 	if (rc < 0) {
-		fprintf(stderr, "can not open database of directory %s: %m\n", dbdir);
+		fprintf(stderr, "can not open database of directory %s: %s\n", dbdir, strerror(-rc));
 		return 1;
 	}
 
@@ -336,7 +336,7 @@ int main(int ac, char **av)
 	if (db_is_empty()) {
 		rc = dbinit_add_file(init);
 		if (rc < 0) {
-			fprintf(stderr, "can't initialize database: %m\n");
+			fprintf(stderr, "can't initialize database: %s\n", strerror(-rc));
 			return 1;
 		}
 	}
@@ -350,7 +350,7 @@ int main(int ac, char **av)
 	signal(SIGPIPE, SIG_IGN); /* avoid SIGPIPE! */
 	rc = cyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
 	if (rc < 0) {
-		fprintf(stderr, "can't initialize server: %m\n");
+		fprintf(stderr, "can't initialize server: %s\n", strerror(-rc));
 		return 1;
 	}
 
@@ -415,17 +415,17 @@ static void ensuredir(char *path, int length, int uid, int gid)
 			if (n == length) {
 				rc = stat(path, &st);
 				if (rc < 0) {
-					fprintf(stderr, "can not check %s: %m\n", path);
+					fprintf(stderr, "can not check %s: %s\n", path, strerror(errno));
 					exit(1);
 				} else if ((st.st_mode & S_IFMT) != S_IFDIR) {
-					fprintf(stderr, "not a directory %s: %m\n", path);
+					fprintf(stderr, "not a directory %s\n", path);
 					exit(1);
 				}
 				/* set ownership */
 				if (((uid_t)uid != st.st_uid && uid >= 0) || ((gid_t)gid != st.st_gid && gid >= 0)) {
 					rc = chown(path, (uid_t)uid, (gid_t)gid);
 					if (rc < 0) {
-						fprintf(stderr, "can not own directory %s for uid=%d & gid=%d: %m\n", path, uid, gid);
+						fprintf(stderr, "can not own directory %s for uid=%d & gid=%d: %s\n", path, uid, gid, strerror(errno));
 						exit(1);
 					}
 				}
@@ -443,7 +443,7 @@ static void ensuredir(char *path, int length, int uid, int gid)
 			}
 			n = (int)(e - path);
 		} else {
-			fprintf(stderr, "can not ensure directory %s: %m\n", path);
+			fprintf(stderr, "can not ensure directory %s: %s\n", path, strerror(errno));
 			exit(1);
 		}
 	}
