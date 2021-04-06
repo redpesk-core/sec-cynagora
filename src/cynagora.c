@@ -926,6 +926,7 @@ cynagora_create(
 	cynagora->async.closure = 0;
 	cynagora->async.requests = NULL;
 	cynagora->agents = NULL;
+	cynagora->queries = NULL;
 	idgen_init(cynagora->idgen);
 
 	/* lazy connection */
