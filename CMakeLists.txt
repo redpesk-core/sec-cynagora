@@ -73,6 +73,8 @@ if(WITH_SYSTEMD)
 	add_subdirectory(systemd)
 endif()
 
+PKG_CHECK_MODULES(libcap REQUIRED libcap)
+
 add_subdirectory(src)
 add_subdirectory(pkgconfig)
 
