@@ -3,7 +3,7 @@
 # format: space/tab separated fields
 # fields: CLIENT SESSION USER PERMISSION ACTION EXPIRATION
 #--------------------------------------------------------------------
-* * *      * no  forever   # explicit default rule: NO
+* * *      * -:- forever   # explicit default rule: ask default agent named "-" with value "-"
 * * @ADMIN * yes forever   # users of group @ADMIN can do anything
 * * @NONE  * no  forever   # users of group @NONE can do nothing
 
