@@ -632,6 +632,13 @@ onrequest(
 			makecheck(cli, count, args, true);
 			return;
 		}
+		if (ckarg(args[0], _clearall_, 1) && count == 1) {
+			if (cli->type != server_Admin && cli->type != server_Agent)
+				break;
+			send_done(cli);
+			cyn_changed();
+			return;
+		}
 		break;
 	case 'd': /* drop */
 		if (ckarg(args[0], _drop_, 1) && count == 5) {
@@ -685,7 +692,7 @@ onrequest(
 			cli->entered = 0;
 			send_done_or_error(cli, rc);
 			return;
-		}
+		} /* log */
 		if (ckarg(args[0], _log_, 1) && count <= 2) {
 			nextlog = cyn_server_log;
 			if (cli->type != server_Admin)
@@ -728,7 +735,7 @@ onrequest(
 			rc = cyn_set(&key, &value);
 			send_done_or_error(cli, rc);
 			return;
-		}
+		} /* sub */
 		if (ckarg(args[0], _sub_, 1) && count == 7) {
 			if (cli->type != server_Agent)
 				break;

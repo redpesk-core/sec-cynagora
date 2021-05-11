@@ -1261,6 +1261,35 @@ cynagora_drop(
 }
 
 /******************************************************************************/
+/*** PUBLIC ADMIN AND AGENT METHODS                                         ***/
+/******************************************************************************/
+
+/* see cynagora.h */
+int
+cynagora_clearall(
+	cynagora_t *cynagora
+) {
+	int rc;
+
+	if (cynagora->type != cynagora_Admin && cynagora->type != cynagora_Agent)
+		return -EPERM;
+	if (cynagora->synclock)
+		return -EBUSY;
+
+	cynagora->synclock = true;
+	rc = ensure_opened(cynagora);
+	if (rc >= 0) {
+		rc = putxkv(cynagora, _clearall_, 0, 0, 0);
+		if (rc >= 0) {
+			rc = wait_done(cynagora);
+		}
+	}
+	cynagora->synclock = false;
+
+	return rc;
+}
+
+/******************************************************************************/
 /*** PRIVATE AGENT METHODS                                                  ***/
 /******************************************************************************/
 

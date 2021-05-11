@@ -187,13 +187,9 @@ addcb(
 	return 0;
 }
 
-/**
- * Call when database changed.
- * Calls all observers to notify them the change
- */
-static
+/* see cyn.h */
 void
-changed(
+cyn_changed(
 ) {
 	struct callback *c;
 
@@ -283,7 +279,7 @@ cyn_leave(
 			rcp = queue_play();
 			rc = db_transaction_end(rcp == 0) ?: rcp;
 			if (rcp == 0)
-				changed();
+				cyn_changed();
 		}
 	}
 	queue_clear();

@@ -91,7 +91,7 @@ static
 const char
 help__text[] =
 	"\n"
-	"Commands are: list, set, drop, check, scheck, test, stest, cache, clear, quit, log, help\n"
+	"Commands are: list, set, drop, check, scheck, test, stest, cache, clearall, quit, log, help\n"
 	"Type 'help command' to get help on the command\n"
 	"Type 'help expiration' to get help on expirations\n"
 	"\n"
@@ -255,7 +255,17 @@ help_clear_text[] =
 	"\n"
 	"Command: clear\n"
 	"\n"
-	"Clear the current cache.\n"
+	"Clear the current local cache.\n"
+	"\n"
+;
+
+static
+const char
+help_clearall_text[] =
+	"\n"
+	"Command: clearall\n"
+	"\n"
+	"Clear all caching.\n"
 	"\n"
 ;
 
@@ -277,7 +287,7 @@ help_help_text[] =
 	"\n"
 	"Gives help on the command or on the topic.\n"
 	"\n"
-	"Available commands: list, set, drop, check, test, cache, clear, quit, help\n"
+	"Available commands: list, set, drop, check, test, cache, clear, clearall, quit, help\n"
 	"Available topics: expiration\n"
 	"\n"
 ;
@@ -625,6 +635,8 @@ int do_help(int ac, char **av)
 		fprintf(stdout, "%s", help_cache_text);
 	else if (ac > 1 && !strcmp(av[1], "clear"))
 		fprintf(stdout, "%s", help_clear_text);
+	else if (ac > 1 && !strcmp(av[1], "clearall"))
+		fprintf(stdout, "%s", help_clearall_text);
 	else if (ac > 1 && !strcmp(av[1], "log"))
 		fprintf(stdout, "%s", help_log_text);
 	else if (ac > 1 && !strcmp(av[1], "quit"))
@@ -674,6 +686,11 @@ int do_any(int ac, char **av, int forcesync)
 
 	if (!strcmp(av[0], "clear")) {
 		cynagora_cache_clear(cynagora);
+		return 1;
+	}
+
+	if (!strcmp(av[0], "clearall")) {
+		cynagora_clearall(cynagora);
 		return 1;
 	}
 

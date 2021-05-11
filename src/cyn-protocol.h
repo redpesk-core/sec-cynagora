@@ -27,6 +27,7 @@ extern const char
 	_agent_[],
 	_ask_[],
 	_check_[],
+	_clearall_[],
 	_clear_[],
 	_commit_[],
 	_cynagora_[],

@@ -29,7 +29,7 @@ synopsis:
 	s->c done 1 CACHEID
 
 The client present itself with the version of the protocol it expects to
-speak (today version 1 only). The server answer yes with the acknoledged
+speak (today version 1 only). The server answer yes with the acknowledged
 version it will use and the CACHEID that identify the cache (see note on
 CACHEID)
 
@@ -153,6 +153,16 @@ In all cases, returns the logging state afterward.
 
 Logging is a global feature. The protocol commands that the server sends or 
 receives are printed to the journal or not.
+
+
+### clear of caches (admin or agent):
+
+synopsis:
+
+	c->s clearall
+	s->c done
+
+Ask the server to invalidate all cachings.
 
 
 ### register agent (agent)

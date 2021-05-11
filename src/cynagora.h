@@ -431,6 +431,24 @@ cynagora_drop(
 	const cynagora_key_t *key
 );
 
+/******************************************************************************/
+/*** MIXED ADMIN AND AGENT PART                                             ***/
+/******************************************************************************/
+
+/**
+ * Request to clear all cachings (admin or agent, synchronous)
+ *
+ * @param cynagora the client handler
+ *
+ * @return 0 if success or a negative -errno value
+ *         -EPERM if not an admin or an agent client
+ *         -EBUSY if pending synchronous request
+ */
+extern
+int
+cynagora_clearall(
+	cynagora_t *cynagora
+);
 
 /******************************************************************************/
 /* AGENT PART - types and functions specific to agent clients                 */

@@ -29,6 +29,7 @@ const char
 	_agent_[] = "agent",
 	_ask_[] = "ask",
 	_check_[] = "check",
+	_clearall_[] = "clearall",
 	_clear_[] = "clear",
 	_commit_[] = "commit",
 	_cynagora_[] = "cynagora",

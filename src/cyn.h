@@ -71,6 +71,15 @@ typedef int (agent_cb_t)(
 		cynagora_query_t *query);
 
 /**
+ * Call it to notify that database changed.
+ * Calls all observers to notify them of the change
+ */
+extern
+void
+cyn_changed(
+);
+
+/**
  * Enter in the critical recoverable section if possible
  *
  * @param magic a pointer not null that must be used in 'cyn_leave'
