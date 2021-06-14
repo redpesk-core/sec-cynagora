@@ -313,6 +313,27 @@ putxkv(
 }
 
 /**
+ * Calls the asynchronous control callback with operation and the given events
+ *
+ * @param cynagora  the handler of the client
+ * @param op operation (see epoll_ctl)
+ * @param events the events (see epoll_ctl)
+ *
+ * @return  0 in case of success or a negative -errno value
+ */
+static
+int
+async_control(
+	cynagora_t *cynagora,
+	int op,
+	uint32_t events
+) {
+	return cynagora->async.controlcb && cynagora->fd >= 0
+		? cynagora->async.controlcb(cynagora->async.closure, op, cynagora->fd, events)
+		: 0;
+}
+
+/**
  * Wait some input event
  *
  * @param cynagora  the handler of the client
@@ -414,6 +435,43 @@ wait_reply(
 			}
 		}
 	}
+}
+
+/**
+ * Enter synchronous section
+ *
+ * @param cynagora  the handler of the client
+ *
+ * @return 1 if entered or 0 if not entered
+ */
+static
+bool
+synchronous_enter(
+	cynagora_t *cynagora
+) {
+	if (cynagora->synclock)
+		return false;
+	cynagora->synclock = true;
+	async_control(cynagora, EPOLL_CTL_MOD, 0);
+	return true;
+}
+
+/**
+ * Enter synchronous section
+ *
+ * @param cynagora  the handler of the client
+ *
+ * @return 1 if entered or 0 if not entered
+ */
+static
+int
+synchronous_leave(
+	cynagora_t *cynagora,
+	int rc
+) {
+	async_control(cynagora, EPOLL_CTL_MOD, EPOLLIN);
+	cynagora->synclock = false;
+	return rc;
 }
 
 /**
@@ -527,27 +585,6 @@ wait_done(
 }
 
 /**
- * Calls the asynchronous control callback with operation and the given events
- *
- * @param cynagora  the handler of the client
- * @param op operation (see epoll_ctl)
- * @param events the events (see epoll_ctl)
- *
- * @return  0 in case of success or a negative -errno value
- */
-static
-int
-async(
-	cynagora_t *cynagora,
-	int op,
-	uint32_t events
-) {
-	return cynagora->async.controlcb && cynagora->fd >= 0
-		? cynagora->async.controlcb(cynagora->async.closure, op, cynagora->fd, events)
-		: 0;
-}
-
-/**
  * Disconnect the client
  *
  * @param cynagora  the handler of the client
@@ -568,7 +605,7 @@ disconnection(
 			query = query->next;
 		}
 		/* drop connection */
-		async(cynagora, EPOLL_CTL_DEL, 0);
+		async_control(cynagora, EPOLL_CTL_DEL, 0);
 		close(cynagora->fd);
 		cynagora->fd = -1;
 	}
@@ -607,7 +644,7 @@ connection(
 			 && 0 == strcmp(cynagora->reply.fields[1], "1")) {
 				cache_clear(cynagora->cache,
 					cynagora->reply.count > 2 ? (uint32_t)atol(cynagora->reply.fields[2]) : 0);
-				rc = async(cynagora, EPOLL_CTL_ADD, EPOLLIN);
+				rc = async_control(cynagora, EPOLL_CTL_ADD, EPOLLIN);
 				/* reconnect agent */
 				agent = cynagora->agents;
 				while (agent && rc >= 0) {
@@ -664,9 +701,8 @@ check_or_test(
 	int rc;
 	time_t expire;
 
-	if (cynagora->synclock)
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
-	cynagora->synclock = true;
 
 	/* ensure opened */
 	rc = ensure_opened(cynagora);
@@ -695,8 +731,8 @@ check_or_test(
 		}
 	}
 end:
-	cynagora->synclock = false;
-	return rc;
+	return synchronous_leave(cynagora, rc);
+
 }
 
 /**
@@ -984,14 +1020,14 @@ cynagora_async_setup(
 	}
 
 	/* remove existing polling */
-	async(cynagora, EPOLL_CTL_DEL, 0);
+	async_control(cynagora, EPOLL_CTL_DEL, 0);
 
 	/* records new data */
-	cynagora->async.controlcb = controlcb;
 	cynagora->async.closure = closure;
+	cynagora->async.controlcb = controlcb;
 
 	/* record to polling */
-	return async(cynagora, EPOLL_CTL_ADD, EPOLLIN);
+	return async_control(cynagora, EPOLL_CTL_ADD, EPOLLIN);
 }
 
 /* see cynagora.h */
@@ -1088,10 +1124,10 @@ cynagora_get(
 
 	if (cynagora->type != cynagora_Admin)
 		return -EPERM;
-	if (cynagora->synclock)
+
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
 
-	cynagora->synclock = true;
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _get_, 0, key, 0);
@@ -1113,8 +1149,7 @@ cynagora_get(
 			rc = status_done(cynagora);
 		}
 	}
-	cynagora->synclock = false;
-	return rc;
+	return synchronous_leave(cynagora, rc);
 }
 
 /* see cynagora.h */
@@ -1128,10 +1163,10 @@ cynagora_log(
 
 	if (cynagora->type != cynagora_Admin)
 		return -EPERM;
-	if (cynagora->synclock)
+
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
 
-	cynagora->synclock = true;
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _log_, off ? _off_ : on ? _on_ : 0, 0, 0);
@@ -1141,9 +1176,10 @@ cynagora_log(
 				rc = cynagora->reply.count >= 2 && !strcmp(cynagora->reply.fields[1], _on_);
 		}
 	}
-	cynagora->synclock = false;
+	if (rc >= 0)
+		rc = cynagora->reply.count < 2 ? 0 : !strcmp(cynagora->reply.fields[1], _on_);
 
-	return rc < 0 ? rc : cynagora->reply.count < 2 ? 0 : !strcmp(cynagora->reply.fields[1], _on_);
+	return synchronous_leave(cynagora, rc);
 }
 
 /* see cynagora.h */
@@ -1157,10 +1193,10 @@ cynagora_enter(
 		return -EPERM;
 	if (cynagora->entered)
 		return -ECANCELED;
-	if (cynagora->synclock)
+
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
 
-	cynagora->synclock = true;
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _enter_, 0, 0, 0);
@@ -1170,9 +1206,7 @@ cynagora_enter(
 				cynagora->entered = true;
 		}
 	}
-	cynagora->synclock = false;
-
-	return rc;
+	return synchronous_leave(cynagora, rc);
 }
 
 /* see cynagora.h */
@@ -1187,10 +1221,10 @@ cynagora_leave(
 		return -EPERM;
 	if (!cynagora->entered)
 		return -ECANCELED;
-	if (cynagora->synclock)
+
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
 
-	cynagora->synclock = true;
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _leave_, commit ? _commit_ : 0/*default: rollback*/, 0, 0);
@@ -1200,9 +1234,7 @@ cynagora_leave(
 				cynagora->entered = false;
 		}
 	}
-	cynagora->synclock = false;
-
-	return rc;
+	return synchronous_leave(cynagora, rc);
 }
 
 /* see cynagora.h */
@@ -1218,19 +1250,17 @@ cynagora_set(
 		return -EPERM;
 	if (!cynagora->entered)
 		return -ECANCELED;
-	if (cynagora->synclock)
+
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
 
-	cynagora->synclock = true;
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _set_, 0, key, value);
 		if (rc >= 0)
 			rc = wait_done(cynagora);
 	}
-	cynagora->synclock = false;
-
-	return rc;
+	return synchronous_leave(cynagora, rc);
 }
 
 /* see cynagora.h */
@@ -1246,18 +1276,16 @@ cynagora_drop(
 	if (!cynagora->entered)
 		return -ECANCELED;
 
-	if (cynagora->synclock)
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
-	cynagora->synclock = true;
+
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _drop_, 0, key, 0);
 		if (rc >= 0)
 			rc = wait_done(cynagora);
 	}
-	cynagora->synclock = false;
-
-	return rc;
+	return synchronous_leave(cynagora, rc);
 }
 
 /******************************************************************************/
@@ -1273,10 +1301,10 @@ cynagora_clearall(
 
 	if (cynagora->type != cynagora_Admin && cynagora->type != cynagora_Agent)
 		return -EPERM;
-	if (cynagora->synclock)
+
+	if (!synchronous_enter(cynagora))
 		return -EBUSY;
 
-	cynagora->synclock = true;
 	rc = ensure_opened(cynagora);
 	if (rc >= 0) {
 		rc = putxkv(cynagora, _clearall_, 0, 0, 0);
@@ -1284,9 +1312,7 @@ cynagora_clearall(
 			rc = wait_done(cynagora);
 		}
 	}
-	cynagora->synclock = false;
-
-	return rc;
+	return synchronous_leave(cynagora, rc);
 }
 
 /******************************************************************************/
