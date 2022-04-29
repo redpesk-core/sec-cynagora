@@ -390,4 +390,34 @@ cache_create(
 	return cache_resize(cache, size);
 }
 
+/* see cache.h */
+void
+cache_iterate(
+	cache_t *cache,
+	int (*callback)(void *closure, const cynagora_key_t *key, int value, time_t expire, int hit),
+	void *closure
+) {
+	cynagora_key_t key;
+	time_t now, rem;
+	item_t *item;
+	uint32_t iter;
+	int action;
 
+	now = time(NULL);
+	iter = 0;
+	while (iter < cache->used) {
+		item = itemat(cache, iter);
+		key.client = item->strings;
+		key.session = &key.client[1 + strlen(key.client)];
+		key.user = &key.session[1 + strlen(key.session)];
+		key.permission = &key.user[1 + strlen(key.user)];
+		rem = item->expire ? item->expire - now : -1;
+		action = callback(closure, &key, item->value, rem, item->hit);
+		if ((item->expire && item->expire < now) || (action & CACHE_ITER_DROP))
+			drop_at(cache, iter);
+		else
+			iter += item->length;
+		if (action & CACHE_ITER_STOP)
+			break;
+	}
+}

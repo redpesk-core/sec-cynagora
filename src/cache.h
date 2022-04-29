@@ -70,7 +70,7 @@ cache_clear(
 );
 
 /**
- *
+ * resize the given cache
  * @param cache pointer to the cache handler
  * @param newsize new size to set to the cache
  * @return 0 on success
@@ -84,7 +84,7 @@ cache_resize(
 );
 
 /**
- *
+ * create a cache
  * @param cache pointer to the cache handler
  * @param size size to set to the cache
  * @return 0 on success
@@ -95,4 +95,26 @@ int
 cache_create(
 	cache_t **cache,
 	uint32_t size
+);
+
+/**
+ * Constants for callback of cache_iterate:
+ *  - CACHE_ITER_DROP: drop the cache entrry
+ *  - CACHE_ITER_STOP: stop iteration
+ */
+#define CACHE_ITER_DROP 1
+#define CACHE_ITER_STOP 2
+
+/**
+ * Iterate over cache entries and report it
+ * @param cache the cache to inspect
+ * @param callback the function to call for each entries
+ * @param closure a closure for the callback
+ */
+extern
+void
+cache_iterate(
+	cache_t *cache,
+	int (*callback)(void *closure, const cynagora_key_t *key, int value, time_t expire, int hit),
+	void *closure
 );

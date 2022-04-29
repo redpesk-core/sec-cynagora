@@ -173,6 +173,41 @@ struct query
 	char *askid;
 };
 
+#if 0
+static
+int
+dump_item(
+	void *closure,
+	const cynagora_key_t *key,
+	int value,
+	time_t expire,
+	int hit
+) {
+	fprintf(stderr, ": HIT %3d EXP %6ld VAL %3d <%s %s %s %s>\n",
+		hit, expire, value, key->client, key->session, key->user, key->permission);
+	return 0;
+}
+
+static
+int
+debug_cache_search(
+	cache_t *cache,
+	const cynagora_key_t *key
+) {
+	int rc = cache_search(cache, key);
+
+	fprintf(stderr, "---------------------------------------------------\n");
+	fprintf(stderr, "> HAS %3d <%s %s %s %s>\n",
+		rc, key->client, key->session, key->user, key->permission);
+	cache_iterate(cache, dump_item, NULL);
+	fprintf(stderr, "---------------------------------------------------\n");
+
+	return rc;
+}
+
+#define cache_search debug_cache_search
+#endif
+
 static void agent_ask(cynagora_t *cynagora, int count, const char **fields);
 static int async_reply_process(cynagora_t *cynagora, int count);
 
