@@ -26,10 +26,6 @@
 /******************************************************************************/
 /* COMMON PART - types and functions common to check/admin/agent clients      */
 /******************************************************************************/
-typedef struct cynagora cynagora_t;
-typedef enum cynagora_type cynagora_type_t;
-typedef struct cynagora_key cynagora_key_t;
-
 /**
  * type of the client interface
  */
@@ -59,6 +55,10 @@ struct cynagora_key
 	/** permission item of the key */
 	const char *permission;
 };
+
+typedef enum   cynagora_type cynagora_type_t;
+typedef struct cynagora_key  cynagora_key_t;
+typedef struct cynagora      cynagora_t;
 
 /**
  * Callback for receiving asynchronously the replies to the queries
