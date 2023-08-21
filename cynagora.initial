@@ -8,8 +8,7 @@
 * * @NONE  * no  forever   # users of group @NONE can do nothing
 
 #--------------------------------------------------------------------
-# User "0" and clients "System" is in the group "@ADMIN"
+# User "0" is in the group "@ADMIN"
 #--------------------------------------------------------------------
 *      * 0 * @:%c;%s;@ADMIN;%p forever
-System * * * @:%c;%s;@ADMIN;%p forever
 
