@@ -888,7 +888,7 @@ create_client(
 	/* records the file descriptor */
 	cli->type = type;
 	cli->version = 0; /* version not set */
-	cli->relax = 0; /* relax on error */
+	cli->relax = 0; /* not relax on error */
 	cli->invalid = 0; /* not invalid */
 	cli->entered = 0; /* not entered */
 	cli->entering = 0; /* not entering */
