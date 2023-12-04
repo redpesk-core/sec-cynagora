@@ -818,7 +818,7 @@ int main(int ac, char **av)
 
 	if (optind < ac) {
 		do_all(ac - optind, av + optind, 0);
-		return last_status <= 0;
+		return last_status < 0;
 	}
 
 	fcntl(0, F_SETFL, O_NONBLOCK);
