@@ -1,0 +1,6 @@
+Version 2.2.4
+-------------
+
+* Fix exit status of cynagora-admin
+* Fix bug in protocol
+
