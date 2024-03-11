@@ -16,7 +16,7 @@
 # limitations under the License.
 ###########################################################################
 
-set(SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/systemd/system"
+set(SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_PREFIX}/lib/systemd/system"
                   CACHE PATH "Path to systemd system unit files")
 
 CONFIGURE_FILE(cynagora.service.in            cynagora.service @ONLY)
