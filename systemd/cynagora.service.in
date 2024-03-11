@@ -2,7 +2,7 @@
 Description=Cynagora service
 
 [Service]
-ExecStart=/usr/bin/cynagorad --user @USER@ --group @GROUP@ --make-db-dir --own-db-dir
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/cynagorad --user @USER@ --group @GROUP@ --make-db-dir --own-db-dir
 
 Type=notify
 
