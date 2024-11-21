@@ -1,0 +1,8 @@
+[Unit]
+Description=Cynagora setup service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mkdir -p @DEFAULT_SOCKET_DIR@
+ExecStart=/usr/bin/chsmack -a System:Shared @DEFAULT_SOCKET_DIR@

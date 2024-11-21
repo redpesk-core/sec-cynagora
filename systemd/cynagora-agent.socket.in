@@ -12,6 +12,8 @@ Service=cynagora.service
 [Unit]
 Wants=cynagora.target
 Before=cynagora.target
+Requires=cynagora-setup.service
+After=cynagora-setup.service
 
 [Install]
 WantedBy=sockets.target
