@@ -153,6 +153,7 @@ int main(int ac, char **av)
 	int error = 0;
 	int uid = -1;
 	int gid = -1;
+	mode_t um;
 	const char *init = NULL;
 	const char *dbdir = NULL;
 	const char *socketdir = NULL;
@@ -259,11 +260,14 @@ int main(int ac, char **av)
 	}
 #endif
 	if (!spec_socket_admin)
-		rc = asprintf(&spec_socket_admin, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_admin_socket_base);
+		rc = asprintf(&spec_socket_admin, "%s:%s/%s",
+		              cyn_default_socket_scheme, socketdir, cyn_default_admin_socket_base);
 	if (!spec_socket_check)
-		rc = asprintf(&spec_socket_check, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_check_socket_base);
+		rc = asprintf(&spec_socket_check, "%s:%s/%s",
+		              cyn_default_socket_scheme, socketdir, cyn_default_check_socket_base);
 	if (!spec_socket_agent)
-		rc = asprintf(&spec_socket_agent, "%s:%s/%s", cyn_default_socket_scheme, socketdir, cyn_default_agent_socket_base);
+		rc = asprintf(&spec_socket_agent, "%s:%s/%s",
+		              cyn_default_socket_scheme, socketdir, cyn_default_agent_socket_base);
 	if (!spec_socket_admin || !spec_socket_check || !spec_socket_agent) {
 		fprintf(stderr, "can't make socket paths\n");
 		return 1;
@@ -295,10 +299,13 @@ int main(int ac, char **av)
 	}
 
 	/* handle directories */
+	um = umask(0077);
 	if (makedbdir)
 		ensure_directory(dbdir, owndbdir ? uid : -1, owndbdir ? gid : -1);
+	umask(0022);
 	if (makesockdir && socketdir[0] != '@')
 		ensure_directory(socketdir, ownsockdir ? uid : -1, ownsockdir ? gid : -1);
+	umask(um);
 
 	/* drop privileges */
 	if (gid >= 0) {

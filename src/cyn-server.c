@@ -1041,7 +1041,7 @@ cyn_server_create(
 
 	/* create the admin server socket */
 	admin_socket_spec = cyn_get_socket_admin(admin_socket_spec);
-	um = umask(017);
+	um = umask(0117);
 	srv->admin.fd = socket_open(admin_socket_spec, 1);
 	umask(um);
 	if (srv->admin.fd < 0) {
@@ -1062,7 +1062,7 @@ cyn_server_create(
 
 	/* create the check server socket */
 	check_socket_spec = cyn_get_socket_check(check_socket_spec);
-	um = umask(011);
+	um = umask(0111);
 	srv->check.fd = socket_open(check_socket_spec, 1);
 	umask(um);
 	if (srv->check.fd < 0) {
@@ -1083,7 +1083,7 @@ cyn_server_create(
 
 	/* create the agent server socket */
 	agent_socket_spec = cyn_get_socket_agent(agent_socket_spec);
-	um = umask(017);
+	um = umask(0117);
 	srv->agent.fd = socket_open(agent_socket_spec, 1);
 	umask(um);
 	if (srv->agent.fd < 0) {
