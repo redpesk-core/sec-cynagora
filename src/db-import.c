@@ -31,34 +31,29 @@
 #include "data.h"
 #include "cyn.h"
 #include "expire.h"
-#include "dbinit.h"
+#include "db-import.h"
 
-/* see dbinit.h */
-int dbinit_add_file(const char *path)
+/* see db-import.h */
+int db_import_file(FILE *file, const char *location)
 {
 	int rc, lino;
 	char *item[10];
 	char buffer[2048];
 	data_key_t key;
 	data_value_t value;
-	FILE *f;
 
 	/* enter critical section */
-	rc = cyn_enter(dbinit_add_file);
+	rc = cyn_enter(db_import_file);
 	if (rc < 0)
 		return rc;
 
-	/* open the file */
-	f = fopen(path, "r");
-	if (f == NULL) {
-		rc = -errno;
-		fprintf(stderr, "can't open file %s\n", path);
-		goto error;
-	}
+	/* ensure location is not NULL */
+	if (location == NULL)
+		location = file == stdin ? "<stdin>" : "<unknown file>";
 
 	/* read lines of the file */
 	lino = 0;
-	while(fgets(buffer, sizeof buffer, f)) {
+	while(fgets(buffer, sizeof buffer, file)) {
 
 		/* parse the line */
 		lino++;
@@ -80,14 +75,14 @@ int dbinit_add_file(const char *path)
 		if (item[1] == NULL || item[2] == NULL
 		  || item[3] == NULL || item[4] == NULL
 		  || item[5] == NULL) {
-			fprintf(stderr, "field missing (%s:%d)\n", path, lino);
+			fprintf(stderr, "field missing (%s:%d)\n", location, lino);
 			rc = -EINVAL;
-			goto error2;
+			goto error;
 		}
 		if (item[6] != NULL && item[6][0] != '#') {
-			fprintf(stderr, "extra field (%s:%d)\n", path, lino);
+			fprintf(stderr, "extra field (%s:%d)\n", location, lino);
 			rc = -EINVAL;
-			goto error2;
+			goto error;
 		}
 
 		/* create the key and value of the rule */
@@ -97,35 +92,52 @@ int dbinit_add_file(const char *path)
 		key.permission = item[3];
 		value.value = item[4];
 		if (!txt2exp(item[5], &value.expire, true)) {
-			fprintf(stderr, "bad expiration %s (%s:%d)\n", item[5], path, lino);
+			fprintf(stderr, "bad expiration %s (%s:%d)\n", item[5], location, lino);
 			rc = -EINVAL;
-			goto error2;
+			goto error;
 		}
 
 		/* record the rule */
 		rc = cyn_set(&key, &value);
 		if (rc < 0) {
-			fprintf(stderr, "can't set (%s:%d)\n", path, lino);
+			fprintf(stderr, "can't set (%s:%d)\n", location, lino);
 			exit(1);
 		}
 	}
-	if (!feof(f)) {
+	if (!feof(file)) {
 		rc = -errno;
-		fprintf(stderr, "error while reading file %s\n", path);
-		goto error2;
+		fprintf(stderr, "error while reading file %s\n", location);
+		goto error;
 	}
 	rc = 0;
-error2:
-	fclose(f);
 error:
 	if (rc)
 		/* cancel changes if error occured */
-		cyn_leave(dbinit_add_file, 0);
+		cyn_leave(db_import_file, 0);
 	else {
 		/* commit the changes */
-		rc = cyn_leave(dbinit_add_file, 1);
+		rc = cyn_leave(db_import_file, 1);
 		if (rc < 0)
-			fprintf(stderr, "unable to commit content of file %s\n", path);
+			fprintf(stderr, "unable to commit content of file %s\n", location);
+	}
+	return rc;
+}
+
+/* see db-import.h */
+int db_import_path(const char *path)
+{
+	int rc;
+	FILE *file;
+
+	/* open the file */
+	file = fopen(path, "r");
+	if (file == NULL) {
+		rc = -errno;
+		fprintf(stderr, "can't open file %s\n", path);
+	}
+	else {
+		rc = db_import_file(file, path);
+		fclose(file);
 	}
 	return rc;
 }

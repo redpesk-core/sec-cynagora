@@ -17,13 +17,10 @@
 #pragma once
 /******************************************************************************/
 /******************************************************************************/
-/* READING DATABASE RULE FILES FOR INITIALISATION                             */
+/* READING DATABASE RULE FROM FILES                                           */
 /******************************************************************************/
 /******************************************************************************/
-
-/**
- * Add to the database the data from file of 'path'
- *
+/*
  * ---------------------------------------------------------------------------
  * The file must be made of lines being either empty, comment or rule
  *
@@ -54,13 +51,35 @@
  * Expiration can be expressed
  *
  * ---------------------------------------------------------------------------
+ */
+
+#include <stdio.h>
+
+/**
+ * Add to the database the data from file of 'path'
  *
- * @param path path of the initialization file
+ * @param path path of the file to import
+ *
  * @return 0 in case of success or a negative -errno like code
  */
 extern
 int
-dbinit_add_file(
+db_import_path(
 	const char *path
+);
+
+/**
+ * Add to the database the data from 'file'
+ *
+ * @param file     handler to the file to import
+ * @param location indication of the imported file (can be NULL)
+ *
+ * @return 0 in case of success or a negative -errno like code
+ */
+extern
+int
+db_import_file(
+	FILE *file,
+	const char *location
 );
 

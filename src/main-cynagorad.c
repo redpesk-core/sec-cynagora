@@ -47,7 +47,7 @@
 #include "cyn.h"
 #include "cyn-server.h"
 #include "cyn-protocol.h"
-#include "dbinit.h"
+#include "db-import.h"
 #include "agent-at.h"
 
 #if !defined(DEFAULT_DB_DIR)
@@ -334,7 +334,7 @@ int main(int ac, char **av)
 
 	/* initialisation of the database */
 	if (db_is_empty()) {
-		rc = dbinit_add_file(init);
+		rc = db_import_path(init);
 		if (rc < 0) {
 			fprintf(stderr, "can't initialize database: %s\n", strerror(-rc));
 			return 1;

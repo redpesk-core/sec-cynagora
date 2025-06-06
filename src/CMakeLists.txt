@@ -20,7 +20,7 @@ set(LIBCORE_SOURCES
 	anydb.c
 	cyn.c
 	db.c
-	dbinit.c
+	db-import.c
 	expire.c
 	fbuf.c
 	filedb.c
