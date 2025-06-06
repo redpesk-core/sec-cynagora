@@ -34,6 +34,7 @@ include(CTest)
 if(NOT CMAKE_INSTALL_FULL_RUNSTATEDIR)
 	set(CMAKE_INSTALL_FULL_RUNSTATEDIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/run")
 endif()
+string(REPLACE "/var/run" "/run" CMAKE_INSTALL_FULL_RUNSTATEDIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}")
 
 ###########################################################################
 # possible settings
