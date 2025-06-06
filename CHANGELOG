@@ -1,3 +1,9 @@
+Version next (2.3.0)
+-------------
+
+* Enforce RUNSTATEDIR to be ../run, not ../var/run
+* Rename dbinit as db-import
+
 Version 2.2.6
 -------------
 
