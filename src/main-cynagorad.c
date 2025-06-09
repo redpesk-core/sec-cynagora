@@ -45,6 +45,7 @@
 #include "data.h"
 #include "db.h"
 #include "cyn.h"
+#include "expire.h"
 #include "cyn-server.h"
 #include "cyn-protocol.h"
 #include "db-import.h"
@@ -66,6 +67,7 @@
 #    define  DEFAULT_LOCKFILE      ".cynagora-lock"
 #endif
 
+#define _DUMP_        'D'
 #define _DBDIR_       'd'
 #define _GROUP_       'g'
 #define _HELP_        'h'
@@ -82,12 +84,13 @@
 
 static
 const char
-shortopts[] = "d:g:hi:lmMOoS:u:v";
+shortopts[] = "Dd:g:hi:lmMOoS:u:v";
 
 static
 const struct option
 longopts[] = {
 	{ "dbdir", 1, NULL, _DBDIR_ },
+	{ "dump", 0, NULL, _DUMP_ },
 	{ "group", 1, NULL, _GROUP_ },
 	{ "help", 0, NULL, _HELP_ },
 	{ "init", 1, NULL, _INIT_ },
@@ -113,6 +116,7 @@ helptxt[] =
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
 	"	                        (default: "DEFAULT_INIT_FILE"\n"
+	"	-D, --dump            dump current rules to stdout and exit\n"
 	"	-l, --log             activate log of transactions\n"
 	"	-d, --dbdir xxx       set the directory of database\n"
 	"	                        (default: "DEFAULT_DB_DIR")\n"
@@ -138,6 +142,7 @@ versiontxt[] =
 static int isid(const char *text);
 static void ensure_directory(const char *path, int uid, int gid);
 static int lockdir(const char *dir);
+static void dumpdb(FILE *fout);
 
 int main(int ac, char **av)
 {
@@ -149,6 +154,7 @@ int main(int ac, char **av)
 	int ownsockdir = 0;
 	int flog = 0;
 	int help = 0;
+	int dump = 0;
 	int version = 0;
 	int error = 0;
 	int uid = -1;
@@ -175,6 +181,9 @@ int main(int ac, char **av)
 			break;
 
 		switch(opt) {
+		case _DUMP_:
+			dump = 1;
+			break;
 		case _DBDIR_:
 			dbdir = optarg;
 			break;
@@ -348,6 +357,12 @@ int main(int ac, char **av)
 		}
 	}
 
+	/* dumps the current rules to the standard output */
+	if (dump) {
+		dumpdb(stdout);
+		return 0;
+	}
+
 	/* reset the change ids */
 	cyn_changeid_reset();
 
@@ -472,6 +487,8 @@ static void ensure_directory(const char *path, int uid, int gid)
 	ensuredir(p, (int)l, uid, gid);
 }
 
+/* set the lockfile in the given directory
+ * return 0 on success otherwise a negative value */
 static int lockdir(const char *dir)
 {
 	char path[PATH_MAX];
@@ -491,3 +508,32 @@ static int lockdir(const char *dir)
 	return rc;
 }
 
+/* callback dumping one rule */
+static void dumpcb(void *closure, const data_key_t *key, const data_value_t *value)
+{
+	char buffer[50];
+	FILE *fout = closure;
+
+	exp2txt(value->expire, true, buffer, sizeof buffer);
+	buffer[sizeof buffer - 1] = 0;
+	fprintf(fout, "%s %s %s %s %s %s\n",
+		key->client,
+		key->session,
+		key->user,
+		key->permission,
+		value->value,
+		buffer);
+}
+
+/* dump the content of the db to fout */
+static void dumpdb(FILE *fout)
+{
+	data_key_t key = {
+		.client     = Data_Any_String,
+		.session    = Data_Any_String,
+		.user       = Data_Any_String,
+		.permission = Data_Any_String
+	};
+
+	db_for_all(dumpcb, fout, &key);
+}
