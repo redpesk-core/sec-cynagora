@@ -108,7 +108,7 @@ helptxt[] =
 	"\n"
 	"usage: cynagorad [options]...\n"
 	"\n"
-	"otpions:\n"
+	"options:\n"
 	"	-u, --user xxx        set the user\n"
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
