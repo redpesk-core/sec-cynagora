@@ -67,6 +67,7 @@
 #    define  DEFAULT_LOCKFILE      ".cynagora-lock"
 #endif
 
+#define _OFFLINE_     '\001'
 #define _DUMP_        'D'
 #define _DBDIR_       'd'
 #define _GROUP_       'g'
@@ -97,6 +98,7 @@ longopts[] = {
 	{ "log", 0, NULL, _LOG_ },
 	{ "make-db-dir", 0, NULL, _MAKEDBDIR_ },
 	{ "make-socket-dir", 0, NULL, _MAKESOCKDIR_ },
+	{ "offline", 0, NULL, _OFFLINE_ },
 	{ "own-db-dir", 0, NULL, _OWNDBDIR_ },
 	{ "own-socket-dir", 0, NULL, _OWNSOCKDIR_ },
 	{ "socketdir", 1, NULL, _SOCKETDIR_ },
@@ -116,6 +118,7 @@ helptxt[] =
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
 	"	                        (default: "DEFAULT_INIT_FILE"\n"
+	"	    --offline         add rules from stdin and exit\n"
 	"	-D, --dump            dump current rules to stdout and exit\n"
 	"	-l, --log             activate log of transactions\n"
 	"	-d, --dbdir xxx       set the directory of database\n"
@@ -155,6 +158,7 @@ int main(int ac, char **av)
 	int flog = 0;
 	int help = 0;
 	int dump = 0;
+	int offline = 0;
 	int version = 0;
 	int error = 0;
 	int uid = -1;
@@ -186,6 +190,9 @@ int main(int ac, char **av)
 			break;
 		case _DBDIR_:
 			dbdir = optarg;
+			break;
+		case _OFFLINE_:
+			offline = 1;
 			break;
 		case _GROUP_:
 			group = optarg;
@@ -360,6 +367,16 @@ int main(int ac, char **av)
 	/* dumps the current rules to the standard output */
 	if (dump) {
 		dumpdb(stdout);
+		return 0;
+	}
+
+	/* when offline only add rules from stdin */
+	if (offline) {
+		rc = db_import_file(stdin, NULL);
+		if (rc < 0) {
+			fprintf(stderr, "can't add rules: %s\n", strerror(-rc));
+			return 1;
+		}
 		return 0;
 	}
 

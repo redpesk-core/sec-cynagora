@@ -4,6 +4,7 @@ Version next (2.3.0)
 * Enforce RUNSTATEDIR to be ../run, not ../var/run
 * Rename dbinit as db-import
 * Add option --dump
+* Add option --offline
 
 Version 2.2.6
 -------------
