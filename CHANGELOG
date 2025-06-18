@@ -1,4 +1,4 @@
-Version next (2.3.0)
+Version 2.3.0
 -------------
 
 * Enforce RUNSTATEDIR to be ../run, not ../var/run
