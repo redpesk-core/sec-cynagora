@@ -19,7 +19,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(sec-cynagora
-	VERSION 2.3.0
+	VERSION 2.3.1
 	DESCRIPTION "Secured permission database for applications"
 	HOMEPAGE_URL "https://github.com/redpesk-core/sec-cynagora"
 	LANGUAGES C
