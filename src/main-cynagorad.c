@@ -344,7 +344,25 @@ int main(int ac, char **av)
 	/* get lock for the database */
 	rc = lockdir(dbdir);
 	if (rc < 0) {
-		fprintf(stderr, "can not lock database of directory %s: %s\n", dbdir, strerror(-rc));
+		/* the lock on the database means that a server already runs */
+		if (!offline) {
+			fprintf(stderr, "can not lock database of directory %s: %s\n", dbdir, strerror(-rc));
+			return 1;
+		}
+
+		/* when offline isn't really offline, try client program */
+		fprintf(stderr, "probably not offline, trying admin client\n");
+		rc = system("sed 's/^/set /' | cynagora-admin");
+		if (rc == 0)
+			return 0; /* no error */
+
+		/* report the error */
+		if (rc < 0)
+			fprintf(stderr, "exec client error: %s\n", strerror(errno));
+		else if (rc == 127)
+			fprintf(stderr, "can not spawn the client\n");
+		else
+			fprintf(stderr, "client returned error %d\n", rc);
 		return 1;
 	}
 
