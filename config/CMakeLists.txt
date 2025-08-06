@@ -1,4 +1,5 @@
 
 CONFIGURE_FILE(cynagora.conf.in cynagora.conf @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cynagora.conf DESTINATION ${DEFAULT_CONF_DIR} RENAME ${DEFAULT_CONFIG_BASENAME})
-install(FILES basic DESTINATION ${DEFAULT_INIT_DIR})
+
+add_subdirectory(cynagora.d)
