@@ -37,6 +37,7 @@ set(SERVER_SOURCES
 	idgen.c
 	main-cynagorad.c
 	prot.c
+	settings.c
 	socket.c
 )
 
@@ -94,6 +95,7 @@ target_compile_definitions(cynagorad PRIVATE
 	DEFAULT_DB_DIR="${DEFAULT_DB_DIR}"
 	DEFAULT_SOCKET_DIR="${DEFAULT_SOCKET_DIR}"
 	DEFAULT_INIT_FILE="${DEFAULT_INIT_FILE}"
+	DEFAULT_CONFIG_FILE="${DEFAULT_CONFIG_FILE}"
 )
 if(WITH_SYSTEMD)
 	target_compile_definitions(cynagorad PRIVATE WITH_SYSTEMD)

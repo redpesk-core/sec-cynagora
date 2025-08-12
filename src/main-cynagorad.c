@@ -50,24 +50,15 @@
 #include "cyn-protocol.h"
 #include "db-import.h"
 #include "agent-at.h"
+#include "settings.h"
 
-#if !defined(DEFAULT_DB_DIR)
-#    define  DEFAULT_DB_DIR      "/var/lib/cynagora"
-#endif
-#if !defined(DEFAULT_INIT_FILE)
-#    define  DEFAULT_INIT_FILE   "/etc/security/cynagora.initial"
-#endif
-#if !defined(DEFAULT_CYNAGORA_USER)
-#    define  DEFAULT_CYNAGORA_USER   NULL
-#endif
-#if !defined(DEFAULT_CYNAGORA_GROUP)
-#    define  DEFAULT_CYNAGORA_GROUP  NULL
-#endif
 #if !defined(DEFAULT_LOCKFILE)
 #    define  DEFAULT_LOCKFILE      ".cynagora-lock"
 #endif
 
 #define _OFFLINE_     '\001'
+#define _NO_CONFIG_   'C'
+#define _CONFIG_      'c'
 #define _DUMP_        'D'
 #define _DBDIR_       'd'
 #define _GROUP_       'g'
@@ -85,11 +76,12 @@
 
 static
 const char
-shortopts[] = "Dd:g:hi:lmMOoS:u:v";
+shortopts[] = "Cc:Dd:g:hi:lmMOoS:u:v";
 
 static
 const struct option
 longopts[] = {
+	{ "config", 1, NULL, _CONFIG_ },
 	{ "dbdir", 1, NULL, _DBDIR_ },
 	{ "dump", 0, NULL, _DUMP_ },
 	{ "group", 1, NULL, _GROUP_ },
@@ -98,6 +90,7 @@ longopts[] = {
 	{ "log", 0, NULL, _LOG_ },
 	{ "make-db-dir", 0, NULL, _MAKEDBDIR_ },
 	{ "make-socket-dir", 0, NULL, _MAKESOCKDIR_ },
+	{ "no-config", 0, NULL, _NO_CONFIG_ },
 	{ "offline", 0, NULL, _OFFLINE_ },
 	{ "own-db-dir", 0, NULL, _OWNDBDIR_ },
 	{ "own-socket-dir", 0, NULL, _OWNSOCKDIR_ },
@@ -114,6 +107,9 @@ helptxt[] =
 	"usage: cynagorad [options]...\n"
 	"\n"
 	"options:\n"
+	"	-c, --config xxx      use configuration file xxx\n"
+	"	                        (default: "DEFAULT_CONFIG_FILE"\n"
+	"	-C, --no-config       dont read any config file\n"
 	"	-u, --user xxx        set the user\n"
 	"	-g, --group xxx       set the group\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
@@ -151,10 +147,6 @@ int main(int ac, char **av)
 {
 	int opt;
 	int rc;
-	int makesockdir = 0;
-	int makedbdir = 0;
-	int owndbdir = 0;
-	int ownsockdir = 0;
 	int flog = 0;
 	int help = 0;
 	int dump = 0;
@@ -164,11 +156,9 @@ int main(int ac, char **av)
 	int uid = -1;
 	int gid = -1;
 	mode_t um;
-	const char *init = NULL;
-	const char *dbdir = NULL;
-	const char *socketdir = NULL;
-	const char *user = NULL;
-	const char *group = NULL;
+	int noconfig = 0;
+	const char *config = NULL;
+	settings_t settings;
 	struct passwd *pw;
 	struct group *gr;
 	cap_t caps = { 0 };
@@ -178,54 +168,37 @@ int main(int ac, char **av)
 	setlinebuf(stdout);
 	setlinebuf(stderr);
 
-	/* scan arguments */
+	/* scan arguments first pass */
 	for (;;) {
 		opt = getopt_long(ac, av, shortopts, longopts, NULL);
 		if (opt == -1)
 			break;
 
 		switch(opt) {
-		case _DUMP_:
-			dump = 1;
-			break;
-		case _DBDIR_:
-			dbdir = optarg;
-			break;
-		case _OFFLINE_:
-			offline = 1;
-			break;
-		case _GROUP_:
-			group = optarg;
+		case _CONFIG_:
+			config = optarg;
 			break;
 		case _HELP_:
 			help = 1;
 			break;
-		case _INIT_:
-			init = optarg;
-			break;
-		case _LOG_:
-			flog = 1;
-			break;
-		case _MAKEDBDIR_:
-			makedbdir = 1;
-			break;
-		case _MAKESOCKDIR_:
-			makesockdir = 1;
-			break;
-		case _OWNSOCKDIR_:
-			ownsockdir = 1;
-			break;
-		case _OWNDBDIR_:
-			owndbdir = 1;
-			break;
-		case _SOCKETDIR_:
-			socketdir = optarg;
-			break;
-		case _USER_:
-			user = optarg;
+		case _NO_CONFIG_:
+			noconfig = 1;
 			break;
 		case _VERSION_:
 			version = 1;
+			break;
+		case _DUMP_:
+		case _DBDIR_:
+		case _OFFLINE_:
+		case _GROUP_:
+		case _INIT_:
+		case _LOG_:
+		case _MAKEDBDIR_:
+		case _MAKESOCKDIR_:
+		case _OWNSOCKDIR_:
+		case _OWNDBDIR_:
+		case _SOCKETDIR_:
+		case _USER_:
 			break;
 		default:
 			error = 1;
@@ -246,11 +219,63 @@ int main(int ac, char **av)
 		return 1;
 
 	/* set the defaults */
-	dbdir = dbdir ?: DEFAULT_DB_DIR;
-	socketdir = socketdir ?: cyn_default_socket_dir;
-	user = user ?: DEFAULT_CYNAGORA_USER;
-	group = group ?: DEFAULT_CYNAGORA_GROUP;
-	init = init ?: DEFAULT_INIT_FILE;
+	initialize_default_settings(&settings);
+	if (!noconfig) {
+		rc = read_file_settings(&settings, config);
+		if (rc < 0) {
+			fprintf(stderr, "can't read config file\n");
+			return 1;
+		}
+	}
+
+	/* scan arguments second pass */
+	optind = 1;
+	for (;;) {
+		opt = getopt_long(ac, av, shortopts, longopts, NULL);
+		if (opt == -1)
+			break;
+
+		switch(opt) {
+		case _DUMP_:
+			dump = 1;
+			break;
+		case _DBDIR_:
+			settings.dbdir = optarg;
+			break;
+		case _OFFLINE_:
+			offline = 1;
+			break;
+		case _GROUP_:
+			settings.group = optarg;
+			break;
+		case _INIT_:
+			settings.init = optarg;
+			break;
+		case _LOG_:
+			flog = 1;
+			break;
+		case _MAKEDBDIR_:
+			settings.makedbdir = 1;
+			break;
+		case _MAKESOCKDIR_:
+			settings.makesockdir = 1;
+			break;
+		case _OWNSOCKDIR_:
+			settings.ownsockdir = 1;
+			break;
+		case _OWNDBDIR_:
+			settings.owndbdir = 1;
+			break;
+		case _SOCKETDIR_:
+			settings.socketdir = optarg;
+			break;
+		case _USER_:
+			settings.user = optarg;
+			break;
+		default:
+			break;
+		}
+	}
 
 	/* activate the agents */
 	agent_at_activate();
@@ -277,37 +302,37 @@ int main(int ac, char **av)
 #endif
 	if (!spec_socket_admin)
 		rc = asprintf(&spec_socket_admin, "%s:%s/%s",
-		              cyn_default_socket_scheme, socketdir, cyn_default_admin_socket_base);
+		              cyn_default_socket_scheme, settings.socketdir, cyn_default_admin_socket_base);
 	if (!spec_socket_check)
 		rc = asprintf(&spec_socket_check, "%s:%s/%s",
-		              cyn_default_socket_scheme, socketdir, cyn_default_check_socket_base);
+		              cyn_default_socket_scheme, settings.socketdir, cyn_default_check_socket_base);
 	if (!spec_socket_agent)
 		rc = asprintf(&spec_socket_agent, "%s:%s/%s",
-		              cyn_default_socket_scheme, socketdir, cyn_default_agent_socket_base);
+		              cyn_default_socket_scheme, settings.socketdir, cyn_default_agent_socket_base);
 	if (!spec_socket_admin || !spec_socket_check || !spec_socket_agent) {
 		fprintf(stderr, "can't make socket paths\n");
 		return 1;
 	}
 
 	/* compute user and group */
-	if (user) {
-		uid = isid(user);
+	if (settings.user) {
+		uid = isid(settings.user);
 		if (uid < 0) {
-			pw = getpwnam(user);
+			pw = getpwnam(settings.user);
 			if (pw == NULL) {
-				fprintf(stderr, "can not find user '%s'\n", user);
+				fprintf(stderr, "can not find user '%s'\n", settings.user);
 				return -1;
 			}
 			uid = (int)pw->pw_uid;
 			gid = (int)pw->pw_gid;
 		}
 	}
-	if (group) {
-		gid = isid(group);
+	if (settings.group) {
+		gid = isid(settings.group);
 		if (gid < 0) {
-			gr = getgrnam(group);
+			gr = getgrnam(settings.group);
 			if (gr == NULL) {
-				fprintf(stderr, "can not find group '%s'\n", group);
+				fprintf(stderr, "can not find group '%s'\n", settings.group);
 				return -1;
 			}
 			gid = (int)gr->gr_gid;
@@ -316,11 +341,11 @@ int main(int ac, char **av)
 
 	/* handle directories */
 	um = umask(0077);
-	if (makedbdir)
-		ensure_directory(dbdir, owndbdir ? uid : -1, owndbdir ? gid : -1);
+	if (settings.makedbdir)
+		ensure_directory(settings.dbdir, settings.owndbdir ? uid : -1, settings.owndbdir ? gid : -1);
 	umask(0022);
-	if (makesockdir && socketdir[0] != '@')
-		ensure_directory(socketdir, ownsockdir ? uid : -1, ownsockdir ? gid : -1);
+	if (settings.makesockdir && settings.socketdir[0] != '@')
+		ensure_directory(settings.socketdir, settings.ownsockdir ? uid : -1, settings.ownsockdir ? gid : -1);
 	umask(um);
 
 	/* drop privileges */
@@ -342,11 +367,11 @@ int main(int ac, char **av)
 	rc = cap_set_proc(caps);
 
 	/* get lock for the database */
-	rc = lockdir(dbdir);
+	rc = lockdir(settings.dbdir);
 	if (rc < 0) {
 		/* the lock on the database means that a server already runs */
 		if (!offline) {
-			fprintf(stderr, "can not lock database of directory %s: %s\n", dbdir, strerror(-rc));
+			fprintf(stderr, "can not lock database of directory %s: %s\n", settings.dbdir, strerror(-rc));
 			return 1;
 		}
 
@@ -367,15 +392,15 @@ int main(int ac, char **av)
 	}
 
 	/* connection to the database */
-	rc = db_open(dbdir);
+	rc = db_open(settings.dbdir);
 	if (rc < 0) {
-		fprintf(stderr, "can not open database of directory %s: %s\n", dbdir, strerror(-rc));
+		fprintf(stderr, "can not open database of directory %s: %s\n", settings.dbdir, strerror(-rc));
 		return 1;
 	}
 
 	/* initialisation of the database */
 	if (db_is_empty()) {
-		rc = db_import_path(init);
+		rc = db_import_path(settings.init);
 		if (rc < 0) {
 			fprintf(stderr, "can't initialize database: %s\n", strerror(-rc));
 			return 1;
