@@ -406,7 +406,7 @@ int main(int ac, char **av)
 
 	/* initialisation of the database */
 	if (settings.forceinit || db_is_empty()) {
-		rc = db_import_path(settings.init);
+		rc = db_import_dir(settings.init, 1);
 		if (rc < 0) {
 			fprintf(stderr, "can't initialize database: %s\n", strerror(-rc));
 			return EXIT_FAILURE;

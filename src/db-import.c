@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include "data.h"
 #include "cyn.h"
@@ -139,5 +140,68 @@ int db_import_path(const char *path)
 		rc = db_import_file(file, path);
 		fclose(file);
 	}
+	return rc;
+}
+
+/* see db-import.h */
+int db_import_dir(const char *path, int weak)
+{
+	char buffer[PATH_MAX];
+	size_t len, pos;
+	int rc, rc2;
+	DIR *d;
+	struct dirent *dent;
+
+	/* open the directory */
+	d = opendir(path);
+	if (d == NULL) {
+		if (weak) {
+			if (errno == ENOENT)
+				return 0;
+			if (errno == ENOTDIR)
+				return db_import_path(path);
+		}
+		rc = -errno;
+		fprintf(stderr, "can't open directory %s\n", path);
+		return rc;
+	}
+
+	/* copy the path */
+	pos = strlen(path);
+	if (pos >= sizeof buffer) {
+		closedir(d);
+		fprintf(stderr, "path too long!\n");
+		return -ENAMETOOLONG;
+	}
+	while (pos && path[pos - 1] == '/') pos--;
+	memcpy(buffer, path, pos);
+	buffer[pos++] = '/';
+
+	/* process entries */
+	rc = 0;
+	for (;;) {
+		errno = 0;
+		dent = readdir(d);
+		if (dent == NULL) {
+			rc2 = -errno;
+			if (rc2)
+				fprintf(stderr, "error while reading directory %s: %s\n",
+						path, strerror(errno));
+			rc = rc ?: rc2;
+			break;
+		}
+		if (dent->d_type == DT_REG) {
+			len = strlen(dent->d_name);
+			if (pos + len >= sizeof buffer) {
+				fprintf(stderr, "path too long!\n");
+				rc = -ENAMETOOLONG;
+				break;
+			}
+			memcpy(&buffer[pos], dent->d_name, len + 1);
+			rc2 = db_import_path(buffer);
+			rc = rc ?: rc2;
+		}
+	}
+	closedir(d);
 	return rc;
 }

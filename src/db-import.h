@@ -83,3 +83,19 @@ db_import_file(
 	const char *location
 );
 
+/**
+ * Add to the database the data from files in the directory of 'path'
+ * If weak is zero, the path must be for an existing directory.
+ * If weak is not zero, if the path can be for a file, a directory,
+ * or even not existing.
+ *
+ * @param path path of the directory containing files to import
+ * @param weak no error if directory is not existing
+ *
+ * @return 0 in case of success or a negative -errno like code
+ */
+extern
+int db_import_dir(
+	const char *path,
+	int weak
+);
