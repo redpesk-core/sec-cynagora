@@ -70,7 +70,6 @@
 #define _OWNSOCKDIR_  'O'
 #define _OWNDBDIR_    'o'
 #define _SOCKETDIR_   'S'
-#define _SYSTEMD_     's'
 #define _USER_        'u'
 #define _VERSION_     'v'
 
