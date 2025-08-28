@@ -169,6 +169,7 @@ db_set(
 	if (!modifiable)
 		return -EACCES;
 
+	/* if session is any or wide, it is permanent rule in file, otherwise in memory */
 	db = is_any_or_wide(key->session) ? filedb : memdb;
 	return anydb_set(db, key, value);
 }

@@ -519,9 +519,17 @@ set_cb(
 		return Anydb_Action_Remove_And_Continue;
 
 	if (searchkey_is(s->db, key, &s->skey)) {
+		/* indicates that is found */
+		s->db = NULL;
+
+		/* only update on need */
+		if (value->value == s->value.value
+		 && value->expire == s->value.expire)
+			return Anydb_Action_Stop;
+
+		/* update needed */
 		value->value = s->value.value;
 		value->expire = s->value.expire;
-		s->db = NULL; /* indicates that is found */
 		return Anydb_Action_Update_And_Stop;
 	}
 
