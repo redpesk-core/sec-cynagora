@@ -3,6 +3,7 @@ Version next
 
 * Add configuration file
 * Optimization of setting of unmodified rule
+* New option --force-init for enforcing initial rules
 * Some cleaning
 
 Version 2.3.1

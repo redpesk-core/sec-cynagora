@@ -61,6 +61,7 @@
 #define _CONFIG_      'c'
 #define _DUMP_        'D'
 #define _DBDIR_       'd'
+#define _FORCEINIT_   'f'
 #define _GROUP_       'g'
 #define _HELP_        'h'
 #define _INIT_        'i'
@@ -75,7 +76,7 @@
 
 static
 const char
-shortopts[] = "Cc:Dd:g:hi:lmMOoS:u:v";
+shortopts[] = "Cc:Dd:fg:hi:lmMOoS:u:v";
 
 static
 const struct option
@@ -83,6 +84,7 @@ longopts[] = {
 	{ "config", 1, NULL, _CONFIG_ },
 	{ "dbdir", 1, NULL, _DBDIR_ },
 	{ "dump", 0, NULL, _DUMP_ },
+	{ "force-init", 0, NULL, _FORCEINIT_ },
 	{ "group", 1, NULL, _GROUP_ },
 	{ "help", 0, NULL, _HELP_ },
 	{ "init", 1, NULL, _INIT_ },
@@ -111,6 +113,7 @@ helptxt[] =
 	"	-C, --no-config       dont read any config file\n"
 	"	-u, --user xxx        set the user\n"
 	"	-g, --group xxx       set the group\n"
+	"	-f, --force-init      always set initialization rules\n"
 	"	-i, --init xxx        initialize if needed the database with file xxx\n"
 	"	                        (default: "DEFAULT_INIT_FILE"\n"
 	"	    --offline         add rules from stdin and exit\n"
@@ -188,12 +191,13 @@ int main(int ac, char **av)
 			break;
 		case _DUMP_:
 		case _DBDIR_:
-		case _OFFLINE_:
+		case _FORCEINIT_:
 		case _GROUP_:
 		case _INIT_:
 		case _LOG_:
 		case _MAKEDBDIR_:
 		case _MAKESOCKDIR_:
+		case _OFFLINE_:
 		case _OWNSOCKDIR_:
 		case _OWNDBDIR_:
 		case _SOCKETDIR_:
@@ -241,8 +245,8 @@ int main(int ac, char **av)
 		case _DBDIR_:
 			settings.dbdir = optarg;
 			break;
-		case _OFFLINE_:
-			offline = 1;
+		case _FORCEINIT_:
+			settings.forceinit = 1;
 			break;
 		case _GROUP_:
 			settings.group = optarg;
@@ -258,6 +262,9 @@ int main(int ac, char **av)
 			break;
 		case _MAKESOCKDIR_:
 			settings.makesockdir = 1;
+			break;
+		case _OFFLINE_:
+			offline = 1;
 			break;
 		case _OWNSOCKDIR_:
 			settings.ownsockdir = 1;
@@ -398,7 +405,7 @@ int main(int ac, char **av)
 	}
 
 	/* initialisation of the database */
-	if (db_is_empty()) {
+	if (settings.forceinit || db_is_empty()) {
 		rc = db_import_path(settings.init);
 		if (rc < 0) {
 			fprintf(stderr, "can't initialize database: %s\n", strerror(-rc));

@@ -39,6 +39,7 @@ struct settings_s {
 	int makedbdir;
 	int owndbdir;
 	int ownsockdir;
+	int forceinit;
 	const char *init;
 	const char *dbdir;
 	const char *socketdir;

@@ -53,6 +53,7 @@ static const desc_setting_t dscset[] = {
 	{ "socketdir",       STRING,  OFFSET(socketdir) },
 	{ "user",            STRING,  OFFSET(user) },
 	{ "group",           STRING,  OFFSET(group) },
+	{ "force-init",      BOOLEAN, OFFSET(forceinit) },
 	{ "make-db-dir",     BOOLEAN, OFFSET(makedbdir) },
 	{ "make-socket-dir", BOOLEAN, OFFSET(makesockdir) },
 	{ "own-db-dir",      BOOLEAN, OFFSET(owndbdir) },
@@ -148,6 +149,7 @@ void initialize_default_settings(settings_t *settings)
 	settings->makedbdir = 0;
 	settings->owndbdir = 0;
 	settings->ownsockdir = 0;
+	settings->forceinit = 0;
 	settings->init = DEFAULT_INIT_FILE;
 	settings->dbdir = DEFAULT_DB_DIR;
 	settings->socketdir = cyn_default_socket_dir;
