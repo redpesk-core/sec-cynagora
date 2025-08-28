@@ -150,7 +150,7 @@ void initialize_default_settings(settings_t *settings)
 	settings->owndbdir = 0;
 	settings->ownsockdir = 0;
 	settings->forceinit = 0;
-	settings->init = DEFAULT_INIT_FILE;
+	settings->init = DEFAULT_INIT_DIR;
 	settings->dbdir = DEFAULT_DB_DIR;
 	settings->socketdir = cyn_default_socket_dir;
 	settings->user = DEFAULT_CYNAGORA_USER;

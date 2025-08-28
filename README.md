@@ -107,7 +107,7 @@ case it requires _lisystemd_.
 
 ## Compiling with cmake and make
 
-The compilation use the build system *cmake*. 
+The compilation use the build system *cmake*.
 
 Example for compiling and installing cynagora:
 
@@ -123,11 +123,11 @@ Options to pass to cmake:
  - *DEFAULT_DB_DIR*: path of the directory for the database (default
    ${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynagora)
 
- - *DEFAULT_SOCKET_DIR*: directory path of the sockets (default 
+ - *DEFAULT_SOCKET_DIR*: directory path of the sockets (default
    ${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynagora)
 
- - *DEFAULT_INIT_FILE*: path to the initialization file to use (default 
-   ${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.initial)
+ - *DEFAULT_INIT_DIR*: path to the initialization directory to use (default
+   ${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.d)
 
  - *WITH_CYNARA_COMPAT*: flag for producing cynara compatibility artifacts
    (default OFF) [WARNING will be removed soon]

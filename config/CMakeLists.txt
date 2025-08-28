@@ -1,0 +1,2 @@
+
+install(FILES basic DESTINATION ${DEFAULT_INIT_DIR})

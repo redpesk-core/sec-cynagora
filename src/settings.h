@@ -16,14 +16,17 @@
  */
 #pragma once
 
+#if !defined(DEFAULT_CONF_DIR)
+#    define  DEFAULT_CONF_DIR        "/etc/security"
+#endif
 #if !defined(DEFAULT_CONFIG_FILE)
-#    define  DEFAULT_CONFIG_FILE     "/etc/security/cynagora.conf"
+#    define  DEFAULT_CONFIG_FILE     DEFAULT_CONF_DIR"/cynagora.conf"
 #endif
 #if !defined(DEFAULT_DB_DIR)
 #    define  DEFAULT_DB_DIR          "/var/lib/cynagora"
 #endif
-#if !defined(DEFAULT_INIT_FILE)
-#    define  DEFAULT_INIT_FILE       "/etc/security/cynagora.initial"
+#if !defined(DEFAULT_INIT_DIR)
+#    define  DEFAULT_INIT_DIR        DEFAULT_CONF_DIR"/cynagora.d"
 #endif
 #if !defined(DEFAULT_CYNAGORA_USER)
 #    define  DEFAULT_CYNAGORA_USER   NULL

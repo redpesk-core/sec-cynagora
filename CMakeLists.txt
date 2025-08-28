@@ -52,8 +52,10 @@ set(DEFAULT_DB_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/cynagora"
 	CACHE PATH "directory path of the database")
 set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynagora"
 	CACHE PATH "directory path of the sockets")
-set(DEFAULT_INIT_FILE "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.initial")
-set(DEFAULT_CONFIG_FILE "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security/cynagora.conf")
+
+set(DEFAULT_CONF_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security")
+set(DEFAULT_INIT_DIR "${DEFAULT_CONF_DIR}/cynagora.d")
+set(DEFAULT_CONFIG_FILE "${DEFAULT_CONF_DIR}/cynagora.conf")
 
 ###########################################################################
 
@@ -80,19 +82,10 @@ PKG_CHECK_MODULES(libcap REQUIRED libcap)
 add_subdirectory(src)
 add_subdirectory(pkgconfig)
 add_subdirectory(tests)
+add_subdirectory(config)
 
 if(WITH_CYNARA_COMPAT)
 	add_subdirectory(compat)
 endif()
 
-get_filename_component(
-	DEFAULT_INIT_FILE_DIRECTORY
-	${DEFAULT_INIT_FILE}
-	DIRECTORY
-)
-install(FILES
-	${CMAKE_CURRENT_SOURCE_DIR}/cynagora.initial
-	DESTINATION
-	${DEFAULT_INIT_FILE_DIRECTORY}
-)
 install(DIRECTORY DESTINATION ${DEFAULT_DB_DIR})
