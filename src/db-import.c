@@ -34,23 +34,35 @@
 #include "expire.h"
 #include "db-import.h"
 
-/* see db-import.h */
-int db_import_file(FILE *file, const char *location)
+static int begin()
+{
+	int rc = cyn_enter(begin);
+	if (rc < 0)
+		fprintf(stderr, "unable to start transaction\n");
+	return rc;
+}
+
+static int end(int rc)
+{
+	if (rc)
+		/* cancel changes if error occured */
+		cyn_leave(begin, 0);
+	else {
+		/* commit the changes */
+		rc = cyn_leave(begin, 1);
+		if (rc < 0)
+			fprintf(stderr, "unable to commit changes\n");
+	}
+	return rc;
+}
+
+int import_file(FILE *file, const char *location)
 {
 	int rc, lino;
 	char *item[10];
 	char buffer[2048];
 	data_key_t key;
 	data_value_t value;
-
-	/* enter critical section */
-	rc = cyn_enter(db_import_file);
-	if (rc < 0)
-		return rc;
-
-	/* ensure location is not NULL */
-	if (location == NULL)
-		location = file == stdin ? "<stdin>" : "<unknown file>";
 
 	/* read lines of the file */
 	lino = 0;
@@ -77,13 +89,11 @@ int db_import_file(FILE *file, const char *location)
 		  || item[3] == NULL || item[4] == NULL
 		  || item[5] == NULL) {
 			fprintf(stderr, "field missing (%s:%d)\n", location, lino);
-			rc = -EINVAL;
-			goto error;
+			return -EINVAL;
 		}
 		if (item[6] != NULL && item[6][0] != '#') {
 			fprintf(stderr, "extra field (%s:%d)\n", location, lino);
-			rc = -EINVAL;
-			goto error;
+			return -EINVAL;
 		}
 
 		/* create the key and value of the rule */
@@ -94,34 +104,63 @@ int db_import_file(FILE *file, const char *location)
 		value.value = item[4];
 		if (!txt2exp(item[5], &value.expire, true)) {
 			fprintf(stderr, "bad expiration %s (%s:%d)\n", item[5], location, lino);
-			rc = -EINVAL;
-			goto error;
+			return -EINVAL;
 		}
 
 		/* record the rule */
 		rc = cyn_set(&key, &value);
 		if (rc < 0) {
 			fprintf(stderr, "can't set (%s:%d)\n", location, lino);
-			exit(1);
+			return rc;
 		}
 	}
-	if (!feof(file)) {
+	/* is end of file? */
+	if (feof(file))
+		return 0; /* yes, ok */
+
+	/* report the error */
+	rc = -errno;
+	fprintf(stderr, "error while reading file %s\n", location);
+	return rc;
+}
+
+static int import_path(const char *path)
+{
+	int rc;
+	FILE *file;
+
+	/* open the file */
+	file = fopen(path, "r");
+	if (file == NULL) {
 		rc = -errno;
-		fprintf(stderr, "error while reading file %s\n", location);
-		goto error;
+		fprintf(stderr, "can't open file %s\n", path);
 	}
-	rc = 0;
-error:
-	if (rc)
-		/* cancel changes if error occured */
-		cyn_leave(db_import_file, 0);
 	else {
-		/* commit the changes */
-		rc = cyn_leave(db_import_file, 1);
-		if (rc < 0)
-			fprintf(stderr, "unable to commit content of file %s\n", location);
+		rc = import_file(file, path);
+		fclose(file);
 	}
 	return rc;
+}
+
+/* see db-import.h */
+int db_import_file(FILE *file, const char *location)
+{
+	int rc;
+
+	/* enter critical section */
+	rc = begin();
+	if (rc < 0)
+		return rc;
+
+	/* ensure location is not NULL */
+	if (location == NULL)
+		location = file == stdin ? "<stdin>" : "<unknown file>";
+
+	/* import the file */
+	rc = import_file(file, location);
+
+	/* done */
+	return end(rc);
 }
 
 /* see db-import.h */
@@ -148,7 +187,7 @@ int db_import_dir(const char *path, int weak)
 {
 	char buffer[PATH_MAX];
 	size_t len, pos;
-	int rc, rc2;
+	int rc, rc2, begun;
 	DIR *d;
 	struct dirent *dent;
 
@@ -178,7 +217,7 @@ int db_import_dir(const char *path, int weak)
 	buffer[pos++] = '/';
 
 	/* process entries */
-	rc = 0;
+	rc = begun = 0;
 	for (;;) {
 		errno = 0;
 		dent = readdir(d);
@@ -198,10 +237,18 @@ int db_import_dir(const char *path, int weak)
 				break;
 			}
 			memcpy(&buffer[pos], dent->d_name, len + 1);
-			rc2 = db_import_path(buffer);
+			if (!begun) {
+				rc = begin();
+				if (rc < 0)
+					break;
+				begun = 1;
+			}
+			rc2 = import_path(buffer);
 			rc = rc ?: rc2;
 		}
 	}
 	closedir(d);
+	if (begun)
+		rc = end(rc);
 	return rc;
 }
