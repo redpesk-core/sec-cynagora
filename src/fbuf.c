@@ -61,10 +61,10 @@ get_asz(
 static
 int
 read_file(
-	fbuf_t	*fb,
-	const char *name
+	fbuf_t *fb,
+	const char *name,
+	struct stat *st
 ) {
-	struct stat st;
 	int fd, rc;
 	uint32_t sz;
 
@@ -76,21 +76,21 @@ read_file(
 	}
 
 	/* get file stat */
-	rc = fstat(fd, &st);
+	rc = fstat(fd, st);
 	if (rc < 0) {
 		rc = -errno;
 		goto error2;
 	}
 
 	/* check file size */
-	if ((off_t)INT32_MAX < st.st_size) {
+	if ((off_t)INT32_MAX < st->st_size) {
 		rc = -EFBIG;
 		goto error2;
 	}
-	sz = (uint32_t)st.st_size;
+	sz = (uint32_t)st->st_size;
 
 	/* allocate memory */
-	rc = fbuf_ensure_capacity(fb, (uint32_t)st.st_size);
+	rc = fbuf_ensure_capacity(fb, (uint32_t)st->st_size);
 	if (rc < 0)
 		goto error2;
 
@@ -122,6 +122,7 @@ fbuf_open(
 ) {
 	int rc;
 	size_t sz;
+	struct stat st, stb;
 
 	/* reset */
 	memset(fb, 0, sizeof *fb);
@@ -152,9 +153,13 @@ fbuf_open(
 	}
 
 	/* read the file */
-	rc = read_file(fb, fb->name);
+	rc = read_file(fb, fb->name, &st);
 	if (rc < 0)
 		goto error;
+
+	/* compute backuped flag */
+	rc = stat(fb->backup, &stb);
+	fb->backuped = rc == 0 && st.st_dev == stb.st_dev && st.st_ino == stb.st_ino;
 
 	/* any read data is already saved */
 	fb->saved = fb->used;
@@ -189,7 +194,8 @@ fbuf_sync(
 	if (fb->used == fb->saved && fb->used == fb->size)
 		return 0;
 
-	/* open the file */
+	/* create the file */
+	fb->backuped = 0;
 	unlink(fb->name);
 	fd = creat(fb->name, 0600);
 	if (fd < 0) {
@@ -331,8 +337,13 @@ int
 fbuf_backup(
 	fbuf_t	*fb
 ) {
+	int rc;
+	if (fb->backuped)
+		return 0;
 	unlink(fb->backup);
-	return link(fb->name, fb->backup);
+	rc = link(fb->name, fb->backup);
+	fb->backuped = rc == 0;
+	return rc;
 }
 
 /* see fbuf.h */
@@ -341,9 +352,11 @@ fbuf_recover(
 	fbuf_t	*fb
 ) {
 	int rc;
+	struct stat st;
 
-	rc = read_file(fb, fb->backup);
+	rc = read_file(fb, fb->backup, &st);
 	fb->saved = 0; /* ensure rewrite of restored data */
+	fb->backuped = 1;
 	return rc;
 }
 

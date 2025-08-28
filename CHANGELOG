@@ -5,6 +5,7 @@ Version next
 * Optimization of setting of unmodified rule
 * New option --force-init for enforcing initial rules
 * Allow initialization using directory of initialization files
+* Optimize management of backups of files
 * Some cleaning
 
 Version 2.3.1

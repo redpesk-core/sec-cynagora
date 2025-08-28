@@ -32,6 +32,9 @@ struct fbuf
         /** backup filename */
         char *backup;
 
+	/** flag teeling if backuped */
+	char backuped;
+
         /** in memory copy of the file */
         void *buffer;
 
