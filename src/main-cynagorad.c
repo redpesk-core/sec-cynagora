@@ -208,14 +208,14 @@ int main(int ac, char **av)
 	/* handles help, version, error */
 	if (help) {
 		fprintf(stdout, helptxt, cyn_default_socket_dir);
-		return 0;
+		return EXIT_SUCCESS;
 	}
 	if (version) {
 		fprintf(stdout, versiontxt);
-		return 0;
+		return EXIT_SUCCESS;
 	}
 	if (error)
-		return 1;
+		return EXIT_FAILURE;
 
 	/* set the defaults */
 	initialize_default_settings(&settings);
@@ -223,7 +223,7 @@ int main(int ac, char **av)
 		rc = read_file_settings(&settings, config);
 		if (rc < 0) {
 			fprintf(stderr, "can't read config file\n");
-			return 1;
+			return EXIT_FAILURE;
 		}
 	}
 
@@ -310,7 +310,7 @@ int main(int ac, char **av)
 		              cyn_default_socket_scheme, settings.socketdir, cyn_default_agent_socket_base);
 	if (!spec_socket_admin || !spec_socket_check || !spec_socket_agent) {
 		fprintf(stderr, "can't make socket paths\n");
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	/* compute user and group */
@@ -320,7 +320,7 @@ int main(int ac, char **av)
 			pw = getpwnam(settings.user);
 			if (pw == NULL) {
 				fprintf(stderr, "can not find user '%s'\n", settings.user);
-				return -1;
+				return EXIT_FAILURE;
 			}
 			uid = (int)pw->pw_uid;
 			gid = (int)pw->pw_gid;
@@ -332,7 +332,7 @@ int main(int ac, char **av)
 			gr = getgrnam(settings.group);
 			if (gr == NULL) {
 				fprintf(stderr, "can not find group '%s'\n", settings.group);
-				return -1;
+				return EXIT_FAILURE;
 			}
 			gid = (int)gr->gr_gid;
 		}
@@ -352,14 +352,14 @@ int main(int ac, char **av)
 		rc = setgid((gid_t)gid);
 		if (rc < 0) {
 			fprintf(stderr, "can not change group: %s\n", strerror(errno));
-			return -1;
+			return EXIT_FAILURE;
 		}
 	}
 	if (uid >= 0) {
 		rc = setuid((uid_t)uid);
 		if (rc < 0) {
 			fprintf(stderr, "can not change user: %s\n", strerror(errno));
-			return -1;
+			return EXIT_FAILURE;
 		}
 	}
 	cap_clear(caps);
@@ -371,14 +371,14 @@ int main(int ac, char **av)
 		/* the lock on the database means that a server already runs */
 		if (!offline) {
 			fprintf(stderr, "can not lock database of directory %s: %s\n", settings.dbdir, strerror(-rc));
-			return 1;
+			return EXIT_FAILURE;
 		}
 
 		/* when offline isn't really offline, try client program */
 		fprintf(stderr, "probably not offline, trying admin client\n");
 		rc = system("sed 's/^/set /' | cynagora-admin");
 		if (rc == 0)
-			return 0; /* no error */
+			return EXIT_SUCCESS; /* no error */
 
 		/* report the error */
 		if (rc < 0)
@@ -387,14 +387,14 @@ int main(int ac, char **av)
 			fprintf(stderr, "can not spawn the client\n");
 		else
 			fprintf(stderr, "client returned error %d\n", rc);
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	/* connection to the database */
 	rc = db_open(settings.dbdir);
 	if (rc < 0) {
 		fprintf(stderr, "can not open database of directory %s: %s\n", settings.dbdir, strerror(-rc));
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	/* initialisation of the database */
@@ -402,14 +402,14 @@ int main(int ac, char **av)
 		rc = db_import_path(settings.init);
 		if (rc < 0) {
 			fprintf(stderr, "can't initialize database: %s\n", strerror(-rc));
-			return 1;
+			return EXIT_FAILURE;
 		}
 	}
 
 	/* dumps the current rules to the standard output */
 	if (dump) {
 		dumpdb(stdout);
-		return 0;
+		return EXIT_SUCCESS;
 	}
 
 	/* when offline only add rules from stdin */
@@ -417,9 +417,9 @@ int main(int ac, char **av)
 		rc = db_import_file(stdin, NULL);
 		if (rc < 0) {
 			fprintf(stderr, "can't add rules: %s\n", strerror(-rc));
-			return 1;
+			return EXIT_FAILURE;
 		}
-		return 0;
+		return EXIT_SUCCESS;
 	}
 
 	/* reset the change ids */
@@ -432,7 +432,7 @@ int main(int ac, char **av)
 	rc = cyn_server_create(&server, spec_socket_admin, spec_socket_check, spec_socket_agent);
 	if (rc < 0) {
 		fprintf(stderr, "can't initialize server: %s\n", strerror(-rc));
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	/* ready ! */
@@ -442,7 +442,7 @@ int main(int ac, char **av)
 
 	/* serve */
 	rc = cyn_server_serve(server);
-	return rc ? 3 : 0;
+	return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 /** returns the value of the id for 'text' (positive) or a negative value (-1) */
