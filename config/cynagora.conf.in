@@ -1,0 +1,11 @@
+# default cynagora configuration
+init             @DEFAULT_INIT_DIR@
+dbdir            @DEFAULT_DB_DIR@
+socketdir        @DEFAULT_SOCKET_DIR@
+user             @USER@
+group            @GROUP@
+force-init       no
+make-db-dir      yes
+own-db-dir       yes
+make-socket-dir  no
+own-socket-dir   no

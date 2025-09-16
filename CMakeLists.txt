@@ -55,7 +55,8 @@ set(DEFAULT_SOCKET_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/cynagora"
 
 set(DEFAULT_CONF_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/security")
 set(DEFAULT_INIT_DIR "${DEFAULT_CONF_DIR}/cynagora.d")
-set(DEFAULT_CONFIG_FILE "${DEFAULT_CONF_DIR}/cynagora.conf")
+set(DEFAULT_CONFIG_BASENAME "cynagora.conf")
+set(DEFAULT_CONFIG_FILE "${DEFAULT_CONF_DIR}/${DEFAULT_CONFIG_BASENAME}")
 
 ###########################################################################
 
