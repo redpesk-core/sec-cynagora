@@ -1,0 +1,30 @@
+#--------------------------------------------------------------------
+# Compatibility with older AGL permissions
+#--------------------------------------------------------------------
+* * * urn:AGL:token:valid                            @:%c;%s;%u;urn:redpesk:token:valid forever
+* * * urn:AGL:permission:*:partner:on-behalf-credentials @:%c;%s;%u;urn:redpesk:permission:*:partner:on-behalf-credentials forever
+* * * urn:AGL:permission::partner:dialout            @:%c;%s;%u;urn:redpesk:permission::partner:dialout forever
+* * * urn:AGL:permission::partner:real-time          @:%c;%s;%u;urn:redpesk:permission::partner:real-time forever
+* * * urn:AGL:permission::partner:scope-platform     @:%c;%s;%u;urn:redpesk:permission::partner:scope-platform forever
+* * * urn:AGL:permission::partner:tty                @:%c;%s;%u;urn:redpesk:permission::partner:tty forever
+* * * urn:AGL:permission::partner:video              @:%c;%s;%u;urn:redpesk:permission::partner:video forever
+* * * urn:AGL:permission::platform:apis:auto-ws      @:%c;%s;%u;urn:redpesk:permission::platform:apis:auto-ws forever
+* * * urn:AGL:permission::platform:no-oom            @:%c;%s;%u;urn:redpesk:permission::platform:no-oom forever
+* * * urn:AGL:permission::public:applications:read   @:%c;%s;%u;urn:redpesk:permission::public:applications:read forever
+* * * urn:AGL:permission::public:audio               @:%c;%s;%u;urn:redpesk:permission::public:audio forever
+* * * urn:AGL:permission::public:bluetooth           @:%c;%s;%u;urn:redpesk:permission::public:bluetooth forever
+* * * urn:AGL:permission::public:display             @:%c;%s;%u;urn:redpesk:permission::public:display forever
+* * * urn:AGL:permission::public:hidden              @:%c;%s;%u;urn:redpesk:permission::public:hidden forever
+* * * urn:AGL:permission::public:network             @:%c;%s;%u;urn:redpesk:permission::public:network forever
+* * * urn:AGL:permission::public:no-htdocs           @:%c;%s;%u;urn:redpesk:permission::public:no-htdocs forever
+* * * urn:AGL:permission::public:syscall:clock       @:%c;%s;%u;urn:redpesk:permission::public:syscall:clock forever
+* * * urn:AGL:permission::system:capability:keep-all @:%c;%s;%u;urn:redpesk:permission::system:capability:keep-all forever
+* * * urn:AGL:permission::system:run-by-default      @:%c;%s;%u;urn:redpesk:permission::system:run-by-default forever
+* * * urn:AGL:permission:afm:system:runner           @:%c;%s;%u;urn:redpesk:permission:afm:system:runner forever
+* * * urn:AGL:permission:afm:system:runner:state     @:%c;%s;%u;urn:redpesk:permission:afm:system:runner:state forever
+* * * urn:AGL:permission:afm:system:runner:kill      @:%c;%s;%u;urn:redpesk:permission:afm:system:runner:kill forever
+* * * urn:AGL:permission:afm:system:set-uid          @:%c;%s;%u;urn:redpesk:permission:afm:system:set-uid forever
+* * * urn:AGL:permission:afm:system:widget           @:%c;%s;%u;urn:redpesk:permission:afm:system:widget forever
+* * * urn:AGL:permission:afm:system:widget:detail    @:%c;%s;%u;urn:redpesk:permission:afm:system:widget:detail forever
+* * * urn:AGL:permission:afm:system:widget:start     @:%c;%s;%u;urn:redpesk:permission:afm:system:widget:start forever
+* * * urn:AGL:permission:afm:system:widget:view-all  @:%c;%s;%u;urn:redpesk:permission:afm:system:widget:view-all forever

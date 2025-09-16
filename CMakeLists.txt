@@ -44,6 +44,7 @@ set(CYNAGORA_SOVERSION ${PROJECT_VERSION_MAJOR})
 
 option(WITH_SYSTEMD       "should include systemd compatibility" ON)
 option(WITH_CYNARA_COMPAT "produce artifacts for compatibility with cynara" OFF)
+option(ADD_AGL_RULES      "Add AGL compatibility rules" NO)
 
 set(USER  cynagora CACHE STRING "user of the daemon")
 set(GROUP cynagora CACHE STRING "group of the daemon")

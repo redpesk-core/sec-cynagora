@@ -1,2 +1,5 @@
 
 install(FILES basic DESTINATION ${DEFAULT_INIT_DIR})
+if(ADD_AGL_RULES)
+  install(FILES compat-agl DESTINATION ${DEFAULT_INIT_DIR})
+endif()
