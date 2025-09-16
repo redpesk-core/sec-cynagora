@@ -1,4 +1,9 @@
+[Unit]
+Wants=cynagora.target
+Before=cynagora.target
+
 [Socket]
+ExecStartPre=+/usr/bin/mkdir --context=System:Shared -p -m 755 @DEFAULT_SOCKET_DIR@
 FileDescriptorName=check
 ListenStream=@DEFAULT_SOCKET_DIR@/cynagora.check
 SocketUser=@USER@
@@ -8,12 +13,6 @@ SmackLabelIPIn=*
 SmackLabelIPOut=@
 
 Service=cynagora.service
-
-[Unit]
-Wants=cynagora.target
-Before=cynagora.target
-Requires=cynagora-setup.service
-After=cynagora-setup.service
 
 [Install]
 WantedBy=sockets.target

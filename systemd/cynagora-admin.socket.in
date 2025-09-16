@@ -1,3 +1,7 @@
+[Unit]
+Requires=cynagora-check.socket
+After=cynagora-check.socket
+
 [Socket]
 FileDescriptorName=admin
 ListenStream=@DEFAULT_SOCKET_DIR@/cynagora.admin
@@ -8,12 +12,6 @@ SmackLabelIPIn=@
 SmackLabelIPOut=@
 
 Service=cynagora.service
-
-[Unit]
-Wants=cynagora.target
-Before=cynagora.target
-Requires=cynagora-setup.service
-After=cynagora-setup.service
 
 [Install]
 WantedBy=sockets.target
