@@ -1,10 +1,24 @@
 #--------------------------------------------------------------------
 # SELinux stuff
 #--------------------------------------------------------------------
+# "unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023"
+# is in the group "@ADMIN"
+#--------------------------------------------------------------------
+
 unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 * * * @:%c;%s;@ADMIN;%p forever
+
+#--------------------------------------------------------------------
+# Allow user_t use afm api
+#--------------------------------------------------------------------
+
 user_u:user_r:user_t:s0    * * urn:redpesk:token:valid yes forever
 user_u:user_r:user_t:s0    * * urn:redpesk:permission:afm:system:widget yes forever
 user_u:user_r:user_t:s0    * * urn:redpesk:permission:afm:system:runner yes forever
+
+#--------------------------------------------------------------------
+# Allow guest_t use limited afm api
+#--------------------------------------------------------------------
+
 guest_u:guest_r:guest_t:s0 * * urn:redpesk:token:valid yes forever
 guest_u:guest_r:guest_t:s0 * * urn:redpesk:permission:afm:system:widget:detail yes forever
 guest_u:guest_r:guest_t:s0 * * urn:redpesk:permission:afm:system:widget:start yes forever
