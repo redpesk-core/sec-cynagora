@@ -4,8 +4,10 @@
 * * * urn:AGL:token:valid                            @:%c;%s;%u;urn:redpesk:token:valid forever
 * * * urn:AGL:permission:*:partner:on-behalf-credentials @:%c;%s;%u;urn:redpesk:permission:*:partner:on-behalf-credentials forever
 * * * urn:AGL:permission::partner:dialout            @:%c;%s;%u;urn:redpesk:permission::partner:dialout forever
+* * * urn:AGL:permission::partner:execute-shell      @:%c;%s;%u;urn:redpesk:permission::partner:execute-shell forever
 * * * urn:AGL:permission::partner:real-time          @:%c;%s;%u;urn:redpesk:permission::partner:real-time forever
 * * * urn:AGL:permission::partner:scope-platform     @:%c;%s;%u;urn:redpesk:permission::partner:scope-platform forever
+* * * urn:AGL:permission::partner:create-can-socket  @:%c;%s;%u;urn:redpesk:permission::partner:create-can-socket forever
 * * * urn:AGL:permission::partner:tty                @:%c;%s;%u;urn:redpesk:permission::partner:tty forever
 * * * urn:AGL:permission::partner:video              @:%c;%s;%u;urn:redpesk:permission::partner:video forever
 * * * urn:AGL:permission::platform:apis:auto-ws      @:%c;%s;%u;urn:redpesk:permission::platform:apis:auto-ws forever
