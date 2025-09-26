@@ -46,6 +46,7 @@ option(WITH_SYSTEMD       "should include systemd compatibility" ON)
 option(WITH_CYNARA_COMPAT "produce artifacts for compatibility with cynara" OFF)
 option(ADD_AGL_RULES      "Add AGL compatibility rules" NO)
 option(ADD_SELINUX_RULES  "Add SELinux rules" NO)
+option(ADD_SYSADMIN_RULES "Add System == ADMIN rules" NO)
 
 set(USER  cynagora CACHE STRING "user of the daemon")
 set(GROUP cynagora CACHE STRING "group of the daemon")
