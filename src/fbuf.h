@@ -26,29 +26,30 @@
  */
 struct fbuf
 {
-        /** filename */
-        char *name;
+	/** filename */
+	char *name;
 
-        /** backup filename */
-        char *backup;
+	/** backup filename */
+	char *backup;
 
 	/** flag teeling if backuped */
 	char backuped;
 
-        /** in memory copy of the file */
-        void *buffer;
 
-        /** size currently allocated */
-        uint32_t capacity;
+	/** in memory copy of the file */
+	void *buffer;
 
-        /** size of the file */
-        uint32_t size;
+	/** size currently allocated */
+	uint32_t capacity;
 
-        /** size saved to the file */
-        uint32_t saved;
+	/** size of the file */
+	uint32_t size;
 
-        /** size currently used */
-        uint32_t used;
+	/** size saved to the file */
+	uint32_t saved;
+
+	/** size currently used */
+	uint32_t used;
 };
 
 /** short type */
