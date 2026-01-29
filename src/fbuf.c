@@ -117,6 +117,7 @@ error:
 int
 fbuf_open(
 	fbuf_t	*fb,
+	fbuf_type_t type,
 	const char *name,
 	const char *backup
 ) {
@@ -126,6 +127,9 @@ fbuf_open(
 
 	/* reset */
 	memset(fb, 0, sizeof *fb);
+
+	/* set the type */
+	fb->type = type;
 
 	/* save name */
 	sz = strlen(name);
@@ -314,6 +318,7 @@ fbuf_identify(
 int
 fbuf_open_identify(
 	fbuf_t	*fb,
+	fbuf_type_t type,
 	const char *name,
 	const char *backup,
 	const char *id,
@@ -322,7 +327,7 @@ fbuf_open_identify(
 	int rc;
 
 	/* open the files */
-	rc = fbuf_open(fb, name, backup);
+	rc = fbuf_open(fb, type, name, backup);
 	if (rc == 0) {
 		/* check identifier */
 		rc = fbuf_identify(fb, id, idlen);

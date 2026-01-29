@@ -305,6 +305,7 @@ init_rules(
  * Check that the identifier prefix matches or if the file doesn't exist
  * create the prefix.
  * @param fb the buffer to open
+ * @param type the type of buffer
  * @param directory the directory containing the file
  * @param name the basename for the file
  * @param extension the extension of the file
@@ -319,6 +320,7 @@ static
 int
 open_identify(
 	fbuf_t	*fb,
+	fbuf_type_t type,
 	const char *directory,
 	const char *name,
 	const char *extension,
@@ -344,7 +346,7 @@ open_identify(
 	mempcpy(p, extension, lext + 1);
 
 	/* open the fbuf now */
-	return fbuf_open_identify(fb, file, NULL, id, idlen);
+	return fbuf_open_identify(fb, type, file, NULL, id, idlen);
 }
 
 /**
@@ -375,10 +377,10 @@ opendb(
 		name = filedb_default_name;
 
 	/* open the names */
-	rc = open_identify(&filedb->fnames, directory, name, "names", uuid_names_v1, uuidlen);
+	rc = open_identify(&filedb->fnames, fbuf_type_Names, directory, name, "names", uuid_names_v1, uuidlen);
 	if (rc == 0) {
 		/* open the rules */
-		rc = open_identify(&filedb->frules, directory, name, "rules", uuid_rules_v1, uuidlen);
+		rc = open_identify(&filedb->frules, fbuf_type_Rules, directory, name, "rules", uuid_rules_v1, uuidlen);
 		if (rc == 0) {
 			/* connect internals */
 			rc = init_names(filedb);

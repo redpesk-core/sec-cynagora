@@ -22,6 +22,24 @@
 /******************************************************************************/
 
 /**
+ * There is two types of buffers
+ */
+enum fbuf_type
+{
+	/** unset buffer type */
+	fbuf_type_Unset,
+
+	/** buffer for names */
+	fbuf_type_Names,
+
+	/** buffer for rules */
+	fbuf_type_Rules
+};
+
+/** short type */
+typedef enum fbuf_type fbuf_type_t;
+
+/**
  * A fbuf records file data and access
  */
 struct fbuf
@@ -35,6 +53,8 @@ struct fbuf
 	/** flag teeling if backuped */
 	char backuped;
 
+	/** type of the buffer */
+	fbuf_type_t type;
 
 	/** in memory copy of the file */
 	void *buffer;
@@ -55,10 +75,10 @@ struct fbuf
 /** short type */
 typedef struct fbuf fbuf_t;
 
-
 /**
  * open in 'fb' the file of 'name'
  * @param fb the fbuf
+ * @param type the type of buffer
  * @param name name of the filename to read
  * @param backup name of the backup to use (can be NULL)
  * @return 0 on success
@@ -68,6 +88,7 @@ extern
 int
 fbuf_open(
 	fbuf_t	*fb,
+	fbuf_type_t type,
 	const char *name,
 	const char *backup
 );
@@ -164,6 +185,7 @@ fbuf_identify(
  * Open the fbuf 'fb' of 'name', 'backup' and check that it has the
  * prefix identifier 'id' of length 'idlen'.
  * @param fb the fbuf to open
+ * @param type the type of buffer
  * @param name file name to open
  * @param backup name of the backup file
  * @param id identifier prefix value
@@ -177,6 +199,7 @@ extern
 int
 fbuf_open_identify(
 	fbuf_t	*fb,
+	fbuf_type_t type,
 	const char *name,
 	const char *backup,
 	const char *id,
