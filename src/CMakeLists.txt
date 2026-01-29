@@ -23,6 +23,7 @@ set(LIBCORE_SOURCES
 	db-import.c
 	expire.c
 	fbuf.c
+	fbuf-sysfile.c
 	filedb.c
 	memdb.c
 	names.c

@@ -26,15 +26,17 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <limits.h>
-#include <unistd.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
-#include "fbuf.h"
+#include "fbuf-sysfile.h"
+#define FBUF_READ    fbuf_sysfile_read
+#define FBUF_SYNC    fbuf_sysfile_sync
+#define FBUF_BACKUP  fbuf_sysfile_backup
+#define FBUF_RECOVER fbuf_sysfile_recover
+
+#ifndef FBUF_MAX_CAPACITY
+#define FBUF_MAX_CAPACITY UINT32_MAX
+#endif
 
 /**
  * compute the size to allocate for ensuring 'sz' bytes
@@ -50,69 +52,6 @@ get_asz(
 	return r > sz ? r : UINT32_MAX;
 }
 
-/**
- * Open in 'fb' the file of 'name'
- * @param fb the fbuf
- * @param name the name of the file to read
- * @return 0 on success
- *         -EFBIG if the file is too big
- *         -errno system error
- */
-static
-int
-read_file(
-	fbuf_t *fb,
-	const char *name,
-	struct stat *st
-) {
-	int fd, rc;
-	uint32_t sz;
-
-	/* open the file */
-	fd = open(name, O_RDWR|O_CREAT, 0600);
-	if (fd < 0) {
-		rc = -errno;
-		goto error;
-	}
-
-	/* get file stat */
-	rc = fstat(fd, st);
-	if (rc < 0) {
-		rc = -errno;
-		goto error2;
-	}
-
-	/* check file size */
-	if ((off_t)INT32_MAX < st->st_size) {
-		rc = -EFBIG;
-		goto error2;
-	}
-	sz = (uint32_t)st->st_size;
-
-	/* allocate memory */
-	rc = fbuf_ensure_capacity(fb, (uint32_t)st->st_size);
-	if (rc < 0)
-		goto error2;
-
-	/* read the file */
-	if (read(fd, fb->buffer, (size_t)sz) != (ssize_t)sz) {
-		rc = -errno;
-		goto error2;
-	}
-
-	/* done */
-	fb->used = fb->size = sz;
-	close(fd);
-	return 0;
-
-error2:
-	close(fd);
-error:
-	fprintf(stderr, "can't read file %s: %s\n", name, strerror(-rc));
-	fb->saved = fb->used = fb->size = 0;
-	return rc;
-}
-
 /* see fbuf.h */
 int
 fbuf_open(
@@ -123,7 +62,6 @@ fbuf_open(
 ) {
 	int rc;
 	size_t sz;
-	struct stat st, stb;
 
 	/* reset */
 	memset(fb, 0, sizeof *fb);
@@ -157,13 +95,9 @@ fbuf_open(
 	}
 
 	/* read the file */
-	rc = read_file(fb, fb->name, &st);
+	rc = FBUF_READ(fb);
 	if (rc < 0)
 		goto error;
-
-	/* compute backuped flag */
-	rc = stat(fb->backup, &stb);
-	fb->backuped = rc == 0 && st.st_dev == stb.st_dev && st.st_ino == stb.st_ino;
 
 	/* any read data is already saved */
 	fb->saved = fb->used;
@@ -191,39 +125,14 @@ int
 fbuf_sync(
 	fbuf_t	*fb
 ) {
-	ssize_t rcs;
-	int rc, fd;
+	int rc = 0;
 
 	/* is sync needed? */
-	if (fb->used == fb->saved && fb->used == fb->size)
-		return 0;
-
-	/* create the file */
-	fb->backuped = 0;
-	unlink(fb->name);
-	fd = creat(fb->name, 0600);
-	if (fd < 0) {
-		rc = -errno;
-		goto error;
+	if (fb->used != fb->saved || fb->used != fb->size) {
+		rc = FBUF_SYNC(fb);
+		if (rc == 0)
+			fb->size = fb->saved = fb->used;
 	}
-
-	/* write unsaved bytes */
-	rcs = write(fd, fb->buffer, fb->used);
-	close(fd);
-	if (rcs < 0) {
-		rc = -errno;
-		goto error;
-	}
-	if ((uint32_t)rcs != fb->used) {
-		rc = -EINTR;
-		goto error;
-	}
-
-	fb->size = fb->saved = fb->used;
-	return 0;
-
-error:
-	fprintf(stderr, "sync of file %s failed: %s\n", fb->name, strerror(-rc));
 	return rc;
 }
 
@@ -238,9 +147,18 @@ fbuf_ensure_capacity(
 
 	if (capacity > fb->capacity) {
 		asz = get_asz(capacity);
+#ifndef FBUF_MAX_CAPACITY
+
+		if (asz > FBUF_MAX_CAPACITY) {
+			fprintf(stderr, "alloc %u %s failed, reach max capacity: %s\n",
+					asz, fb->name, strerror(ENOMEM));
+			return -ENOMEM;
+		}
+#endif
 		buffer = realloc(fb->buffer, asz);
 		if (buffer == NULL) {
-			fprintf(stderr, "alloc %u for file %s failed: %s\n", asz, fb->name, strerror(ENOMEM));
+			fprintf(stderr, "alloc %u for file %s failed: %s\n",
+					asz, fb->name, strerror(ENOMEM));
 			return -ENOMEM;
 		}
 		fb->buffer = buffer;
@@ -343,10 +261,10 @@ fbuf_backup(
 	fbuf_t	*fb
 ) {
 	int rc;
+
 	if (fb->backuped)
 		return 0;
-	unlink(fb->backup);
-	rc = link(fb->name, fb->backup);
+	rc = FBUF_BACKUP(fb);
 	fb->backuped = rc == 0;
 	return rc;
 }
@@ -357,9 +275,8 @@ fbuf_recover(
 	fbuf_t	*fb
 ) {
 	int rc;
-	struct stat st;
 
-	rc = read_file(fb, fb->backup, &st);
+	rc = FBUF_RECOVER(fb);
 	fb->saved = 0; /* ensure rewrite of restored data */
 	fb->backuped = 1;
 	return rc;
