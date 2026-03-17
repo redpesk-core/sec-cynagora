@@ -1,3 +1,9 @@
+Version ?????
+-------------
+
+* Split fbuf for allowing multiple backends
+* Enforce strict cache clearing
+
 Version 2.4.1
 -------------
 
