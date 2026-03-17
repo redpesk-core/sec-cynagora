@@ -677,8 +677,7 @@ connection(
 			if (cynagora->reply.count >= 2
 			 && 0 == strcmp(cynagora->reply.fields[0], _done_)
 			 && 0 == strcmp(cynagora->reply.fields[1], "1")) {
-				cache_clear(cynagora->cache,
-					cynagora->reply.count > 2 ? (uint32_t)atol(cynagora->reply.fields[2]) : 0);
+				cache_clear(cynagora->cache, 0);
 				rc = async_control(cynagora, EPOLL_CTL_ADD, EPOLLIN);
 				/* reconnect agent */
 				agent = cynagora->agents;

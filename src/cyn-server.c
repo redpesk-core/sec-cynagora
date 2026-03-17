@@ -375,10 +375,9 @@ replycheck(
 			vtxt = _no_;
 		else
 			vtxt = _ack_;
-		if (value->expire >= 0)
-			cli->caching = 1;
 		etxt = exp2check(value->expire, text, sizeof text);
 	}
+	cli->caching = 1;
 	putx(cli, vtxt, id, etxt, NULL);
 	flushw(cli);
 }
