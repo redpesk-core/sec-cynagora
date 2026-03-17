@@ -43,6 +43,7 @@ cache_search(
  * @param key the key to cache
  * @param value the value (must be an integer from -128 to 127)
  * @param expire expiration date
+ * @param absolute if false expire is relative to now
  * @return 0 on success
  *         -EINVAL invalid argument
  *         -ENOMEM too big for the cache size
